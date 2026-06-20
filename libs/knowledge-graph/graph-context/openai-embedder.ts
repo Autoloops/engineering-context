@@ -1,4 +1,4 @@
-import { HttpRequestError, withRetry } from "./retry.js";
+import { HttpRequestError, withRetry } from "../../utils/retry.js";
 
 export interface OpenAIEmbedderOptions {
   apiKey?: string;
