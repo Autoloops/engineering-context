@@ -18,6 +18,7 @@
     "preinstall": "node scripts/check-node-version.js",
     "build": "tsc -p tsconfig.build.json",
     "prepare": "npm run build",
+    "test": "npm run build && node --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "eval:bootstrap-current": "npm run build && node dist/evals/cases/bootstrap-current-repo-at-8038fe8/run.js",
     "eval:coding-proposal-apply-atomicity": "npm run build && node dist/evals/cases/coding-proposal-apply-atomicity-at-d6ebf80/run.js",

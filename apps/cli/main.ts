@@ -292,12 +292,12 @@ function parseHookIngestPlatform(args: string[]): InstallPlatform {
     if (arg === "--platform") return parseHookPlatform(args[index + 1]);
     if (arg.startsWith("--platform=")) return parseHookPlatform(arg.slice("--platform=".length));
   }
-  throw new Error("Usage: greplica hook ingest --platform codex|claude");
+  throw new Error("Usage: greplica hook ingest --platform <supported-platform>");
 }
 
 function parseHookPlatform(value: string | undefined): InstallPlatform {
-  if (value === "codex" || value === "claude") return value;
-  throw new Error("Usage: greplica hook ingest --platform codex|claude");
+  if (value === "codex" || value === "claude" || value === "opencode") return value;
+  throw new Error("Usage: greplica hook ingest --platform <supported-platform>");
 }
 
 async function runDoctor(args: string[]): Promise<void> {
@@ -490,7 +490,7 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
 
 function installUsage(): string {
   const cli = basename(process.argv[1] ?? "greplica");
-  return `Usage: ${cli} install --platform codex|claude|opencode --embedding local|openai`;
+  return `Usage: ${cli} install --platform <platform> --embedding local|openai`;
 }
 
 function printEmbeddingConfig(config: EmbeddingConfig): void {
@@ -637,7 +637,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function printHelp(): void {
   const cli = basename(process.argv[1] ?? "greplica");
   console.log(`Usage:
-  ${cli} install --platform codex|claude|opencode --embedding local|openai
+  ${cli} install --platform <platform> --embedding local|openai
+  ${cli} init [--local|--openai]
   ${cli} config
   ${cli} doctor [--check-embeddings]
   ${cli} graph read

@@ -101,7 +101,7 @@ export class KnowledgeGraphService {
   }
 
   buildGraphView(input: RepoRef): string {
-    const initialized = this.ensureInitialized(input);
+    const initialized = this.requireRepo(input);
     const graph = this.repository.readGraphView(initialized.repo_id);
     const provenance = this.repository.readClaimProvenance(initialized.repo_id);
     const supersededClaims = this.repository.readSupersededClaims(initialized.repo_id);
