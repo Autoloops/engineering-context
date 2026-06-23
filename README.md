@@ -134,6 +134,7 @@ greplica proposal apply <proposal.json>
 - `greplica graph context "<query>"` - returns Markdown for agent use. Add `--debug` for the full retrieval payload with ranking signals.
 - `greplica graph read` - prints the current graph view: all components, flows, claims, sources, and edges in scope.
 - `greplica graph view` to visualise the current memory in a local HTML, opens in your default browser. Use `--out` to choose where the file is written; by default it goes to a temp path.
+- `greplica graph export <dir>` - writes an offline graph export. Open `<dir>/index.html` for a self-contained visualization with search, node-type filters, node details, and immediate relationships. The export also includes Markdown index files for browsing components, flows, claims, and sources.
 - `greplica transcript bundle` - converts one or more Codex, Claude Code, or GitHub Copilot CLI JSONL transcripts into a sanitized Markdown bundle for `greplica-fast-session-bootstrap`.
 - `greplica doctor` - verifies installation and diagnoses configuration failures. Not a required preflight before every command.
 - `greplica install` prepares repo state, local storage, and agent integration; normal repo commands require install first.

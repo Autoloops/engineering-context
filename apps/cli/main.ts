@@ -285,6 +285,7 @@ function runGraphExportCommand(args: string[]): void {
   const files = buildGraphFolderExport(service.readGraph(repo));
   writeGraphFolderExport(outputDir, files);
   console.log(`Exported current graph view to ${outputDir}`);
+  console.log(`HTML: ${join(outputDir, "index.html")}`);
   console.log(`Files: ${files.length}`);
 }
 
