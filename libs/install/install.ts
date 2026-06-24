@@ -31,7 +31,9 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
   const embedding = configureEmbedding(options.embedding, options.repo);
   const service = createLocalKnowledgeGraphService(graphContextConfigFromGreplicaConfig(embedding.config));
   const init = service.initRepo(options.repo);
-  const platformInstall = installPlatform(options.platform);
+  const platformInstall = installPlatform(options.platform, {
+    repoRoot: options.repo.repo_root ?? process.cwd(),
+  });
 
   const notes: string[] = [];
   if (options.embedding === "local") {

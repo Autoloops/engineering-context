@@ -12,11 +12,11 @@ import {
   sanitizeTranscriptMessage,
   type SessionTranscriptMessage,
 } from "../../session-transcript/markdown.js";
-import type { PlatformInstallResult, PlatformInstaller, WorkingMemoryUpdateInput } from "./types.js";
+import type { PlatformInstallContext, PlatformInstallResult, PlatformInstaller, WorkingMemoryUpdateInput } from "./types.js";
 
 export const claudeInstaller: PlatformInstaller = {
   platform: "claude",
-  install(): PlatformInstallResult {
+  install(_context: PlatformInstallContext): PlatformInstallResult {
     const claudeHome = join(homedir(), ".claude");
     const skills = copyBundledSkills(join(claudeHome, "skills"));
     const settingsPath = join(claudeHome, "settings.json");
