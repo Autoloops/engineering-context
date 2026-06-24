@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export type InstallPlatform = "codex" | "claude" | "opencode";
+export type InstallPlatform = "codex" | "claude" | "opencode" | "cursor";
 export type InstallEmbedding = "local" | "openai";
 
 export const skillNames = ["greplica-bootstrap", "greplica-update-working-memory"] as const;

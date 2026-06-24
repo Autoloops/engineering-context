@@ -437,7 +437,7 @@ function requireFlagValue(args: string[], index: number, flag: string, usage = i
 }
 
 function parseInstallPlatform(value: string): InstallPlatform {
-  if (value === "codex" || value === "claude" || value === "opencode") return value;
+  if (value === "codex" || value === "claude" || value === "opencode" || value === "cursor") return value;
   throw new Error(`Invalid --platform ${value}.\n${installUsage()}`);
 }
 
@@ -449,15 +449,23 @@ function parseInstallEmbedding(value: string): InstallEmbedding {
 function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>): void {
   console.log(`Installed Greplica for ${platformDisplayName(result.platform)}.`);
   console.log("");
-  console.log("Skills:");
-  for (const skill of result.skills) console.log(`- ${skill}`);
-  console.log("");
+  if (result.skills.length > 0) {
+    console.log("Skills:");
+    for (const skill of result.skills) console.log(`- ${skill}`);
+    console.log("");
+  }
   if (result.hooks !== undefined) {
     console.log("Hooks:");
     console.log(`- events: ${result.hooks.events.join(", ")}`);
     console.log(`- command: ${result.hooks.command}`);
     for (const configFile of result.hooks.configFiles) console.log(`- config: ${configFile}`);
     console.log("- note: your agent may ask you to trust or accept these hooks the next time it starts.");
+    console.log("");
+  }
+  if (result.rules !== undefined) {
+    console.log("Project rules:");
+    for (const configFile of result.rules.configFiles) console.log(`- ${configFile}`);
+    console.log("- note: reload your editor if the new project rule does not appear immediately.");
     console.log("");
   }
   console.log("Embedding:");
@@ -490,7 +498,7 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
 
 function installUsage(): string {
   const cli = basename(process.argv[1] ?? "greplica");
-  return `Usage: ${cli} install --platform codex|claude|opencode --embedding local|openai`;
+  return `Usage: ${cli} install --platform <platform> --embedding local|openai`;
 }
 
 function printEmbeddingConfig(config: EmbeddingConfig): void {
@@ -637,7 +645,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function printHelp(): void {
   const cli = basename(process.argv[1] ?? "greplica");
   console.log(`Usage:
-  ${cli} install --platform codex|claude|opencode --embedding local|openai
+  ${cli} install --platform <platform> --embedding local|openai
   ${cli} config
   ${cli} doctor [--check-embeddings]
   ${cli} graph read

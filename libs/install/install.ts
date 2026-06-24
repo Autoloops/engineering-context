@@ -20,6 +20,10 @@ export interface InstallResult {
   platform: InstallPlatform;
   skills: string[];
   hooks?: HookInstallResult;
+  rules?: {
+    platform: InstallPlatform;
+    configFiles: string[];
+  };
   embedding: InstallEmbedding;
   session: SessionConfig;
   configFile: string;
@@ -31,9 +35,9 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
   const embedding = configureEmbedding(options.embedding, options.repo);
   const service = createLocalKnowledgeGraphService(graphContextConfigFromGreplicaConfig(embedding.config));
   const init = service.initRepo(options.repo);
-  const platformInstall = installPlatform(options.platform);
+  const platformInstall = installPlatform(options.platform, options.repo);
 
-  const notes: string[] = [];
+  const notes: string[] = [...(platformInstall.notes ?? [])];
   if (options.embedding === "local") {
     notes.push("Local embeddings were configured without prewarming; the first graph-context query may download the local model.");
   }
@@ -42,6 +46,7 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
     platform: options.platform,
     skills: platformInstall.skills,
     hooks: platformInstall.hooks,
+    rules: platformInstall.rules,
     embedding: options.embedding,
     session: embedding.config.session,
     configFile: embedding.configPath,
@@ -51,6 +56,7 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
 }
 
 export function platformDisplayName(platform: InstallPlatform): string {
+  if (platform === "cursor") return "Cursor";
   if (platform === "codex") return "Codex";
   if (platform === "opencode") return "OpenCode";
   return "Claude Code";

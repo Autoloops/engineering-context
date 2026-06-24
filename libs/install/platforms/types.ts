@@ -1,3 +1,4 @@
+import type { RepoRef } from "../../knowledge-graph/service.js";
 import type { InstallPlatform } from "../paths.js";
 
 export interface HookInstallResult {
@@ -10,6 +11,13 @@ export interface HookInstallResult {
 export interface PlatformInstallResult {
   skills: string[];
   hooks?: HookInstallResult;
+  rules?: RuleInstallResult;
+  notes?: string[];
+}
+
+export interface RuleInstallResult {
+  platform: InstallPlatform;
+  configFiles: string[];
 }
 
 export interface WorkingMemoryUpdateInput {
@@ -22,7 +30,7 @@ export interface WorkingMemoryUpdateInput {
 
 export interface PlatformInstaller {
   platform: InstallPlatform;
-  install(): PlatformInstallResult;
+  install(repo: RepoRef): PlatformInstallResult;
   sessionSourceRef(sessionId: string): string;
   sessionIdFromSourceRef(ref: string): string | undefined;
   transcriptToMarkdown(transcript: string): string;
