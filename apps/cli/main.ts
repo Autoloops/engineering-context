@@ -18,7 +18,7 @@ import { createEmbedder } from "../../libs/knowledge-graph/graph-context/embedde
 import { compactGraphContextResult, renderGraphContextMarkdown } from "../../libs/knowledge-graph/graph-context/render.js";
 import { buildGraphFolderExport } from "../../libs/knowledge-graph/folder-export.js";
 import { installGreplica, platformDisplayName } from "../../libs/install/install.js";
-import { allPlatformInstallers } from "../../libs/install/platforms/index.js";
+import { allPlatformInstallers, platformInstaller } from "../../libs/install/platforms/index.js";
 import type { InstallEmbedding, InstallPlatform } from "../../libs/install/paths.js";
 import { hookCwd, hookEventName, hookSessionId, hookTranscriptPath, readHookInput } from "../../libs/hooks/hook-input.js";
 import { HookSessionStore } from "../../libs/hooks/session-state.js";
@@ -184,10 +184,12 @@ function runHookIngest(args: string[]): void {
   if (process.env.GREPLICA_HOOK_DISABLE === "1") return;
 
   const platform = parseHookIngestPlatform(args);
+  const runner = platformInstaller(platform);
   const stdin = isatty(0) ? "" : readFileSync(0, "utf8");
   const hook = readHookInput(stdin);
   const eventName = hookEventName(hook);
   const cwd = hookCwd(hook) ?? process.cwd();
+  const transcriptPath = runner.transcriptPathFromHook?.(hook) ?? hookTranscriptPath(hook);
   const repo = detectRepoContext(cwd);
   const db = openDatabase();
   try {
@@ -204,7 +206,7 @@ function runHookIngest(args: string[]): void {
       platform,
       repoId: installed.repo_id,
       sessionId: hookSessionId(hook),
-      transcriptPath: hookTranscriptPath(hook),
+      transcriptPath,
       cwd,
       eventName,
     });
@@ -213,17 +215,21 @@ function runHookIngest(args: string[]): void {
     if (!result.shouldInjectGuidance) return;
     const additionalContext =
       `${greplicaContextMarker}: greplica is a repo-memory search tool for finding relevant architecture, decisions, flows, and code anchors. Before broad manual exploration in this repository, run greplica graph context "<question>" with a focused natural-language query. When Greplica provides useful context, mention that you used it and briefly say what it helped with.`;
-    console.log(
-      JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: "UserPromptSubmit",
-          additionalContext,
-        },
-      }),
-    );
+    console.log(JSON.stringify(hookGuidanceOutput(platform, additionalContext)));
   } finally {
     db.close();
   }
+}
+
+// OpenHands injects via top-level additionalContext; Claude/Codex use hookSpecificOutput.
+function hookGuidanceOutput(platform: InstallPlatform, additionalContext: string): Record<string, unknown> {
+  if (platform === "openhands") return { additionalContext };
+  return {
+    hookSpecificOutput: {
+      hookEventName: "UserPromptSubmit",
+      additionalContext,
+    },
+  };
 }
 
 const greplicaContextMarker = "Greplica hook guidance";
@@ -292,12 +298,12 @@ function parseHookIngestPlatform(args: string[]): InstallPlatform {
     if (arg === "--platform") return parseHookPlatform(args[index + 1]);
     if (arg.startsWith("--platform=")) return parseHookPlatform(arg.slice("--platform=".length));
   }
-  throw new Error("Usage: greplica hook ingest --platform codex|claude");
+  throw new Error("Usage: greplica hook ingest --platform codex|claude|openhands");
 }
 
 function parseHookPlatform(value: string | undefined): InstallPlatform {
-  if (value === "codex" || value === "claude") return value;
-  throw new Error("Usage: greplica hook ingest --platform codex|claude");
+  if (value === "codex" || value === "claude" || value === "openhands") return value;
+  throw new Error("Usage: greplica hook ingest --platform codex|claude|openhands");
 }
 
 async function runDoctor(args: string[]): Promise<void> {
@@ -437,7 +443,7 @@ function requireFlagValue(args: string[], index: number, flag: string, usage = i
 }
 
 function parseInstallPlatform(value: string): InstallPlatform {
-  if (value === "codex" || value === "claude" || value === "opencode") return value;
+  if (value === "codex" || value === "claude" || value === "opencode" || value === "openhands") return value;
   throw new Error(`Invalid --platform ${value}.\n${installUsage()}`);
 }
 
@@ -490,7 +496,7 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
 
 function installUsage(): string {
   const cli = basename(process.argv[1] ?? "greplica");
-  return `Usage: ${cli} install --platform codex|claude|opencode --embedding local|openai`;
+  return `Usage: ${cli} install --platform codex|claude|opencode|openhands --embedding local|openai`;
 }
 
 function printEmbeddingConfig(config: EmbeddingConfig): void {
@@ -637,7 +643,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function printHelp(): void {
   const cli = basename(process.argv[1] ?? "greplica");
   console.log(`Usage:
-  ${cli} install --platform codex|claude|opencode --embedding local|openai
+  ${cli} install --platform codex|claude|opencode|openhands --embedding local|openai
   ${cli} config
   ${cli} doctor [--check-embeddings]
   ${cli} graph read

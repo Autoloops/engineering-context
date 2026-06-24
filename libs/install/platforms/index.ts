@@ -2,12 +2,14 @@ import type { InstallPlatform } from "../paths.js";
 import { claudeInstaller } from "./claude.js";
 import { codexInstaller } from "./codex.js";
 import { opencodeInstaller } from "./opencode.js";
+import { openhandsInstaller } from "./openhands.js";
 import type { HookInstallResult, PlatformInstallContext, PlatformInstaller, PlatformInstallResult } from "./types.js";
 
 const platformInstallers: Partial<Record<InstallPlatform, PlatformInstaller>> = {
   claude: claudeInstaller,
   codex: codexInstaller,
   opencode: opencodeInstaller,
+  openhands: openhandsInstaller,
 };
 
 export type { HookInstallResult };

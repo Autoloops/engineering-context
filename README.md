@@ -42,7 +42,7 @@ Run:
 
 ```bash
 npm install -g greplica
-greplica install --platform <codex|claude|opencode> --embedding local
+greplica install --platform <codex|claude|opencode|openhands> --embedding local
 ```
 
 Use the platform matching this agent. Do not manually copy skills. After installation, summarize the installer output, including whether hooks were installed and whether I need to accept or trust them.
@@ -66,7 +66,7 @@ npm install -g greplica
 ```
 
 ```bash
-greplica install --platform <codex|claude|opencode> --embedding local
+greplica install --platform <codex|claude|opencode|openhands> --embedding local
 ```
 
 </details>
@@ -127,14 +127,14 @@ Broader context-retrieval benchmarking, including SWE-Context benchmark work, is
 
 ## Roadmap
 
-- Codex, Claude Code, and OpenCode plugins so Greplica can be installed and used as a first-class agent integration.
+- Codex, Claude Code, OpenCode, and OpenHands plugins so Greplica can be installed and used as a first-class agent integration.
 - Review UX for memory updates before the agent applies them.
 - SWE-Context benchmark coverage and sharper retrieval evals for real coding tasks.
 
 ## Commands
 
 ```bash
-greplica install --platform codex|claude|opencode --embedding local|openai
+greplica install --platform codex|claude|opencode|openhands --embedding local|openai
 greplica config
 greplica doctor [--check-embeddings]
 greplica graph read
@@ -150,5 +150,7 @@ greplica proposal apply <proposal.json>
 `greplica graph context "<query>"` prints concise Markdown for coding-agent use. Use `--json` for compact structured output, or `--debug` for the full retrieval payload with ranking signals and embedding status.
 
 Run `greplica install` from each repo or folder where Greplica should work. Other commands require that repo to have been installed first.
+
+For **OpenHands**, install is repo-local: skills are written to `.agents/skills/` and the `UserPromptSubmit`/`Stop` hooks to `.openhands/hooks.json` (Claude/Codex install to the agent's home config instead). The hooks inject `graph context` guidance and trigger background working-memory updates the same way; OpenHands must trust the repo hooks for the background save to run.
 
 `greplica doctor` is for install verification and diagnosing failures, not a required preflight before every Greplica command.
