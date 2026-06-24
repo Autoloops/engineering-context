@@ -20,6 +20,7 @@ export interface InstallResult {
   platform: InstallPlatform;
   skills: string[];
   hooks?: HookInstallResult;
+  guidanceFiles?: string[];
   embedding: InstallEmbedding;
   session: SessionConfig;
   configFile: string;
@@ -31,7 +32,7 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
   const embedding = configureEmbedding(options.embedding, options.repo);
   const service = createLocalKnowledgeGraphService(graphContextConfigFromGreplicaConfig(embedding.config));
   const init = service.initRepo(options.repo);
-  const platformInstall = installPlatform(options.platform);
+  const platformInstall = installPlatform(options.platform, options.repo);
 
   const notes: string[] = [];
   if (options.embedding === "local") {
@@ -42,6 +43,7 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
     platform: options.platform,
     skills: platformInstall.skills,
     hooks: platformInstall.hooks,
+    guidanceFiles: platformInstall.guidanceFiles,
     embedding: options.embedding,
     session: embedding.config.session,
     configFile: embedding.configPath,
@@ -52,6 +54,7 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
 
 export function platformDisplayName(platform: InstallPlatform): string {
   if (platform === "codex") return "Codex";
+  if (platform === "cline") return "Cline";
   if (platform === "opencode") return "OpenCode";
   return "Claude Code";
 }

@@ -16,7 +16,7 @@ Do not run `greplica doctor` as a routine preflight. Run the needed Greplica com
 
 If `greplica` is missing, tell the user to run the Greplica setup prompt from the README.
 
-If a Greplica command reports that Greplica is not installed for this repo, or that the main or working scope is missing, run `greplica install --platform <platform> --embedding local` from the target repo and retry the failed command once. Use the platform matching the current agent: `codex` for Codex, `claude` for Claude Code, and `opencode` for OpenCode. If the platform is genuinely unclear, ask the user which platform to install for.
+If a Greplica command reports that Greplica is not installed for this repo, or that the main or working scope is missing, run `greplica install --platform <platform> --embedding local` from the target repo and retry the failed command once. Use the platform matching the current agent: `codex` for Codex, `claude` for Claude Code, `opencode` for OpenCode, and `cline` for Cline. If the platform is genuinely unclear, ask the user which platform to install for.
 
 Local embeddings are the default and do not require `OPENAI_API_KEY`. If Greplica is configured for OpenAI and a command reports that `OPENAI_API_KEY` is missing, stop. Do not ask the user to paste the key into chat. Tell them to set it in their shell before launching the coding agent, or in target-root `.env.local`.
 

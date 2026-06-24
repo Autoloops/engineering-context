@@ -6,7 +6,7 @@
 
 <p>
   <a href="https://www.npmjs.com/package/greplica"><img alt="npm package" src="https://img.shields.io/npm/v/greplica?color=111111"></a>
-  <img alt="Agents" src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code-2563eb">
+  <img alt="Agents" src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20OpenCode%20%7C%20Cline-2563eb">
   <img alt="Storage" src="https://img.shields.io/badge/storage-local%20SQLite-475569">
   <img alt="Embeddings" src="https://img.shields.io/badge/embeddings-local%20%7C%20OpenAI-16a34a">
   <a href="https://discord.gg/q2R6AYXh9"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2"></a>
@@ -42,7 +42,7 @@ Run:
 
 ```bash
 npm install -g greplica
-greplica install --platform <codex|claude|opencode> --embedding local
+greplica install --platform <codex|claude|opencode|cline> --embedding local
 ```
 
 Use the platform matching this agent. Do not manually copy skills. After installation, summarize the installer output, including whether hooks were installed and whether I need to accept or trust them.
@@ -56,6 +56,8 @@ After that, the normal workflow is:
 | 2 | Work normally | The agent can query `greplica graph context "<question>"` before broad exploration. |
 | 3 | Accept hooks, or run `Use greplica-update-working-memory for this session.` manually | Durable decisions, constraints, changed flows, and follow-ups are saved. |
 
+Cline installs repo-local guidance under `.clinerules/` instead of hooks. Reload or restart Cline if the new rule does not appear immediately, then use the same `greplica-bootstrap`, `greplica graph context`, and `greplica-update-working-memory` workflow manually.
+
 <details>
 <summary>Manual install commands</summary>
 
@@ -66,7 +68,7 @@ npm install -g greplica
 ```
 
 ```bash
-greplica install --platform <codex|claude|opencode> --embedding local
+greplica install --platform <codex|claude|opencode|cline> --embedding local
 ```
 
 </details>
@@ -127,14 +129,14 @@ Broader context-retrieval benchmarking, including SWE-Context benchmark work, is
 
 ## Roadmap
 
-- Codex, Claude Code, and OpenCode plugins so Greplica can be installed and used as a first-class agent integration.
+- Codex, Claude Code, OpenCode, and Cline integrations so Greplica can be installed and used as a first-class agent integration.
 - Review UX for memory updates before the agent applies them.
 - SWE-Context benchmark coverage and sharper retrieval evals for real coding tasks.
 
 ## Commands
 
 ```bash
-greplica install --platform codex|claude|opencode --embedding local|openai
+greplica install --platform codex|claude|opencode|cline --embedding local|openai
 greplica config
 greplica doctor [--check-embeddings]
 greplica graph read

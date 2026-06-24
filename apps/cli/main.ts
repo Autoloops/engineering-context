@@ -437,7 +437,7 @@ function requireFlagValue(args: string[], index: number, flag: string, usage = i
 }
 
 function parseInstallPlatform(value: string): InstallPlatform {
-  if (value === "codex" || value === "claude" || value === "opencode") return value;
+  if (value === "codex" || value === "claude" || value === "opencode" || value === "cline") return value;
   throw new Error(`Invalid --platform ${value}.\n${installUsage()}`);
 }
 
@@ -450,8 +450,17 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
   console.log(`Installed Greplica for ${platformDisplayName(result.platform)}.`);
   console.log("");
   console.log("Skills:");
-  for (const skill of result.skills) console.log(`- ${skill}`);
+  if (result.skills.length === 0) {
+    console.log("- none installed for this platform");
+  } else {
+    for (const skill of result.skills) console.log(`- ${skill}`);
+  }
   console.log("");
+  if (result.guidanceFiles !== undefined && result.guidanceFiles.length > 0) {
+    console.log("Guidance:");
+    for (const file of result.guidanceFiles) console.log(`- ${file}`);
+    console.log("");
+  }
   if (result.hooks !== undefined) {
     console.log("Hooks:");
     console.log(`- events: ${result.hooks.events.join(", ")}`);
@@ -469,7 +478,9 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
   console.log(`- session current grace: ${result.session.currentGraceMinutes} minutes`);
   console.log("");
   console.log("Next steps:");
-  console.log("- Restart your coding agent if the new skills or hooks do not appear immediately.");
+  if (result.skills.length > 0 || result.hooks !== undefined) {
+    console.log("- Restart your coding agent if the new skills or hooks do not appear immediately.");
+  }
   if (result.hooks !== undefined) {
     console.log("- Accept or trust the installed hooks if your agent asks. Hook dispatchers ignore repos where greplica install was not run.");
     console.log("- Hooks record session activity and attempt background working-memory updates for this repo.");
@@ -477,7 +488,10 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
   } else {
     console.log("- Hooks were not installed for this platform. Manually ask the agent to use greplica-update-working-memory near the end of useful sessions.");
   }
-  console.log("- Add a short AGENTS.md/CLAUDE.md instruction if hooks are unavailable or not accepted: use greplica graph context \"<question>\" before broad manual exploration.");
+  console.log("- Add a short AGENTS.md/CLAUDE.md/.clinerules instruction if hooks are unavailable or not accepted: use greplica graph context \"<question>\" before broad manual exploration.");
+  if (result.platform === "cline") {
+    console.log("- Reload or restart Cline if the new .clinerules guidance does not appear immediately.");
+  }
   console.log("- Ask the agent to use greplica-bootstrap once for repos that do not have memory yet.");
   console.log("- During work, the agent can run greplica graph context \"<question>\" to fetch relevant repo memory.");
   if (result.embedding === "local") {
@@ -490,7 +504,7 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
 
 function installUsage(): string {
   const cli = basename(process.argv[1] ?? "greplica");
-  return `Usage: ${cli} install --platform codex|claude|opencode --embedding local|openai`;
+  return `Usage: ${cli} install --platform codex|claude|opencode|cline --embedding local|openai`;
 }
 
 function printEmbeddingConfig(config: EmbeddingConfig): void {
@@ -637,7 +651,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function printHelp(): void {
   const cli = basename(process.argv[1] ?? "greplica");
   console.log(`Usage:
-  ${cli} install --platform codex|claude|opencode --embedding local|openai
+  ${cli} install --platform codex|claude|opencode|cline --embedding local|openai
   ${cli} config
   ${cli} doctor [--check-embeddings]
   ${cli} graph read
