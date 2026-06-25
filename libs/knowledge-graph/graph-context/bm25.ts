@@ -4,6 +4,7 @@ import type { ContextDocument } from "./documents.js";
 export interface ScoreEntry {
   id: string;
   score: number;
+  raw_score: number;
   rank: number;
 }
 
@@ -43,6 +44,7 @@ export function scoreBm25(query: string, documents: ContextDocument[], config: G
   return scored.map((entry, index) => ({
     id: entry.id,
     score: entry.score / maxScore,
+    raw_score: entry.score,
     rank: index + 1,
   }));
 }

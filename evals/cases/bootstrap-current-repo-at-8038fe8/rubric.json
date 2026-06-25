@@ -27,7 +27,11 @@
       "An edge can satisfy an expected relation if the proposal connects the same semantic subjects through inline compact fields or canonical edges.",
       "Compact relationship fields are graph edges: flow.touches creates Flow -> Component touches edges, claim.about creates Claim -> Component/Flow about edges, component.contains creates Component -> Component contains edges, and flow.contains creates Flow -> Flow contains edges.",
       "When judging expected edges, inspect compact relationship arrays directly. Do not require a separate creates.edges entry.",
-      "Do not mark a real existing source file or source folder as a bad anchor merely because it is broad. Bad anchors are fake paths, generated/dependency paths, .git paths, or useless anchors like the repo root.",
+      "Judge claim code_anchors as navigation aids for future agents, not as exhaustive evidence lists.",
+      "For code_verified claims, good claim code_anchors usually point to one stable implementation symbol; two anchors are acceptable for explicit cross-boundary behavior.",
+      "File-only claim anchors are acceptable for docs, skills, config, or schema artifacts without stable symbols, but code files should usually include a function, class, method, type, or constant symbol.",
+      "Mark claim anchors bad when they are fake paths, generated/dependency paths, .git paths, repo-root anchors, directories, broad lists of many files, or file-only code anchors that force a future agent to inspect too much.",
+      "Do not mark component code_anchor values as bad just because they are folders or grouped paths; this eval's anchor-quality concern is claim code_anchors.",
       "Do not mark a combined top-level component as noisy merely because a more detailed rubric has separate expected nodes. Missing specificity belongs in node coverage, not quality penalties.",
       "Penalize depth only when the proposal is clearly doing a deep audit instead of top-level bootstrap.",
       "The proposal should be useful to a future coding agent that needs to understand this repo quickly."

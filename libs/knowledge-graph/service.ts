@@ -7,11 +7,14 @@ import { GraphContextBuilder } from "./graph-context/context-builder.js";
 import { graphContextConfig, type GraphContextConfig } from "./graph-context/config.js";
 import type { EmbeddingStatus, GraphContextResult } from "./graph-context/types.js";
 import { buildGraphViewHtml } from "./graph-view/build-graph-view.js";
+import { auditClaimCodeAnchors } from "./code-anchors/audit.js";
+import type { ClaimAnchorAuditResult } from "./code-anchors/types.js";
 import { defaultDatabasePath, openDatabase } from "../storage/sqlite/db.js";
 import type { SqliteRepository } from "../storage/sqlite/repository.js";
 import { SqliteRepository as SqliteKnowledgeGraphRepository } from "../storage/sqlite/repository.js";
 
 export type { GraphContextResult } from "./graph-context/types.js";
+export type { ClaimAnchorAuditResult } from "./code-anchors/types.js";
 
 export interface RepoRef {
   repo_root?: string;
@@ -113,7 +116,13 @@ export class KnowledgeGraphService {
     return this.contextBuilder.build(initialized.repo_id, this.repository.readGraphView(initialized.repo_id), query, {
       config: this.contextConfig,
       warnOnCreatedEmbeddings: true,
+      repoRoot: input.repo_root,
     });
+  }
+
+  async auditCodeAnchors(input: RepoRef): Promise<ClaimAnchorAuditResult> {
+    const initialized = this.requireRepo(input);
+    return auditClaimCodeAnchors(input.repo_root, this.repository.readGraphView(initialized.repo_id).claims);
   }
 
   validateProposal(input: RepoRef, proposal: unknown): ProposalValidationResult {
@@ -159,6 +168,8 @@ export class KnowledgeGraphService {
 
 }
 
-export function createLocalKnowledgeGraphService(config: GraphContextConfig = graphContextConfig): KnowledgeGraphService {
+export function createLocalKnowledgeGraphService(
+  config: GraphContextConfig = graphContextConfig,
+): KnowledgeGraphService {
   return new KnowledgeGraphService(new SqliteKnowledgeGraphRepository(openDatabase()), config);
 }

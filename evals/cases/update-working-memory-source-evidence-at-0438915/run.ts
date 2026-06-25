@@ -12,6 +12,10 @@ import {
   valueAfter,
   writeJson,
 } from "../../lib/common.js";
+import {
+  evaluateProposalAnchorQuality,
+  type ProposalAnchorQualityResult,
+} from "../../lib/code-anchor-quality.js";
 import { runCodexAgent } from "../../../libs/agent-runner/codex.js";
 import type { AgentRunResult } from "../../../libs/agent-runner/types.js";
 import { loadRepoEnv } from "../../../libs/env/load-local-env.js";
@@ -64,6 +68,7 @@ interface EvalResult {
   setup_commands: CommandResult[];
   patch_command?: CommandResult;
   generation?: AgentRunResult;
+  anchor_quality?: ProposalAnchorQualityResult;
   update_commands: CommandResult[];
   graph_read_command?: CommandResult;
   judge?: {
@@ -84,6 +89,7 @@ interface Rubric {
     role_correctness_points: number;
     evidence_correctness_points: number;
     supersedes_points: number;
+    anchor_correctness_points: number;
     quality_points: number;
     bad_memory_penalties: Record<BadMemoryCategory, number>;
     noise_penalties: Record<NoiseKey, number>;
@@ -97,6 +103,7 @@ interface JudgeRubric {
   session_facts: string[];
   expected_memories: ExpectedMemory[];
   expected_supersedes: ExpectedSupersedes[];
+  expected_anchor_sets: ExpectedAnchorSet[];
   bad_memory_categories: Record<BadMemoryCategory, string>;
 }
 
@@ -141,6 +148,16 @@ interface ExpectedSupersedes {
   id: string;
   old_claim_id: string;
   description: string;
+}
+
+interface ExpectedCodeAnchor {
+  file: string;
+  symbol?: string;
+}
+
+interface ExpectedAnchorSet {
+  expected_memory_id: string;
+  anchors: ExpectedCodeAnchor[];
 }
 
 interface JudgeInput {
@@ -196,6 +213,7 @@ interface JudgeOutput {
 interface ProposalClaim {
   id: string;
   supersedes?: unknown;
+  code_anchors?: unknown;
 }
 
 interface ProposalEdge {
@@ -212,10 +230,29 @@ interface ScoreResult {
   role_correctness_score: number;
   evidence_correctness_score: number;
   supersedes_score: number;
+  anchor_correctness_score: number;
   quality_score: number;
   final_score: number;
   pass_threshold: number;
   passed: boolean;
+  anchor_correctness: AnchorCorrectnessResult;
+}
+
+interface AnchorCorrectnessResult {
+  correct_required_anchors: number;
+  total_required_anchors: number;
+  passed_expected_memory_ids: string[];
+  checks: AnchorCorrectnessCheck[];
+}
+
+interface AnchorCorrectnessCheck {
+  expected_memory_id: string;
+  matched_claim_ids: string[];
+  correct_required_anchors: number;
+  total_required_anchors: number;
+  passed: boolean;
+  expected_anchors: ExpectedCodeAnchor[];
+  actual_anchors: ExpectedCodeAnchor[];
 }
 
 main().catch((error: unknown) => {
@@ -236,6 +273,9 @@ async function main(): Promise<void> {
   const patchSucceeded = patchCommand?.exit_code === 0;
   const generation = patchSucceeded ? await runUpdateAgent(context, args) : undefined;
   const proposalCreated = existsSync(context.updateProposalPath);
+  const anchorQuality = proposalCreated
+    ? await evaluateProposalAnchorQuality(readJson<unknown>(context.updateProposalPath), context.targetRepoDir)
+    : undefined;
   const updateCommands = generation?.exit_code === 0 && proposalCreated ? applyUpdateProposal(context) : [];
   const graphReadCommand = updateCommands.every((command) => command.exit_code === 0)
     ? readFinalGraph(context)
@@ -248,17 +288,27 @@ async function main(): Promise<void> {
     patchSucceeded &&
     generation?.exit_code === 0 &&
     proposalCreated &&
+    anchorQuality?.passed === true &&
     updateCommands.every((command) => command.exit_code === 0) &&
     graphReadCommand?.exit_code === 0 &&
     (judge === undefined || judge.score.passed);
 
-  writeResult(context, setupCommands, patchCommand, generation, updateCommands, graphReadCommand, judge, success);
+  writeResult(context, setupCommands, patchCommand, generation, anchorQuality, updateCommands, graphReadCommand, judge, success);
 
   console.log(success ? "Update working memory setup run passed." : "Update working memory setup run failed.");
   console.log(`Run directory: ${context.runDir}`);
   console.log(`Update proposal: ${context.updateProposalPath}`);
+  if (anchorQuality) {
+    console.log(
+      `Anchor quality: ${anchorQuality.error_count} errors, ${anchorQuality.warning_count} warnings across ${anchorQuality.checked_claim_count} code-verified claims.`,
+    );
+    printAnchorQualityIssues(anchorQuality);
+  }
   if (judge) {
     console.log(`Score: ${judge.score.final_score.toFixed(2)} / 100`);
+    console.log(
+      `Anchor correctness: ${judge.score.anchor_correctness.correct_required_anchors}/${judge.score.anchor_correctness.total_required_anchors} required anchors matched.`,
+    );
   }
   process.exitCode = success ? 0 : 1;
 }
@@ -443,6 +493,7 @@ function writeResult(
   setupCommands: CommandResult[],
   patchCommand: CommandResult | undefined,
   generation: AgentRunResult | undefined,
+  anchorQuality: ProposalAnchorQualityResult | undefined,
   updateCommands: CommandResult[],
   graphReadCommand: CommandResult | undefined,
   judge: EvalResult["judge"],
@@ -466,6 +517,7 @@ function writeResult(
     setup_commands: setupCommands,
     patch_command: patchCommand,
     generation,
+    anchor_quality: anchorQuality,
     update_commands: updateCommands,
     graph_read_command: graphReadCommand,
     judge,
@@ -608,6 +660,11 @@ function scoreJudgeOutput(rubric: Rubric, judge: JudgeOutput, proposal: unknown)
   const supersedesScore = rubric.judge.expected_supersedes.length === 0
     ? rubric.score.supersedes_points
     : (presentSupersedes.size / rubric.judge.expected_supersedes.length) * rubric.score.supersedes_points;
+  const anchorCorrectness = scoreAnchorCorrectness(rubric, judge, proposal);
+  const anchorCorrectnessScore = anchorCorrectness.total_required_anchors === 0
+    ? rubric.score.anchor_correctness_points
+    : (anchorCorrectness.correct_required_anchors / anchorCorrectness.total_required_anchors) *
+      rubric.score.anchor_correctness_points;
 
   const qualityPenalty = [
     ...judge.bad_memories.map((memory) => rubric.score.bad_memory_penalties[memory.category] ?? 0),
@@ -616,18 +673,80 @@ function scoreJudgeOutput(rubric: Rubric, judge: JudgeOutput, proposal: unknown)
     }),
   ].reduce((sum, penalty) => sum + penalty, 0);
   const qualityScore = Math.max(0, rubric.score.quality_points - qualityPenalty);
-  const finalScore = expectedMemoryScore + roleCorrectnessScore + evidenceCorrectnessScore + supersedesScore + qualityScore;
+  const finalScore =
+    expectedMemoryScore +
+    roleCorrectnessScore +
+    evidenceCorrectnessScore +
+    supersedesScore +
+    anchorCorrectnessScore +
+    qualityScore;
 
   return {
     expected_memory_score: round(expectedMemoryScore, 2),
     role_correctness_score: round(roleCorrectnessScore, 2),
     evidence_correctness_score: round(evidenceCorrectnessScore, 2),
     supersedes_score: round(supersedesScore, 2),
+    anchor_correctness_score: round(anchorCorrectnessScore, 2),
     quality_score: round(qualityScore, 2),
     final_score: round(finalScore, 2),
     pass_threshold: rubric.score.pass_threshold,
     passed: finalScore >= rubric.score.pass_threshold,
+    anchor_correctness: anchorCorrectness,
   };
+}
+
+function scoreAnchorCorrectness(
+  rubric: Rubric,
+  judge: JudgeOutput,
+  proposal: unknown,
+): AnchorCorrectnessResult {
+  const classifiedById = new Map(judge.expected_memories.map((memory) => [memory.expected_id, memory]));
+  const claimsById = new Map(proposalClaims(proposalCreates(proposal) ?? {}).map((claim) => [claim.id, claim]));
+  const checks: AnchorCorrectnessCheck[] = [];
+
+  for (const expectation of rubric.judge.expected_anchor_sets) {
+    const classified = classifiedById.get(expectation.expected_memory_id);
+    if (!classified?.present) continue;
+
+    const actualAnchors = classified.matched_claim_ids.flatMap((claimId) => {
+      return claimCodeAnchors(claimsById.get(claimId)?.code_anchors);
+    });
+    const correctRequiredAnchors = expectation.anchors.filter((expectedAnchor) => {
+      return actualAnchors.some((actualAnchor) => anchorsEqual(actualAnchor, expectedAnchor));
+    }).length;
+
+    checks.push({
+      expected_memory_id: expectation.expected_memory_id,
+      matched_claim_ids: classified.matched_claim_ids,
+      correct_required_anchors: correctRequiredAnchors,
+      total_required_anchors: expectation.anchors.length,
+      passed: correctRequiredAnchors === expectation.anchors.length,
+      expected_anchors: expectation.anchors,
+      actual_anchors: actualAnchors,
+    });
+  }
+
+  const correctRequiredAnchors = checks.reduce((sum, check) => sum + check.correct_required_anchors, 0);
+  const totalRequiredAnchors = checks.reduce((sum, check) => sum + check.total_required_anchors, 0);
+
+  return {
+    correct_required_anchors: correctRequiredAnchors,
+    total_required_anchors: totalRequiredAnchors,
+    passed_expected_memory_ids: checks.filter((check) => check.passed).map((check) => check.expected_memory_id),
+    checks,
+  };
+}
+
+function printAnchorQualityIssues(anchorQuality: ProposalAnchorQualityResult): void {
+  for (const issue of anchorQuality.issues.slice(0, 8)) {
+    const anchor = issue.anchor === undefined
+      ? ""
+      : ` (${issue.anchor.file}${issue.anchor.symbol === undefined ? "" : `#${issue.anchor.symbol}`})`;
+    console.log(`- ${issue.severity}: ${issue.claim_id}${anchor}: ${issue.message}`);
+  }
+  if (anchorQuality.issues.length > 8) {
+    console.log(`- ... ${anchorQuality.issues.length - 8} more anchor quality issues in result.json`);
+  }
 }
 
 function hasSupersedes(proposal: unknown, oldClaimId: string): boolean {
@@ -652,8 +771,23 @@ function proposalClaims(creates: Record<string, unknown>): ProposalClaim[] {
   if (!Array.isArray(creates.claims)) return [];
   return creates.claims.flatMap((claim) => {
     if (!isRecord(claim) || typeof claim.id !== "string") return [];
-    return [{ id: claim.id, supersedes: claim.supersedes }];
+    return [{ id: claim.id, supersedes: claim.supersedes, code_anchors: claim.code_anchors }];
   });
+}
+
+function claimCodeAnchors(value: unknown): ExpectedCodeAnchor[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((anchor) => {
+    if (!isRecord(anchor) || typeof anchor.file !== "string") return [];
+    return [{
+      file: anchor.file,
+      symbol: typeof anchor.symbol === "string" ? anchor.symbol : undefined,
+    }];
+  });
+}
+
+function anchorsEqual(actual: ExpectedCodeAnchor, expected: ExpectedCodeAnchor): boolean {
+  return actual.file === expected.file && actual.symbol === expected.symbol;
 }
 
 function proposalEdges(creates: Record<string, unknown>): ProposalEdge[] {

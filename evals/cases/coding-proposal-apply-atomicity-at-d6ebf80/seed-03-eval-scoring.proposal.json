@@ -17,6 +17,17 @@
         ],
         "supersedes": [
           "claim.transcript_replay_eval_keeps_only_replay_specific_prompting"
+        ],
+        "code_anchors": [
+          {
+            "file": "evals"
+          },
+          {
+            "file": "libs/agent-runner"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          }
         ]
       },
       {
@@ -32,6 +43,17 @@
         "supersedes": [
           "claim.update_memory_skill_requires_full_transcript_scan",
           "claim.update_memory_candidate_inventory_followup"
+        ],
+        "code_anchors": [
+          {
+            "file": "skills/greplica-bootstrap/SKILL.md"
+          },
+          {
+            "file": "skills/greplica-update-working-memory/SKILL.md"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          }
         ]
       },
       {

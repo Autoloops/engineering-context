@@ -42,6 +42,7 @@ type MembershipRow = {
   subject_id: string;
 };
 
+type ClaimRow = Omit<Claim, "code_anchors"> & { code_anchors: string | null };
 type EdgeRow = Omit<Edge, "metadata"> & { metadata: string | null };
 type RepoMatch = { repo: RepoRecord; matchedBy: "remote" | "root" };
 
@@ -298,8 +299,14 @@ export class SqliteRepository {
 
       for (const claim of proposal.creates.claims ?? []) {
         this.db
-          .prepare("INSERT INTO claims (id, kind, text, truth, intent) VALUES (@id, @kind, @text, @truth, @intent)")
-          .run(claim);
+          .prepare(
+            `INSERT INTO claims (id, kind, text, truth, intent, code_anchors)
+             VALUES (@id, @kind, @text, @truth, @intent, @code_anchors)`,
+          )
+          .run({
+            ...claim,
+            code_anchors: claim.code_anchors === undefined ? null : JSON.stringify(claim.code_anchors),
+          });
         this.createMembership(scopeId, "claim", claim.id, memoryCommitId);
       }
 
@@ -405,7 +412,14 @@ export class SqliteRepository {
   }
 
   private loadClaims(ids: string[]): Claim[] {
-    return this.loadByIds<Claim>("claims", ids);
+    return this.loadByIds<ClaimRow>("claims", ids).map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      text: row.text,
+      truth: row.truth,
+      intent: row.intent,
+      code_anchors: row.code_anchors === null ? undefined : JSON.parse(row.code_anchors) as Claim["code_anchors"],
+    }));
   }
 
   private loadSources(ids: string[]): Source[] {

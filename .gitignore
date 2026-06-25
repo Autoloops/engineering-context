@@ -1,4 +1,8 @@
 node_modules/
 dist/
 eval-runs/
+memory-workbench/
+__pycache__/
+*.pyc
+.DS_Store
 .env.local

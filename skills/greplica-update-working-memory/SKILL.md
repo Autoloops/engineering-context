@@ -29,8 +29,18 @@ Use the current conversation/session context plus code evidence. Read:
 - focused `git diff` for changed areas
 - files touched by the session when needed to verify claims
 - existing relevant memory with `greplica graph context "<task or changed area>"`
+- code-anchor audit with `greplica graph audit anchors` when the installed Greplica version supports it
 
 Use the current session as context, but verify durable code facts against files or diffs when possible.
+
+Transcript evidence can produce useful memory, but it has different roles:
+
+- user decisions, constraints, rejected alternatives, and future-work boundaries can become `source_verified` session claims.
+- explored repo paths can become memory only when they explain ownership, a cross-component flow, a confusing distinction, or a location future agents would otherwise rediscover.
+- tool outputs containing file paths, symbols, line numbers, or Greplica anchors are navigation clues, not proof by themselves.
+- convert a transcript clue into a `code_verified` claim only after checking the current file/diff and adding a precise `code_anchors` entry.
+- when a session decision, rationale, constraint, trade-off, or future-work claim points at a concrete code area, include `code_anchors` as navigation hints if you verified those anchors. The session source remains the evidence for the decision; the anchors tell future agents where the related code lives.
+- if a transcript mentions an issue, PR, review, or comment packet, store the durable fact from the packet content, not a title-only summary.
 
 The update proposal must preserve the session delta, not just the final patch. A useful update usually has separate memories for:
 
@@ -166,13 +176,17 @@ Create memory for durable changes only:
 For session-derived claims, choose the claim kind and truth value by what supports the claim:
 
 - Use `fact`/`code_verified` for behavior verified in code or diffs.
-- Use `decision` or `requirement`/`source_verified` for user-approved design choices, rejected alternatives, policy constraints, and process rules from the conversation.
+- Use `decision` or `requirement`/`source_verified` for user-approved design choices, rejected alternatives, policy constraints, and process rules from the conversation. Add verified code anchors to those claims when the decision or rule points at a specific implementation surface.
 - Use `task` or `question`/`unknown` for unresolved future work.
 - Do not mark guidance from a skill/doc change as a code-verified requirement unless enforcement exists in code. If it is a user/session policy or instruction, keep it source-verified and attach session evidence.
 
 When existing memory is now too vague or stale, create a clearer claim with `supersedes[]` pointing at the old claim. In particular, look for old claims returned by `greplica graph context` that describe the changed area broadly but miss the new session nuance. A claim can be worth superseding even when the old text is not false, if it is now materially incomplete and future agents would be misled by leaving it active.
 
 If a new claim materially narrows, qualifies, or corrects an existing claim returned by `greplica graph context`, encode that relationship with `supersedes[]`; do not rely on wording alone. Before validating, review the proposal for changed validation rules, compact relationship behavior, and workflow claims that should supersede older broad memory.
+
+If `greplica graph audit anchors` reports missing or stale anchors, treat the output as advisory. Fix relevant missing or stale anchors when they relate to the current session or are a small obvious cleanup. Do not mass-backfill unrelated claims unless the user asks.
+
+When adding or correcting anchors for an existing claim, do not edit the old claim in place. Create a superseding claim with the same text if the claim remains true, or corrected text if the claim itself changed.
 
 Do not store:
 
@@ -254,6 +268,29 @@ Allowed claim kinds: `fact`, `requirement`, `decision`, `task`, `question`, `ris
 Allowed truth values: `code_verified`, `source_verified`, `unknown`.
 Allowed intent values: `intended`, `accidental`, `unknown`.
 Allowed source kinds: `session`.
+New `code_verified` claims require `code_anchors`, for example:
+
+```json
+"code_anchors": [
+  {
+    "file": "libs/knowledge-graph/service.ts",
+    "symbol": "KnowledgeGraphService.applyProposal"
+  }
+]
+```
+
+For claim `code_anchors`:
+
+- Prefer one anchor per code-verified claim: the stable function, class, method, type, or constant that best proves the claim.
+- Use two anchors only when the claim is explicitly about a cross-boundary behavior changed or clarified by the session.
+- Use file-only anchors for docs, skills, config, schemas, or other artifacts without stable symbols.
+- Avoid file-only anchors for normal source files unless the file is tiny and the whole file is the relevant unit.
+- Three anchors is the hard maximum and should be rare.
+- A claim with four or more `code_anchors` is invalid; split it into narrower claims.
+- Anchor the representative implementation boundary, not every related helper, caller, or downstream file.
+- Avoid volatile private helpers when a more stable public class, function, method, command handler, or model type captures the claim.
+
+For `source_verified` claims, code anchors are optional navigation aids, not proof. Add them when the session-derived memory is about a concrete code path and you verified the related file/symbol. Prefer a separate `code_verified` claim when the claim text itself is a code fact. Do not force anchors onto non-code decisions, user constraints, rejected alternatives, or future work.
 
 Use compact relationship fields where possible:
 
@@ -277,6 +314,7 @@ Each source-backed session claim should have its own `evidenced_by` edge to the 
 - Use `code_verified` only for claims checked against code.
 - Use `source_verified` for claims grounded in the session.
 - Use `unknown` for unresolved tasks, questions, and risks.
+- For `code_verified` claims, keep `code_anchors` compact and symbol-backed where the target is source code. Do not mass-backfill unrelated missing anchors during a normal memory update.
 - Create one `session` source for the current session when storing session-derived claims, with a source ID derived from the actual session metadata.
 - Add a concise free-text `metadata.reason` to each `evidenced_by` edge.
 - Include tasks and future work only when the session discussed what remains to be built.

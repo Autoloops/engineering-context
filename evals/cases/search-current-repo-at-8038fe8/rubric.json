@@ -1,13 +1,13 @@
 {
   "case_id": "search-current-repo-at-8038fe8",
-  "benchmark_version": "0.2.0",
+  "benchmark_version": "0.2.2",
   "target": "current workspace repo",
   "k": 10,
   "score": {
     "pass_threshold": 80,
     "weights": {
-      "precision_at_k": 10,
-      "recall_at_k": 25,
+      "precision_at_k": 15,
+      "recall_at_k": 20,
       "mrr_at_k": 15,
       "ndcg_at_k": 25,
       "grade_recall_at_k": 25

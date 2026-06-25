@@ -8,7 +8,8 @@
     "role_correctness_points": 10,
     "evidence_correctness_points": 15,
     "supersedes_points": 5,
-    "quality_points": 15,
+    "anchor_correctness_points": 10,
+    "quality_points": 5,
     "bad_memory_penalties": {
       "unsupported": 6,
       "wrong_role": 3,
@@ -187,6 +188,43 @@
         "id": "compact_normalization_superseded",
         "old_claim_id": "claim.compact_normalization",
         "description": "The update should supersede or clearly qualify the old compact-normalization claim because compact claim.evidenced_by still normalizes but cannot produce a valid reasoned evidence edge."
+      }
+    ],
+    "expected_anchor_sets": [
+      {
+        "expected_memory_id": "source_kind_session_only",
+        "anchors": [
+          {
+            "file": "libs/knowledge-graph/schema.ts",
+            "symbol": "SourceKind"
+          },
+          {
+            "file": "libs/knowledge-graph/validate-proposal.ts",
+            "symbol": "validateProposal"
+          }
+        ]
+      },
+      {
+        "expected_memory_id": "evidence_reason_required",
+        "anchors": [
+          {
+            "file": "libs/knowledge-graph/validate-proposal.ts",
+            "symbol": "validateEvidenceMetadata"
+          }
+        ]
+      },
+      {
+        "expected_memory_id": "graph_context_returns_reasoned_evidence",
+        "anchors": [
+          {
+            "file": "libs/knowledge-graph/graph-context/types.ts",
+            "symbol": "GraphContextResult"
+          },
+          {
+            "file": "libs/knowledge-graph/graph-context/context-builder.ts",
+            "symbol": "buildEvidenceByClaim"
+          }
+        ]
       }
     ],
     "bad_memory_categories": {

@@ -21,6 +21,7 @@ export function run(command: string[], cwd: string, env: NodeJS.ProcessEnv, opti
     cwd,
     env,
     encoding: stdio === "pipe" ? "utf8" : undefined,
+    maxBuffer: 100 * 1024 * 1024,
     stdio,
   });
 

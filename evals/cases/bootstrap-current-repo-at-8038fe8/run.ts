@@ -13,6 +13,10 @@ import {
   valueAfter,
   writeJson,
 } from "../../lib/common.js";
+import {
+  evaluateProposalAnchorQuality,
+  type ProposalAnchorQualityResult,
+} from "../../lib/code-anchor-quality.js";
 import { runCodexAgent } from "../../../libs/agent-runner/codex.js";
 import type { AgentRunResult } from "../../../libs/agent-runner/types.js";
 import { loadRepoEnv } from "../../../libs/env/load-local-env.js";
@@ -50,6 +54,7 @@ interface EvalResult {
   proposal_path: string;
   success: boolean;
   commands: CommandResult[];
+  anchor_quality: ProposalAnchorQualityResult;
   generation?: AgentRunResult;
   judge?: {
     model: string;
@@ -140,17 +145,22 @@ async function main(): Promise<void> {
   prepareGreplicaHome(context);
   const installCommand = runProductCommand(context, "install", "--platform", "codex", "--embedding", "local");
   const generation = await getProposal(context, args);
+  const anchorQuality = await evaluateProposalAnchorQuality(readJson<unknown>(context.proposalPath), context.targetRepoDir);
   const commands = [
     installCommand,
     ...runProductCommands(context),
   ];
   const commandsSucceeded = commands.every((command) => command.exit_code === 0);
   const judge = commandsSucceeded && args.judge === "openai" ? await runOpenAiJudge(context, args) : undefined;
-  const success = commandsSucceeded && (judge === undefined || judge.score.passed);
-  writeResult(context, commands, success, generation, judge);
+  const success = commandsSucceeded && anchorQuality.passed && (judge === undefined || judge.score.passed);
+  writeResult(context, commands, anchorQuality, success, generation, judge);
 
   console.log(success ? "Eval run passed." : "Eval run failed.");
   console.log(`Run directory: ${context.runDir}`);
+  console.log(
+    `Anchor quality: ${anchorQuality.error_count} errors, ${anchorQuality.warning_count} warnings across ${anchorQuality.checked_claim_count} code-verified claims.`,
+  );
+  printAnchorQualityIssues(anchorQuality);
   if (judge) {
     console.log(`Score: ${judge.score.final_score.toFixed(2)} / 100`);
   }
@@ -286,6 +296,7 @@ async function runOpenAiJudge(
 function writeResult(
   context: RunContext,
   commands: CommandResult[],
+  anchorQuality: ProposalAnchorQualityResult,
   success: boolean,
   generation: AgentRunResult | undefined,
   judge: EvalResult["judge"],
@@ -300,6 +311,7 @@ function writeResult(
     proposal_path: context.proposalPath,
     success,
     commands,
+    anchor_quality: anchorQuality,
     generation,
     judge,
   };
@@ -420,6 +432,18 @@ function scoreJudgeOutput(rubric: Rubric, judge: JudgeOutput): ScoreResult {
     pass_threshold: rubric.score.pass_threshold,
     passed: finalScore >= rubric.score.pass_threshold,
   };
+}
+
+function printAnchorQualityIssues(anchorQuality: ProposalAnchorQualityResult): void {
+  for (const issue of anchorQuality.issues.slice(0, 8)) {
+    const anchor = issue.anchor === undefined
+      ? ""
+      : ` (${issue.anchor.file}${issue.anchor.symbol === undefined ? "" : `#${issue.anchor.symbol}`})`;
+    console.log(`- ${issue.severity}: ${issue.claim_id}${anchor}: ${issue.message}`);
+  }
+  if (anchorQuality.issues.length > 8) {
+    console.log(`- ... ${anchorQuality.issues.length - 8} more anchor quality issues in result.json`);
+  }
 }
 
 function extractOutputText(body: Record<string, unknown>): string {

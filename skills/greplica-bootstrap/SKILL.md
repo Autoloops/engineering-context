@@ -185,7 +185,13 @@ Write a JSON proposal to a temporary file:
         "text": "Example component participates in Example workflow.",
         "truth": "code_verified",
         "intent": "unknown",
-        "about": ["component.example", "flow.example"]
+        "about": ["component.example", "flow.example"],
+        "code_anchors": [
+          {
+            "file": "src/example.ts",
+            "symbol": "ExampleComponent"
+          }
+        ]
       }
     ],
     "sources": [],
@@ -198,6 +204,18 @@ Allowed claim kinds: `fact`, `requirement`, `decision`, `task`, `question`, `ris
 Allowed truth values: `code_verified`, `source_verified`, `unknown`.
 Allowed intent values: `intended`, `accidental`, `unknown`.
 Allowed source kinds: `session`.
+New `code_verified` claims require `code_anchors` with repo-relative `file` and optional `symbol`.
+
+For claim `code_anchors`:
+
+- Prefer one anchor per code-verified claim: the stable function, class, method, type, or constant that best proves the claim.
+- Use two anchors only when the claim is explicitly about a cross-boundary behavior that cannot be understood from one symbol.
+- Use file-only anchors for docs, skills, config, schemas, or other artifacts without stable symbols.
+- Avoid file-only anchors for normal source files unless the file is tiny and the whole file is the relevant unit.
+- Three anchors is the hard maximum and should be rare.
+- A claim with four or more `code_anchors` is invalid; split it into narrower claims.
+- Anchor the representative implementation boundary, not every related helper, caller, or downstream file.
+- Avoid volatile private helpers when a more stable public class, function, method, command handler, or model type captures the claim.
 
 Use compact relationship fields where possible:
 
@@ -220,6 +238,7 @@ Sources currently represent session artifacts. Do not create a source just becau
 - Avoid speculative drift claims during bootstrap. If a checked-out repo's docs, skills, or code disagree with your own current instructions, capture what the checked-out repo says and leave reconciliation to a later working-memory update.
 - Drop claims that mostly summarize test harness mechanics, fixture recording details, emulator wiring, private dispatch branches, or exhaustive method inventories unless curated docs explicitly present them as durable contracts.
 - Use `code_verified` only for claims grounded in inspected code.
+- Add precise `code_anchors` for every `code_verified` claim. Claim anchors should be narrow enough that a future agent can verify the claim without inspecting a broad file set.
 - Use `unknown` truth for unverified questions, risks, or tasks.
 - Add open questions/tasks for important areas that need deeper inspection.
 - Avoid noisy structure nodes, tiny helpers, private functions, and one claim per file.

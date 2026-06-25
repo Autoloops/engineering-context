@@ -44,7 +44,8 @@ CREATE TABLE IF NOT EXISTS claims (
   kind TEXT NOT NULL,
   text TEXT NOT NULL,
   truth TEXT NOT NULL,
-  intent TEXT NOT NULL
+  intent TEXT NOT NULL,
+  code_anchors TEXT
 );
 
 CREATE TABLE IF NOT EXISTS sources (
