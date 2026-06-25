@@ -488,9 +488,11 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
   } else {
     console.log("- Hooks were not installed for this platform. Manually ask the agent to use greplica-update-working-memory near the end of useful sessions.");
   }
-  console.log("- Add a short AGENTS.md/CLAUDE.md/.clinerules instruction if hooks are unavailable or not accepted: use greplica graph context \"<question>\" before broad manual exploration.");
   if (result.platform === "cline") {
+    console.log("- Review the generated .clinerules guidance if you want to customize it.");
     console.log("- Reload or restart Cline if the new .clinerules guidance does not appear immediately.");
+  } else {
+    console.log("- Add a short AGENTS.md/CLAUDE.md instruction if hooks are unavailable or not accepted: use greplica graph context \"<question>\" before broad manual exploration.");
   }
   console.log("- Ask the agent to use greplica-bootstrap once for repos that do not have memory yet.");
   console.log("- During work, the agent can run greplica graph context \"<question>\" to fetch relevant repo memory.");
