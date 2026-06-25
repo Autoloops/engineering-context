@@ -36,158 +36,309 @@ interface CommandContext {
   service: KnowledgeGraphService;
 }
 
+type HelpMode = "query-aware";
+
+interface CliCommand {
+  key: string;
+  path: readonly string[];
+  usage: string;
+  handler: (args: string[]) => void | Promise<void>;
+  showInTopLevelHelp?: boolean;
+  helpMode?: HelpMode;
+}
+
+interface CliCommandGroup {
+  commands: CliCommand[];
+  helpRequested: boolean;
+}
+
+const cliCommands = [
+  {
+    key: "install",
+    path: ["install"],
+    usage: "install --platform codex|claude|opencode --embedding local|openai",
+    handler: runInstallCommand,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "config",
+    path: ["config"],
+    usage: "config",
+    handler: runConfigCommand,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "doctor",
+    path: ["doctor"],
+    usage: "doctor [--check-embeddings]",
+    handler: runDoctor,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "embeddingsPrewarm",
+    path: ["embeddings", "prewarm"],
+    usage: "embeddings prewarm",
+    handler: runEmbeddingsPrewarm,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "graphRead",
+    path: ["graph", "read"],
+    usage: "graph read",
+    handler: runGraphReadCommand,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "graphContext",
+    path: ["graph", "context"],
+    usage: "graph context <query> [--debug]",
+    handler: runGraphContextCommand,
+    showInTopLevelHelp: true,
+    helpMode: "query-aware",
+  },
+  {
+    key: "graphAuditAnchors",
+    path: ["graph", "audit", "anchors"],
+    usage: "graph audit anchors",
+    handler: runGraphAuditAnchorsCommand,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "graphExport",
+    path: ["graph", "export"],
+    usage: "graph export <dir>",
+    handler: runGraphExportCommand,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "graphView",
+    path: ["graph", "view"],
+    usage: "graph view [--out <file>] [--no-open]",
+    handler: runGraphViewCommand,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "proposalValidate",
+    path: ["proposal", "validate"],
+    usage: "proposal validate <file>",
+    handler: runProposalValidateCommand,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "proposalApply",
+    path: ["proposal", "apply"],
+    usage: "proposal apply <file>",
+    handler: runProposalApplyCommand,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "sessionMarkMemoryCurrent",
+    path: ["session", "mark-memory-current"],
+    usage: "session mark-memory-current --session-ref <ref>",
+    handler: runSessionMarkMemoryCurrent,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "transcriptBundle",
+    path: ["transcript", "bundle"],
+    usage: "transcript bundle --platform codex|claude --file <path> [--file <path>...] --out <bundle.md>",
+    handler: runTranscriptBundle,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "hookIngest",
+    path: ["hook", "ingest"],
+    usage: "hook ingest --platform codex|claude",
+    handler: runHookIngest,
+  },
+  {
+    key: "hookWorker",
+    path: ["hook", "worker"],
+    usage: "hook worker",
+    handler: runHookWorker,
+  },
+] as const satisfies readonly CliCommand[];
+
+type CommandKey = (typeof cliCommands)[number]["key"];
+
+const commandByKey = new Map(cliCommands.map((command) => [command.key, command]));
+const commandsByDescendingPathLength = [...cliCommands].sort((left, right) => right.path.length - left.path.length);
+
 async function main(argv: string[]): Promise<void> {
-  const [area, action, ...rest] = argv;
-
-  if (area === "install") {
-    const options = parseInstallArgs([action, ...rest].filter((arg): arg is string => arg !== undefined));
-    const result = await installGreplica({
-      ...options,
-      repo: detectRepoContext(),
-    });
-    printInstallResult(result);
+  if (argv.length === 0 || isHelpRequest(argv[0])) {
+    printTopLevelHelp();
     return;
   }
 
-  if (area === "hook" && action === "ingest") {
-    runHookIngest(rest);
-    return;
-  }
-
-  if (area === "hook" && action === "worker") {
-    await runHookWorker();
-    return;
-  }
-
-  if (area === "session" && action === "mark-memory-current") {
-    runSessionMarkMemoryCurrent(rest);
-    return;
-  }
-
-  if (area === "transcript" && action === "bundle") {
-    runTranscriptBundle(rest);
-    return;
-  }
-
-  if (area === "config") {
-    runConfigCommand([action, ...rest].filter((arg): arg is string => arg !== undefined));
-    return;
-  }
-
-  if (area === "doctor") {
-    await runDoctor([action, ...rest].filter((arg): arg is string => arg !== undefined));
-    return;
-  }
-
-  if (area === "embeddings" && action === "prewarm") {
-    await runEmbeddingsPrewarm(rest);
-    return;
-  }
-
-  if (area === "graph" && action === "read") {
-    const { repo, service } = createCommandContext();
-    const graph = service.readGraph(repo);
-    console.log("Current graph view: main + working");
-    printSection("Components", graph.components, (item) => `${named(item)} ${anchor(item)}`.trim());
-    printSection("Flows", graph.flows, named);
-    printSection("Claims", graph.claims, (item) => `${field(item, "kind")}: ${field(item, "text")}`);
-    printSection("Sources", graph.sources, (item) => `${field(item, "kind")}: ${field(item, "title") || field(item, "ref")}`);
-    printSection("Edges", graph.edges, (item) => `${field(item, "from_type")}:${field(item, "from_id")} -[${field(item, "kind")}]-> ${field(item, "to_type")}:${field(item, "to_id")}`);
-    return;
-  }
-
-  if (area === "graph" && action === "context") {
-    const output = parseGraphContextOutput(rest);
-    const query = rest.filter((arg) => arg !== "--debug").join(" ").trim();
-    if (query.length === 0) throw new Error(`Usage: greplica graph ${action} <query>`);
-    const { repo, service } = createCommandContext();
-    const result = await service.contextGraph(repo, query);
-    if (output === "debug") {
-      console.log(JSON.stringify(result, null, 2));
-    } else {
-      console.log(renderGraphContextMarkdown(result));
-    }
-    return;
-  }
-
-  if (area === "graph" && action === "export") {
-    const outputDir = requireFile(rest[0], "Usage: greplica graph export <dir>");
-    const { repo, service } = createCommandContext();
-    const files = buildGraphFolderExport(service.readGraph(repo));
-    writeGraphFolderExport(outputDir, files);
-    console.log(`Exported current graph view to ${outputDir}`);
-    console.log(`Files: ${files.length}`);
-    return;
-  }
-
-  if (area === "graph" && action === "view") {
-    const options = parseGraphViewArgs(rest);
-    const { repo, service } = createCommandContext();
-    const graph = service.readGraph(repo);
-    if (graph.components.length === 0) {
-      console.log("No components to visualise. Bootstrap memory first.");
-      process.exitCode = 1;
+  const command = matchCommand(argv);
+  if (command !== undefined) {
+    const args = argv.slice(command.path.length);
+    if (commandHasHelpRequest(command, args)) {
+      printUsage([command]);
       return;
     }
-
-    const outputPath = options.outputPath ?? defaultGraphViewOutputPath(repo.repo_name);
-    mkdirSync(dirname(outputPath), { recursive: true });
-    const html = service.buildGraphView(repo);
-    writeFileSync(outputPath, html, "utf8");
-    console.log(`Wrote graph view to ${outputPath}`);
-
-    if (!options.noOpen) {
-      openInBrowser(outputPath);
-    }
+    await command.handler(args);
     return;
   }
 
-  if (area === "graph" && action === "audit" && rest[0] === "anchors") {
-    const { repo, service } = createCommandContext();
-    const result = await service.auditCodeAnchors(repo);
-    printAnchorAudit(result);
-    if (anchorAuditIssueCount(result) > 0) process.exitCode = 1;
+  const group = matchCommandGroup(argv);
+  if (group !== undefined) {
+    printGroupHelp(group.commands);
+    process.exitCode = group.helpRequested ? 0 : 1;
     return;
   }
 
-  if (area === "proposal" && action === "validate") {
-    const file = requireFile(rest[0], "Usage: greplica proposal validate <file>");
-    const { repo, service } = createCommandContext();
-    const proposal = readProposal(file);
-    const result = await service.validateProposal(repo, proposal);
-    if (result.valid) {
-      console.log("Proposal is valid.");
-      return;
-    }
-    console.log("Proposal is invalid:");
-    for (const error of result.errors) console.log(`- ${error}`);
+  printTopLevelHelp();
+  process.exitCode = 1;
+}
+
+function matchCommand(argv: string[]): CliCommand | undefined {
+  return commandsByDescendingPathLength.find((command) => command.path.every((part, index) => argv[index] === part));
+}
+
+function matchCommandGroup(argv: string[]): CliCommandGroup | undefined {
+  const helpRequested = isHelpRequest(argv.at(-1));
+  const groupPath = helpRequested ? argv.slice(0, -1) : argv;
+  for (let length = groupPath.length; length > 0; length -= 1) {
+    const prefix = groupPath.slice(0, length);
+    const commands = commandsForGroupPath(prefix);
+    if (commands.length > 0) return { commands, helpRequested };
+  }
+  return undefined;
+}
+
+function commandsForGroupPath(prefix: string[]): CliCommand[] {
+  return cliCommands.filter((command) => command.path.length > prefix.length && prefix.every((part, index) => command.path[index] === part));
+}
+
+function commandHasHelpRequest(command: CliCommand, args: string[]): boolean {
+  if (command.helpMode === "query-aware") return isQueryAwareHelpRequest(args);
+  return args[0] === "help" || hasHelpFlag(args);
+}
+
+function isHelpFlag(arg: string | undefined): boolean {
+  return arg === "--help" || arg === "-h";
+}
+
+function isHelpRequest(arg: string | undefined): boolean {
+  return isHelpFlag(arg) || arg === "help";
+}
+
+function hasHelpFlag(args: Array<string | undefined>): boolean {
+  return args.some(isHelpFlag);
+}
+
+function isOnlyHelpFlag(args: string[]): boolean {
+  return args.length === 1 && isHelpFlag(args[0]);
+}
+
+function isQueryAwareHelpRequest(args: string[]): boolean {
+  const queryParts = args.filter((arg) => arg !== "--debug");
+  return isOnlyHelpFlag(queryParts);
+}
+
+async function runInstallCommand(args: string[]): Promise<void> {
+  const options = parseInstallArgs(args);
+  const result = await installGreplica({
+    ...options,
+    repo: detectRepoContext(),
+  });
+  printInstallResult(result);
+}
+
+function runGraphReadCommand(_args: string[]): void {
+  const { repo, service } = createCommandContext();
+  const graph = service.readGraph(repo);
+  console.log("Current graph view: main + working");
+  printSection("Components", graph.components, (item) => `${named(item)} ${anchor(item)}`.trim());
+  printSection("Flows", graph.flows, named);
+  printSection("Claims", graph.claims, (item) => `${field(item, "kind")}: ${field(item, "text")}`);
+  printSection("Sources", graph.sources, (item) => `${field(item, "kind")}: ${field(item, "title") || field(item, "ref")}`);
+  printSection("Edges", graph.edges, (item) => `${field(item, "from_type")}:${field(item, "from_id")} -[${field(item, "kind")}]-> ${field(item, "to_type")}:${field(item, "to_id")}`);
+}
+
+async function runGraphContextCommand(args: string[]): Promise<void> {
+  const output = parseGraphContextOutput(args);
+  const query = args.filter((arg) => arg !== "--debug").join(" ").trim();
+  if (query.length === 0) throw new Error(usage("graphContext"));
+  const { repo, service } = createCommandContext();
+  const result = await service.contextGraph(repo, query);
+  if (output === "debug") {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(renderGraphContextMarkdown(result));
+  }
+}
+
+async function runGraphAuditAnchorsCommand(_args: string[]): Promise<void> {
+  const { repo, service } = createCommandContext();
+  const result = await service.auditCodeAnchors(repo);
+  printAnchorAudit(result);
+  if (anchorAuditIssueCount(result) > 0) process.exitCode = 1;
+}
+
+function runGraphExportCommand(args: string[]): void {
+  const outputDir = requireFile(args[0], usage("graphExport"));
+  const { repo, service } = createCommandContext();
+  const files = buildGraphFolderExport(service.readGraph(repo));
+  writeGraphFolderExport(outputDir, files);
+  console.log(`Exported current graph view to ${outputDir}`);
+  console.log(`Files: ${files.length}`);
+}
+
+function runGraphViewCommand(args: string[]): void {
+  const options = parseGraphViewArgs(args);
+  const { repo, service } = createCommandContext();
+  const graph = service.readGraph(repo);
+  if (graph.components.length === 0) {
+    console.log("No components to visualise. Bootstrap memory first.");
     process.exitCode = 1;
     return;
   }
 
-  if (area === "proposal" && action === "apply") {
-    const file = requireFile(rest[0], "Usage: greplica proposal apply <file>");
-    const { repo, service } = createCommandContext();
-    const installed = service.requireRepo(repo);
-    const proposal = readProposal(file);
-    const result = await service.applyProposal(repo, proposal);
-    console.log("Applied proposal to working memory.");
-    console.log(`Memory commit: ${result.memory_commit_id}`);
-    console.log(`Scope: ${result.scope_id}`);
-    console.log(`Components: ${result.created.components}`);
-    console.log(`Flows: ${result.created.flows}`);
-    console.log(`Claims: ${result.created.claims}`);
-    console.log(`Sources: ${result.created.sources}`);
-    console.log(`Edges: ${result.created.edges}`);
-    console.log(`Embeddings checked: ${result.embedding_status.checked_objects}`);
-    console.log(`Embeddings created: ${result.embedding_status.created}`);
-    console.log(`Embeddings reused: ${result.embedding_status.reused}`);
-    markProposalApplyMemoryUpdated(installed.repo_id, proposal);
+  const outputPath = options.outputPath ?? defaultGraphViewOutputPath(repo.repo_name);
+  mkdirSync(dirname(outputPath), { recursive: true });
+  const html = service.buildGraphView(repo);
+  writeFileSync(outputPath, html, "utf8");
+  console.log(`Wrote graph view to ${outputPath}`);
+
+  if (!options.noOpen) {
+    openInBrowser(outputPath);
+  }
+}
+
+async function runProposalValidateCommand(args: string[]): Promise<void> {
+  const file = requireFile(args[0], usage("proposalValidate"));
+  const { repo, service } = createCommandContext();
+  const proposal = readProposal(file);
+  const result = await service.validateProposal(repo, proposal);
+  if (result.valid) {
+    console.log("Proposal is valid.");
     return;
   }
+  console.log("Proposal is invalid:");
+  for (const error of result.errors) console.log(`- ${error}`);
+  process.exitCode = 1;
+}
 
-  printHelp();
-  process.exitCode = area === undefined ? 0 : 1;
+async function runProposalApplyCommand(args: string[]): Promise<void> {
+  const file = requireFile(args[0], usage("proposalApply"));
+  const { repo, service } = createCommandContext();
+  const installed = service.requireRepo(repo);
+  const proposal = readProposal(file);
+  const result = await service.applyProposal(repo, proposal);
+  console.log("Applied proposal to working memory.");
+  console.log(`Memory commit: ${result.memory_commit_id}`);
+  console.log(`Scope: ${result.scope_id}`);
+  console.log(`Components: ${result.created.components}`);
+  console.log(`Flows: ${result.created.flows}`);
+  console.log(`Claims: ${result.created.claims}`);
+  console.log(`Sources: ${result.created.sources}`);
+  console.log(`Edges: ${result.created.edges}`);
+  console.log(`Embeddings checked: ${result.embedding_status.checked_objects}`);
+  console.log(`Embeddings created: ${result.embedding_status.created}`);
+  console.log(`Embeddings reused: ${result.embedding_status.reused}`);
+  markProposalApplyMemoryUpdated(installed.repo_id, proposal);
 }
 
 function printAnchorAudit(result: ClaimAnchorAuditResult): void {
@@ -280,7 +431,7 @@ function runHookIngest(args: string[]): void {
 const greplicaContextMarker = "Greplica hook guidance";
 
 function runSessionMarkMemoryCurrent(args: string[]): void {
-  const sessionRef = parseRequiredOption(args, "--session-ref", "Usage: greplica session mark-memory-current --session-ref <ref>");
+  const sessionRef = parseRequiredOption(args, "--session-ref", usage("sessionMarkMemoryCurrent"));
   const { repo, service } = createCommandContext();
   const installed = service.requireRepo(repo);
   const db = openDatabase();
@@ -361,12 +512,12 @@ function parseHookIngestPlatform(args: string[]): InstallPlatform {
     if (arg === "--platform") return parseHookPlatform(args[index + 1]);
     if (arg.startsWith("--platform=")) return parseHookPlatform(arg.slice("--platform=".length));
   }
-  throw new Error("Usage: greplica hook ingest --platform codex|claude");
+  throw new Error(usage("hookIngest"));
 }
 
 function parseHookPlatform(value: string | undefined): InstallPlatform {
   if (value === "codex" || value === "claude") return value;
-  throw new Error("Usage: greplica hook ingest --platform codex|claude");
+  throw new Error(usage("hookIngest"));
 }
 
 async function runDoctor(args: string[]): Promise<void> {
@@ -425,7 +576,7 @@ async function runDoctor(args: string[]): Promise<void> {
 }
 
 async function runEmbeddingsPrewarm(args: string[]): Promise<void> {
-  if (args.length > 0) throw new Error("Usage: greplica embeddings prewarm");
+  if (args.length > 0) throw new Error(usage("embeddingsPrewarm"));
 
   const config = ensureGreplicaConfig();
   if (config.embedding.provider === "openai") {
@@ -456,7 +607,7 @@ async function checkEmbeddings(config: EmbeddingConfig): Promise<boolean> {
 }
 
 function runConfigCommand(args: string[]): void {
-  if (args.length > 0) throw new Error("Usage: greplica config");
+  if (args.length > 0) throw new Error(usage("config"));
 
   const config = ensureGreplicaConfig();
   console.log("Greplica config");
@@ -488,31 +639,31 @@ function parseInstallArgs(args: string[]): { platform: InstallPlatform; embeddin
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--platform") {
-      if (platform !== undefined) throw new Error(`Specify --platform only once.\n${installUsage()}`);
+      if (platform !== undefined) throw new Error(`Specify --platform only once.\n${usage("install")}`);
       platform = parseInstallPlatform(requireFlagValue(args, index, "--platform"));
       index += 1;
       continue;
     }
     if (arg.startsWith("--platform=")) {
-      if (platform !== undefined) throw new Error(`Specify --platform only once.\n${installUsage()}`);
+      if (platform !== undefined) throw new Error(`Specify --platform only once.\n${usage("install")}`);
       platform = parseInstallPlatform(arg.slice("--platform=".length));
       continue;
     }
     if (arg === "--embedding") {
-      if (embedding !== undefined) throw new Error(`Specify --embedding only once.\n${installUsage()}`);
+      if (embedding !== undefined) throw new Error(`Specify --embedding only once.\n${usage("install")}`);
       embedding = parseInstallEmbedding(requireFlagValue(args, index, "--embedding"));
       index += 1;
       continue;
     }
     if (arg.startsWith("--embedding=")) {
-      if (embedding !== undefined) throw new Error(`Specify --embedding only once.\n${installUsage()}`);
+      if (embedding !== undefined) throw new Error(`Specify --embedding only once.\n${usage("install")}`);
       embedding = parseInstallEmbedding(arg.slice("--embedding=".length));
       continue;
     }
-    throw new Error(installUsage());
+    throw new Error(usage("install"));
   }
 
-  if (platform === undefined || embedding === undefined) throw new Error(installUsage());
+  if (platform === undefined || embedding === undefined) throw new Error(usage("install"));
   return { platform, embedding };
 }
 
@@ -530,18 +681,18 @@ function parseTranscriptBundleArgs(args: string[]): TranscriptBundleOptions {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--platform") {
-      if (platform !== undefined) throw new Error(`Specify --platform only once.\n${transcriptBundleUsage()}`);
-      platform = parseTranscriptBundlePlatform(requireFlagValue(args, index, "--platform", transcriptBundleUsage()));
+      if (platform !== undefined) throw new Error(`Specify --platform only once.\n${usage("transcriptBundle")}`);
+      platform = parseTranscriptBundlePlatform(requireFlagValue(args, index, "--platform", usage("transcriptBundle")));
       index += 1;
       continue;
     }
     if (arg.startsWith("--platform=")) {
-      if (platform !== undefined) throw new Error(`Specify --platform only once.\n${transcriptBundleUsage()}`);
+      if (platform !== undefined) throw new Error(`Specify --platform only once.\n${usage("transcriptBundle")}`);
       platform = parseTranscriptBundlePlatform(arg.slice("--platform=".length));
       continue;
     }
     if (arg === "--file") {
-      files.push(resolve(requireFlagValue(args, index, "--file", transcriptBundleUsage())));
+      files.push(resolve(requireFlagValue(args, index, "--file", usage("transcriptBundle"))));
       index += 1;
       continue;
     }
@@ -550,42 +701,42 @@ function parseTranscriptBundleArgs(args: string[]): TranscriptBundleOptions {
       continue;
     }
     if (arg === "--out") {
-      if (outputPath !== undefined) throw new Error(`Specify --out only once.\n${transcriptBundleUsage()}`);
-      outputPath = resolve(requireFlagValue(args, index, "--out", transcriptBundleUsage()));
+      if (outputPath !== undefined) throw new Error(`Specify --out only once.\n${usage("transcriptBundle")}`);
+      outputPath = resolve(requireFlagValue(args, index, "--out", usage("transcriptBundle")));
       index += 1;
       continue;
     }
     if (arg.startsWith("--out=")) {
-      if (outputPath !== undefined) throw new Error(`Specify --out only once.\n${transcriptBundleUsage()}`);
+      if (outputPath !== undefined) throw new Error(`Specify --out only once.\n${usage("transcriptBundle")}`);
       outputPath = resolve(arg.slice("--out=".length));
       continue;
     }
-    throw new Error(transcriptBundleUsage());
+    throw new Error(usage("transcriptBundle"));
   }
 
-  if (platform === undefined || outputPath === undefined || files.length === 0) throw new Error(transcriptBundleUsage());
+  if (platform === undefined || outputPath === undefined || files.length === 0) throw new Error(usage("transcriptBundle"));
   return { platform, files, outputPath };
 }
 
 function parseTranscriptBundlePlatform(value: string): InstallPlatform {
   if (value === "codex" || value === "claude" || value === "opencode") return value;
-  throw new Error(`Invalid --platform ${value}.\n${transcriptBundleUsage()}`);
+  throw new Error(`Invalid --platform ${value}.\n${usage("transcriptBundle")}`);
 }
 
-function requireFlagValue(args: string[], index: number, flag: string, usage = installUsage()): string {
+function requireFlagValue(args: string[], index: number, flag: string, usageText = usage("install")): string {
   const value = args[index + 1];
-  if (value === undefined || value.startsWith("--")) throw new Error(`Missing value for ${flag}.\n${usage}`);
+  if (value === undefined || value.startsWith("--")) throw new Error(`Missing value for ${flag}.\n${usageText}`);
   return value;
 }
 
 function parseInstallPlatform(value: string): InstallPlatform {
   if (value === "codex" || value === "claude" || value === "opencode") return value;
-  throw new Error(`Invalid --platform ${value}.\n${installUsage()}`);
+  throw new Error(`Invalid --platform ${value}.\n${usage("install")}`);
 }
 
 function parseInstallEmbedding(value: string): InstallEmbedding {
   if (value === "local" || value === "openai") return value;
-  throw new Error(`Invalid --embedding ${value}.\n${installUsage()}`);
+  throw new Error(`Invalid --embedding ${value}.\n${usage("install")}`);
 }
 
 function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>): void {
@@ -616,14 +767,14 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
   for (const note of result.notes) console.log(`- ${note}`);
 }
 
-function installUsage(): string {
-  const cli = basename(process.argv[1] ?? "greplica");
-  return `Usage: ${cli} install --platform codex|claude|opencode --embedding local|openai`;
+function cliName(): string {
+  return basename(process.argv[1] ?? "greplica");
 }
 
-function transcriptBundleUsage(): string {
-  const cli = basename(process.argv[1] ?? "greplica");
-  return `Usage: ${cli} transcript bundle --platform codex|claude --file <path> [--file <path>...] --out <bundle.md>`;
+function usage(commandKey: CommandKey): string {
+  const command = commandByKey.get(commandKey);
+  if (command === undefined) throw new Error(`Unknown command key: ${commandKey}`);
+  return `Usage: ${cliName()} ${command.usage}`;
 }
 
 function printEmbeddingConfig(config: EmbeddingConfig): void {
@@ -684,7 +835,7 @@ function parseGraphViewArgs(args: string[]): GraphViewOptions {
       continue;
     }
     if (arg === "--out") {
-      outputPath = resolve(requireFlagValue(args, index, "--out", graphViewUsage()));
+      outputPath = resolve(requireFlagValue(args, index, "--out", usage("graphView")));
       index += 1;
       continue;
     }
@@ -692,15 +843,10 @@ function parseGraphViewArgs(args: string[]): GraphViewOptions {
       outputPath = resolve(arg.slice("--out=".length));
       continue;
     }
-    throw new Error(graphViewUsage());
+    throw new Error(usage("graphView"));
   }
 
   return { outputPath, noOpen };
-}
-
-function graphViewUsage(): string {
-  const cli = basename(process.argv[1] ?? "greplica");
-  return `Usage: ${cli} graph view [--out <file>] [--no-open]`;
 }
 
 function defaultGraphViewOutputPath(repoName: string): string {
@@ -765,22 +911,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function printHelp(): void {
-  const cli = basename(process.argv[1] ?? "greplica");
-  console.log(`Usage:
-  ${cli} install --platform codex|claude|opencode --embedding local|openai
-  ${cli} config
-  ${cli} doctor [--check-embeddings]
-  ${cli} embeddings prewarm
-  ${cli} graph read
-  ${cli} graph context <query> [--debug]
-  ${cli} graph audit anchors
-  ${cli} graph export <dir>
-  ${cli} graph view [--out <file>] [--no-open]
-  ${cli} transcript bundle --platform codex|claude --file <path> [--file <path>...] --out <bundle.md>
-  ${cli} session mark-memory-current --session-ref <ref>
-  ${cli} proposal validate <file>
-  ${cli} proposal apply <file>`);
+function printTopLevelHelp(): void {
+  printUsage(cliCommands.filter(isShownInTopLevelHelp));
+}
+
+function isShownInTopLevelHelp(command: CliCommand): boolean {
+  return command.showInTopLevelHelp === true;
+}
+
+function printGroupHelp(commands: readonly CliCommand[]): void {
+  printUsage(commands);
+}
+
+function printUsage(commands: readonly CliCommand[]): void {
+  const cli = cliName();
+  console.log(["Usage:", ...commands.map((command) => `  ${cli} ${command.usage}`)].join("\n"));
 }
 
 main(process.argv.slice(2)).catch((error: unknown) => {
