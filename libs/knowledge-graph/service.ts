@@ -125,14 +125,26 @@ export class KnowledgeGraphService {
     return auditClaimCodeAnchors(input.repo_root, this.repository.readGraphView(initialized.repo_id).claims);
   }
 
-  validateProposal(input: RepoRef, proposal: unknown): ProposalValidationResult {
+  async validateProposal(input: RepoRef, proposal: unknown): Promise<ProposalValidationResult> {
     this.requireRepo(input);
-    return validateProposal(normalizeProposal(proposal, this.repository), this.repository);
+    const normalizedProposal = normalizeProposal(proposal, this.repository);
+    const validation = validateProposal(normalizedProposal, this.repository);
+    if (!validation.valid) return validation;
+
+    const anchorErrors = anchorAuditErrors(
+      await auditClaimCodeAnchors(input.repo_root, normalizedProposal.creates.claims ?? []),
+    );
+    if (anchorErrors.length === 0) return validation;
+
+    return {
+      valid: false,
+      errors: anchorErrors,
+    };
   }
 
   async applyProposal(input: RepoRef, proposal: unknown): Promise<ApplyProposalResult> {
     const normalizedProposal = normalizeProposal(proposal, this.repository);
-    const validation = this.validateProposal(input, normalizedProposal);
+    const validation = await this.validateProposal(input, normalizedProposal);
     if (!validation.valid) {
       throw new Error(`Proposal is invalid:\n${validation.errors.map((error) => `- ${error}`).join("\n")}`);
     }
@@ -166,6 +178,21 @@ export class KnowledgeGraphService {
     };
   }
 
+}
+
+function anchorAuditErrors(result: ClaimAnchorAuditResult): string[] {
+  return [
+    ...result.missing_anchors.map((issue) => `${issue.claim_id} is code_verified but has no code anchors`),
+    ...result.missing_files.map((issue) => `${issue.claim_id} -> ${formatAnchor(issue.anchor)} file does not exist`),
+    ...result.missing_symbols.map((issue) => `${issue.claim_id} -> ${formatAnchor(issue.anchor)} symbol was not found`),
+    ...result.ambiguous_symbols.map((issue) => `${issue.claim_id} -> ${formatAnchor(issue.anchor)} symbol is ambiguous`),
+    ...result.unsupported_languages.map((issue) => `${issue.claim_id} -> ${formatAnchor(issue.anchor)} language is unsupported for symbol anchors`),
+  ];
+}
+
+function formatAnchor(anchor: { file: string; symbol?: string } | undefined): string {
+  if (anchor === undefined) return "<missing>";
+  return anchor.symbol === undefined ? anchor.file : `${anchor.file}#${anchor.symbol}`;
 }
 
 export function createLocalKnowledgeGraphService(

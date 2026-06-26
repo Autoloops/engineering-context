@@ -17,6 +17,7 @@ import { graphContextConfigFromGreplicaConfig } from "../../libs/knowledge-graph
 import { createEmbedder } from "../../libs/knowledge-graph/graph-context/embedder.js";
 import { renderGraphContextMarkdown } from "../../libs/knowledge-graph/graph-context/render.js";
 import { buildGraphFolderExport } from "../../libs/knowledge-graph/folder-export.js";
+import { buildTranscriptBundle } from "../../libs/session-transcript/bundle.js";
 import { installGreplica, platformDisplayName } from "../../libs/install/install.js";
 import { allPlatformInstallers, platformInstaller } from "../../libs/install/platforms/index.js";
 import type { InstallEmbedding, InstallPlatform } from "../../libs/install/paths.js";
@@ -59,6 +60,11 @@ async function main(argv: string[]): Promise<void> {
 
   if (area === "session" && action === "mark-memory-current") {
     runSessionMarkMemoryCurrent(rest);
+    return;
+  }
+
+  if (area === "transcript" && action === "bundle") {
+    runTranscriptBundle(rest);
     return;
   }
 
@@ -134,6 +140,7 @@ async function main(argv: string[]): Promise<void> {
     const { repo, service } = createCommandContext();
     const result = await service.auditCodeAnchors(repo);
     printAnchorAudit(result);
+    if (anchorAuditIssueCount(result) > 0) process.exitCode = 1;
     return;
   }
 
@@ -141,7 +148,7 @@ async function main(argv: string[]): Promise<void> {
     const file = requireFile(rest[0], "Usage: greplica proposal validate <file>");
     const { repo, service } = createCommandContext();
     const proposal = readProposal(file);
-    const result = service.validateProposal(repo, proposal);
+    const result = await service.validateProposal(repo, proposal);
     if (result.valid) {
       console.log("Proposal is valid.");
       return;
@@ -185,6 +192,14 @@ function printAnchorAudit(result: ClaimAnchorAuditResult): void {
   printAuditSection("Missing symbols", result.missing_symbols, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
   printAuditSection("Ambiguous symbols", result.ambiguous_symbols, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
   printAuditSection("Unsupported languages", result.unsupported_languages, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
+}
+
+function anchorAuditIssueCount(result: ClaimAnchorAuditResult): number {
+  return result.missing_anchors.length +
+    result.missing_files.length +
+    result.missing_symbols.length +
+    result.ambiguous_symbols.length +
+    result.unsupported_languages.length;
 }
 
 function printAuditSection<T>(title: string, items: T[], render: (item: T) => string): void {
@@ -279,6 +294,24 @@ function runSessionMarkMemoryCurrent(args: string[]): void {
     process.exitCode = 1;
   } finally {
     db.close();
+  }
+}
+
+function runTranscriptBundle(args: string[]): void {
+  const options = parseTranscriptBundleArgs(args);
+  const result = buildTranscriptBundle({
+    platform: options.platform,
+    files: options.files,
+  });
+  mkdirSync(dirname(options.outputPath), { recursive: true });
+  writeFileSync(options.outputPath, result.markdown, "utf8");
+
+  console.log(`Wrote transcript bundle to ${options.outputPath}`);
+  console.log(`Platform: ${options.platform}`);
+  console.log(`Transcripts: ${result.entries.length}`);
+  console.log("Session refs:");
+  for (const entry of result.entries) {
+    console.log(`- ${entry.sessionRef ?? "unknown"} (${entry.file})`);
   }
 }
 
@@ -466,6 +499,62 @@ function parseInstallArgs(args: string[]): { platform: InstallPlatform; embeddin
   return { platform, embedding };
 }
 
+interface TranscriptBundleOptions {
+  platform: InstallPlatform;
+  files: string[];
+  outputPath: string;
+}
+
+function parseTranscriptBundleArgs(args: string[]): TranscriptBundleOptions {
+  let platform: InstallPlatform | undefined;
+  let outputPath: string | undefined;
+  const files: string[] = [];
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--platform") {
+      if (platform !== undefined) throw new Error(`Specify --platform only once.\n${transcriptBundleUsage()}`);
+      platform = parseTranscriptBundlePlatform(requireFlagValue(args, index, "--platform", transcriptBundleUsage()));
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--platform=")) {
+      if (platform !== undefined) throw new Error(`Specify --platform only once.\n${transcriptBundleUsage()}`);
+      platform = parseTranscriptBundlePlatform(arg.slice("--platform=".length));
+      continue;
+    }
+    if (arg === "--file") {
+      files.push(resolve(requireFlagValue(args, index, "--file", transcriptBundleUsage())));
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--file=")) {
+      files.push(resolve(arg.slice("--file=".length)));
+      continue;
+    }
+    if (arg === "--out") {
+      if (outputPath !== undefined) throw new Error(`Specify --out only once.\n${transcriptBundleUsage()}`);
+      outputPath = resolve(requireFlagValue(args, index, "--out", transcriptBundleUsage()));
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--out=")) {
+      if (outputPath !== undefined) throw new Error(`Specify --out only once.\n${transcriptBundleUsage()}`);
+      outputPath = resolve(arg.slice("--out=".length));
+      continue;
+    }
+    throw new Error(transcriptBundleUsage());
+  }
+
+  if (platform === undefined || outputPath === undefined || files.length === 0) throw new Error(transcriptBundleUsage());
+  return { platform, files, outputPath };
+}
+
+function parseTranscriptBundlePlatform(value: string): InstallPlatform {
+  if (value === "codex" || value === "claude" || value === "opencode") return value;
+  throw new Error(`Invalid --platform ${value}.\n${transcriptBundleUsage()}`);
+}
+
 function requireFlagValue(args: string[], index: number, flag: string, usage = installUsage()): string {
   const value = args[index + 1];
   if (value === undefined || value.startsWith("--")) throw new Error(`Missing value for ${flag}.\n${usage}`);
@@ -527,6 +616,11 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
 function installUsage(): string {
   const cli = basename(process.argv[1] ?? "greplica");
   return `Usage: ${cli} install --platform codex|claude|opencode|openhands --embedding local|openai`;
+}
+
+function transcriptBundleUsage(): string {
+  const cli = basename(process.argv[1] ?? "greplica");
+  return `Usage: ${cli} transcript bundle --platform codex|claude --file <path> [--file <path>...] --out <bundle.md>`;
 }
 
 function printEmbeddingConfig(config: EmbeddingConfig): void {
@@ -679,6 +773,7 @@ function printHelp(): void {
   ${cli} graph audit anchors
   ${cli} graph export <dir>
   ${cli} graph view [--out <file>] [--no-open]
+  ${cli} transcript bundle --platform codex|claude --file <path> [--file <path>...] --out <bundle.md>
   ${cli} session mark-memory-current --session-ref <ref>
   ${cli} proposal validate <file>
   ${cli} proposal apply <file>`);

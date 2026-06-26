@@ -288,7 +288,7 @@ export class SqliteRepository {
       for (const component of proposal.creates.components ?? []) {
         this.db
           .prepare("INSERT INTO components (id, name, code_anchor) VALUES (@id, @name, @code_anchor)")
-          .run(component);
+          .run({ ...component, code_anchor: component.code_anchor ?? null });
         this.createMembership(scopeId, "component", component.id, memoryCommitId);
       }
 
@@ -313,7 +313,7 @@ export class SqliteRepository {
       for (const source of proposal.creates.sources ?? []) {
         this.db
           .prepare("INSERT INTO sources (id, kind, ref, title) VALUES (@id, @kind, @ref, @title)")
-          .run(source);
+          .run({ ...source, title: source.title ?? null });
       }
 
       for (const edge of proposal.creates.edges ?? []) {

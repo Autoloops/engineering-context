@@ -24,29 +24,60 @@ That's because it is re-learrning context. Every new session, your agent wastes 
 
 ---
 
-## Quick Start (paste into your agent)
+## Agent Quick Start
 
-If you want your agent to handle the entire setup in one step, paste this:
+Most users should not install Greplica by hand. Paste this into your coding agent from inside the repo you want Greplica to remember.
 
-`````txt
+Greplica requires Node.js 22-26.
+
+<div style="max-height: 34rem; overflow-y: auto; border: 1px solid #d0d7de; border-radius: 6px;">
+
+<pre><code class="language-text">
 Install Greplica for this repo.
 
-First install the CLI:
+Run:
 
 ```bash
 npm install -g greplica
+greplica install --platform &lt;codex|claude|opencode&gt; --embedding local
 ```
 
-Then run the installer for the agent I am using:
+Use the platform matching this agent. Do not manually copy skills. After installation, summarize the installer output, including skills, embedding mode, whether hooks were installed, and whether I need to restart or trust hooks.
 
-Codex:
+Before running install or bootstrap, ask me one question:
+"Should I use the last five prior sessions for this same repo to create richer Greplica memory?"
+
+Recommend yes, but do not read old transcripts deeply until I answer.
+
+Then bootstrap shallow memory for this repo:
+- Prefer using the `greplica-bootstrap` skill.
+- If the skill is not visible until restart, read the installed `greplica-bootstrap/SKILL.md` file and follow it directly.
+- Create, validate, and apply the bootstrap proposal.
+- Keep bootstrap output brief: give a one-sentence summary of what this repo does and say baseline memory was applied.
+
+If I opted into prior-session learning:
+- Find the five most recent prior sessions for this same repo and platform.
+- Candidate locations: Codex `~/.codex/sessions/**/*.jsonl`; Claude Code `~/.claude/projects/**/*.jsonl`.
+- For OpenCode, tell me transcript backfill is not supported yet.
+- Show me the five selected transcripts before bundling them: title if available, date/time, path, and why each matched this repo.
+- Since I already opted in, continue without asking a second confirmation and run:
+
 ```bash
-greplica install --platform codex --embedding local
+greplica transcript bundle --platform &lt;codex-or-claude&gt; --file &lt;path-1&gt; --file &lt;path-2&gt; --file &lt;path-3&gt; --file &lt;path-4&gt; --file &lt;path-5&gt; --out .greplica-transcript-backfill.md
 ```
 
-Claude Code:
-```bash
-greplica install --platform claude --embedding local
+- Then use the `greplica-fast-session-bootstrap` skill on `.greplica-transcript-backfill.md`.
+- After apply, show exactly three compact, high-signal memories in this style:
+
+```markdown
+Applied transcript backfill to working memory: .greplica-transcript-backfill.md
+
+Three useful things I learned from your previous sessions:
+
+1. **&lt;short title&gt;**
+   &lt;specific stored memory&gt;.
+   Why it matters: &lt;why this helps the next session&gt;.
+   Backed by: &lt;session/code evidence&gt;; connected to &lt;component/flow&gt;.
 ```
 
 OpenCode:
@@ -64,14 +95,23 @@ Do not manually copy skills. Let the installer do it.
 After installation, tell me where the skills were installed, which embedding mode was configured, whether I should restart the agent, and how to switch later to OpenAI embeddings if I want that.
 
 Then tell me how to use Greplica:
-- If this repo has not been initialized yet, tell me to run "Use greplica-bootstrap for this repo." once. If repo memory already exists, do not run it again.
-- Tell me that during work, the agent can use `greplica graph context "<question about the current task>"` to fetch relevant repo context, including prior working memory, before broad manual exploration.
+- Tell me that during work, the agent can use `greplica graph context "&lt;question about the current task&gt;"` to fetch relevant repo context, including prior working memory, before broad manual exploration.
 - Tell me that near the end of a useful session, I should run "Use greplica-update-working-memory for this session." so decisions, changed flows, constraints, and follow-up work are stored.
-- Tell me that OpenAI embeddings are also available later by rerunning `greplica install --platform <codex-or-claude-or-opencode-or-openhands> --embedding openai`.
-- IMPORTANT: tell me to add the Greplica guidance block manually to AGENTS.md or CLAUDE.md if I want the agent to keep using Greplica automatically.
-`````
+- Tell me that OpenAI embeddings are also available later by rerunning `greplica install --platform &lt;codex-or-claude-or-opencode-or-openhands&gt; --embedding openai`.
+- IMPORTANT: tell me that hooks and installed skills are the primary integration. Add a short AGENTS.md or CLAUDE.md instruction only if hooks are unavailable, not accepted, or I want extra repo-local guidance.
+</code></pre>
 
-This bootstraps a graph mapping your entire project, ready to store important context you build while working.
+</div>
+
+After that, the normal onboarding flow is:
+
+| Step | Ask your agent | What happens |
+| --- | --- | --- |
+| 1 | Paste the prompt above | Installs the CLI, installs the matching agent integration, and reports hooks/skills status. |
+| 2 | `Use greplica-bootstrap for this repo.` | Creates the first repo memory map. |
+| 3 | Optional prior-session learning | Shows five same-repo transcripts, bundles them, and stores three high-signal memories. |
+| 4 | Work normally | The agent can query `greplica graph context "<question>"` before broad exploration. |
+| 5 | Accept hooks, or run `Use greplica-update-working-memory for this session.` manually | Durable decisions, constraints, changed flows, and follow-ups are saved. |
 
 To visualise your current memory in browser, run:
 
@@ -138,7 +178,7 @@ The agent gets the relevant file anchors, the decision trail, and the constraint
 
 | When                    | Ask your agent                                         | What happens                                                               |
 | ----------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------- |
-| Before starting a task  | (automatic if guidance block is in place)              | Agent runs `greplica graph context "<task>"` before broad file exploration |
+| Before starting a task  | (automatic when hooks/agent guidance are active)       | Agent runs `greplica graph context "<task>"` before broad file exploration |
 | During work             | Agent uses context to navigate                         | Relevant components, flows, and past decisions surface immediately         |
 | End of a useful session | `Use greplica-update-working-memory for this session.` | Decisions, changed flows, constraints, and follow-up work are saved        |
 
@@ -149,13 +189,15 @@ The agent gets the relevant file anchors, the decision trail, and the constraint
 
 ### 1. Install the CLI
 
+Greplica requires Node.js 22-26.
+
 ```bash
 npm install -g greplica
 ```
 
 ### 2. Install for your coding agent
 
-Run this from inside the repository you want Greplica to remember:
+Run exactly one of these from inside the repository you want Greplica to remember:
 
 ```bash
 # Claude Code
@@ -173,9 +215,11 @@ greplica install --platform openhands --embedding local
 
 This copies the Greplica agent skills, configures local embeddings (no API key needed), and initializes the memory database.
 
-### 3. Add the Greplica guidance block to your agent config
+### 3. Restart or trust hooks if needed
 
-After install, Greplica tells you exactly which file to edit (`CLAUDE.md` or `AGENTS.md`). Add the guidance block so your agent knows how to use its memory on every session.
+After install, restart your coding agent if the new skills or hooks do not appear immediately. If your agent asks you to trust or accept the installed hooks, accept them for this repo.
+
+Hooks record session activity and attempt background working-memory updates. If hooks are unavailable or not accepted, manually ask the agent to use `greplica-update-working-memory` near the end of useful sessions. Add a short `AGENTS.md` or `CLAUDE.md` instruction only if you want extra repo-local guidance.
 
 ### 4. Bootstrap memory for this repository (once)
 
@@ -186,6 +230,30 @@ Use greplica-bootstrap for this repo.
 ```
 
 The agent reads your repository shallowly - README, config files, key entrypoints, type definitions - and writes a structured memory proposal. After validation and apply, the graph is ready.
+
+### 5. Optionally backfill from prior sessions
+
+Ask your agent to find five recent prior sessions for this repo and show you the selected transcript paths before it reads them deeply. If you already asked it to use prior sessions, it should continue from the shown list without asking a second confirmation.
+
+Candidate locations:
+
+- Codex: `~/.codex/sessions/**/*.jsonl`; prefer transcripts whose metadata `cwd` matches this repo.
+- Claude Code: `~/.claude/projects/<sanitized-current-cwd>/*.jsonl`; if needed, fall back to `~/.claude/projects/**/*.jsonl` and filter by transcript metadata `cwd`.
+- OpenCode: transcript backfill is not supported yet.
+
+Bundle them:
+
+```bash
+greplica transcript bundle --platform codex|claude --file <path> [--file <path>...] --out .greplica-transcript-backfill.md
+```
+
+Then ask:
+
+```
+Use greplica-fast-session-bootstrap on .greplica-transcript-backfill.md.
+```
+
+The skill reads the bundle, extracts durable decisions/gotchas/rejected approaches/follow-up work, validates and applies the proposal, then shows three compact memories that demonstrate what Greplica learned.
 
 ---
 
@@ -221,22 +289,24 @@ Switch at any time by rerunning `greplica install` with the new flag.
 
 ```bash
 greplica install --platform codex|claude|opencode|openhands --embedding local|openai
-greplica init [--local|--openai]
 greplica config
 greplica doctor [--check-embeddings]
 greplica graph read
-greplica graph context "<query>" [--json|--debug]
+greplica graph context "<query>" [--debug]
+greplica graph audit anchors
 greplica graph view [--out <file>] [--no-open]
 greplica graph export <dir>
+greplica transcript bundle --platform codex|claude --file <path> [--file <path>...] --out <bundle.md>
 greplica proposal validate <proposal.json>
 greplica proposal apply <proposal.json>
 ```
 
-- `greplica graph context "<query>"` - returns Markdown for agent use. Add `--json` for compact structured output, or `--debug` for the full retrieval payload with ranking signals.
+- `greplica graph context "<query>"` - returns Markdown for agent use. Add `--debug` for the full retrieval payload with ranking signals.
 - `greplica graph read` - prints the current graph view: all components, flows, claims, sources, and edges in scope.
 - `greplica graph view` to visualise the current memory in a local HTML, opens in your default browser. Use `--out` to choose where the file is written; by default it goes to a temp path.
+- `greplica transcript bundle` - converts one or more Codex or Claude Code JSONL transcripts into a sanitized Markdown bundle for `greplica-fast-session-bootstrap`.
 - `greplica doctor` - verifies installation and diagnoses embedding configuration failures. Not a required preflight before every command.
-- `greplica` automatically prepares memory state when commands run; no separate init step is needed.
+- `greplica install` prepares repo memory state; normal repo commands require install first.
 
 For **OpenHands**, install is repo-local: skills are written to `.agents/skills/` and the `UserPromptSubmit`/`Stop` hooks to `.openhands/hooks.json` (Claude/Codex install to the agent's home config instead). The hooks inject `graph context` guidance and trigger background working-memory updates the same way; OpenHands must trust the repo hooks for the background save to run.
 
@@ -267,4 +337,3 @@ The search eval scores `greplica graph context` retrieval with `Precision@10`, `
 Broader context-retrieval benchmarking, including SWE-Context benchmark work, is ongoing and showing promising early results. We will publish those numbers when the harness and methodology are stable enough to compare fairly.
 
 ---
-

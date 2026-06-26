@@ -248,4 +248,9 @@ Sources currently represent session artifacts. Do not create a source just becau
 1. Run `greplica proposal validate <proposal-file>`.
 2. Fix validation errors until valid.
 3. Run `greplica proposal apply <proposal-file>`.
-4. Summarize what memory was created and mention the proposal file path if it still exists.
+4. Keep the final bootstrap output brief:
+   - one sentence summarizing what the repository does, based on the applied proposal;
+   - one sentence saying baseline Greplica memory was applied;
+   - if the onboarding flow is continuing into prior-session learning, say you are reading prior sessions next.
+
+Do not run `greplica graph context` just to prove bootstrap worked. The bootstrap value report should come from the proposal you created and applied.

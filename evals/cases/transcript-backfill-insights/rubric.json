@@ -1,0 +1,393 @@
+{
+  "case_id": "transcript-backfill-insights",
+  "base_commit": "cec10c26d4c219ad4410e2d05043dbdd2438f331",
+  "score": {
+    "pass_threshold": 80,
+    "expected_memory_points": 30,
+    "expected_memory_hit_cap": 12,
+    "role_correctness_points": 5,
+    "evidence_correctness_points": 15,
+    "category_coverage_points": 10,
+    "category_coverage_min_count": 5,
+    "supersedes_points": 0,
+    "anchor_correctness_points": 10,
+    "quality_points": 15,
+    "summary_quality_points": 10,
+    "generation_time_points": 5,
+    "generation_time_full_credit_seconds": 300,
+    "generation_time_limit_seconds": 600,
+    "bad_memory_penalties": {
+      "unsupported": 8,
+      "wrong_role": 3,
+      "wrong_evidence": 6,
+      "duplicate_bootstrap": 8,
+      "transcript_noise": 15,
+      "over_specific": 5,
+      "generic_agent_behavior": 8,
+      "stale_or_reverted_as_implemented": 10,
+      "bad_supersedes": 8
+    },
+    "noise_penalties": {
+      "stores_raw_transcript_junk": 15,
+      "stores_system_or_developer_prompt": 15,
+      "stores_encrypted_reasoning": 15,
+      "stores_command_log_chatter": 8
+    }
+  },
+  "judge": {
+    "instructions": [
+      "Classify the candidate fast-session-bootstrap proposal for this exact previous-session bundle.",
+      "Do not compute a numeric score. The eval runner computes all scores locally.",
+      "The expected memories are a gold pool of useful possibilities, not an exhaustive checklist the agent must fully recover.",
+      "A strong run should extract a fast, impressive subset with high precision, good category coverage, and useful final output.",
+      "Judge semantic equivalence, not exact claim IDs or exact wording.",
+      "Classify every gold-pool memory as present or absent. If an item is vague, only indirectly implied, or too incomplete to help a future coding agent, mark it absent.",
+      "This eval rewards high-signal incremental memory from previous sessions, especially decisions, rejected alternatives, risks/gotchas, corrected repo assumptions, and evidence/provenance rules.",
+      "A user correction is only valuable if it reveals repo-specific truth, a rejected implementation, stale memory/docs, a wrong assumption, a workflow constraint, or future work. Generic agent etiquette such as 'plan before implementing' is bad memory.",
+      "Do not award credit for planned, reverted, or exploratory work as implemented behavior unless current repo code verifies it.",
+      "Do not award credit for simply repeating bootstrap memory unless a transcript narrowed, corrected, rejected, or clarified it in a way future agents should preserve.",
+      "Current implementation facts should be code_verified only when verified against current repo code. If a matched claim is code_verified, expected_anchor_sets require the listed anchors.",
+      "A code_verified claim with valid current-repo code anchors should not be marked wrong_evidence merely because the proposal does not separately narrate how the file was inspected; anchor validation is the verification signal.",
+      "Transcript-derived decisions, constraints, rationales, trade-offs, drift, tasks, and future work should usually be source_verified or otherwise evidenced by a stable session source from the bundle.",
+      "Do not penalize a source_verified transcript-derived claim for including a precise code anchor as a navigation hint when stable session provenance is present and the claim text is a decision, constraint, rationale, trade-off, drift, task, or future work rather than current implementation truth. Code anchors on source_verified claims are navigation, not truth, unless the claim text asserts current implementation behavior.",
+      "Penalize broad or unnecessary code upgrading: the proposal should not inspect or mark many transcript-derived memories code_verified unless their primary value is current implementation behavior.",
+      "For transcript backfill, supersedes should be rare. Penalize superseding a true bootstrap code fact with adjacent usage guidance, a narrower clarification, or a non-conflicting session decision.",
+      "Evidence edges for session-backed claims should point only to the transcript source that actually supports the claim and should include a meaningful metadata.reason.",
+      "Do not require every claim to cite every transcript source; that is a wrong-evidence pattern.",
+      "Bad memories should contain candidate claims that are harmful, unsupported, misleading, duplicated, noisy, stale/reverted-as-implemented, generic agent behavior, bad supersedes, or too implementation-specific.",
+      "Use candidate_update.final_message to judge summary_quality. It should show exactly three compact, non-obvious memories from the applied proposal. Each item should name a concrete repo-specific memory, explain why it helps the next session, and include a compact evidence/connection line. Do not penalize for omitting a 5-8 item summary; that old format is no longer desired.",
+      "Flag generic project summaries, raw transcript chatter, historical system/developer prompt content, command logs, unsupported claims, duplicate bootstrap memory without transcript nuance, over-broad capability lists, code facts sourced only from transcript text, and blanket evidence links."
+    ],
+    "allowed_memory_roles": [
+      "code_fact",
+      "flow_fact",
+      "constraint",
+      "rationale",
+      "tradeoff",
+      "drift",
+      "task",
+      "future_work"
+    ],
+    "bundle_facts": [
+      "The bundle contains five Codex session refs: codex-session:019ee6a2-efa0-7471-a59e-b41b5b033ee3, codex-session:019e846e-d7dc-7f33-a811-ccd825f33a08, codex-session:019ee4ac-de50-7572-8d05-3a89c859849d, codex-session:019e8d51-1eb6-7a43-824a-9eec0014ca50, and codex-session:019e9181-71e9-79c2-ba60-b2f53ac6ef2e.",
+      "Session 019ee6a2 discussed the risk that globally installed hooks would fire in every repo or folder and store memory for places where the user did not opt in.",
+      "Session 019ee6a2 decided Greplica install should be repo-scoped: install creates the repo opt-in state for the current repo and normal commands should require installed repo state instead of silently initializing any repo.",
+      "Session 019ee6a2 accepted global hook dispatchers only if they are inert outside repos where Greplica has been installed.",
+      "Session 019ee6a2 decided the existing repos table is enough to represent enabled repos; there should not be a repo row for repos where Greplica is not needed.",
+      "Session 019ee6a2 refined wrong-repo errors so commands tell the user to run install to fix missing repo or scope state.",
+      "Session 019ee6a2 updated bootstrap behavior so greplica-bootstrap can install the current repo when missing and retry once.",
+      "Session 019e846e designed Source as session transcript provenance: one session source can evidence multiple claims from that session.",
+      "Session 019e846e clarified that sources are audit/grouping artifacts, not the mechanism that makes code facts true.",
+      "Session 019e846e rejected Source(kind: code) for ordinary code inspection; code facts should be represented through code_verified claims, component anchors, flow links, and claim about links.",
+      "Session 019e846e rejected storing memory commit SHA as code truth because dirty working branches make that misleading.",
+      "Session 019e846e chose free-text metadata.reason on evidenced_by edges and required every evidenced_by edge to have a reason.",
+      "Session 019e846e discussed but did not build a separate session-ingestion/session-apply command; proposal JSON remained the workflow primitive for that slice.",
+      "Session 019ee4ac investigated hook/session tracking and found session tracking was working, but session memory-current marking and update accountability were weaker than desired.",
+      "Session 019ee4ac identified a risk where background memory updates could succeed or no-op without clearly marking each tracked session current.",
+      "Session 019e8d51 started with a plan to filter transcript eval inputs to human/agent Markdown, but the implementation was reverted when the user asked for a plan first.",
+      "Session 019e8d51 explored Greplica usage guidance placement; repo AGENTS.md was removed after the user clarified the target was Codex-specific always-loaded guidance.",
+      "Session 019e9181 designed graph folder export / visualizer behavior: components and flows should have compact index files, claims should not become a noisy folder hierarchy, and output should be less verbose but still useful.",
+      "Session 019e9181 rejected the exact-output unit test for graph folder export as not useful enough after reviewing what it checked.",
+      "Session 019e9181 refined Greplica usage guidance toward making a task-shaped graph-context query before broad manual exploration and not running doctor as routine preflight."
+    ],
+    "expected_memories": [
+      {
+        "id": "install_repo_opt_in",
+        "category": "decision",
+        "role": "constraint",
+        "weight": 5,
+        "description": "greplica install is the repo opt-in boundary; normal repo commands should require installed repo state."
+      },
+      {
+        "id": "normal_commands_no_auto_init",
+        "category": "rejected_alternative",
+        "role": "constraint",
+        "weight": 5,
+        "description": "Normal graph/proposal/session commands should not silently initialize arbitrary repos."
+      },
+      {
+        "id": "repos_table_is_enablement_marker",
+        "category": "component_flow",
+        "role": "code_fact",
+        "weight": 3,
+        "description": "The existing repos table/state is enough to represent enabled repos; no separate opt-in table was needed."
+      },
+      {
+        "id": "global_hooks_allowed_only_if_inert",
+        "category": "decision",
+        "role": "constraint",
+        "weight": 5,
+        "description": "Global hooks are acceptable only because hook dispatch is inert outside installed repos."
+      },
+      {
+        "id": "hook_ingest_noop_uninstalled",
+        "category": "risk_gotcha",
+        "role": "constraint",
+        "weight": 5,
+        "description": "hook ingest should silently exit in uninstalled repos to avoid polluting every Codex/Claude session."
+      },
+      {
+        "id": "hook_only_records_after_install",
+        "category": "component_flow",
+        "role": "flow_fact",
+        "weight": 4,
+        "description": "Hooks should record sessions, inject guidance, or start workers only after repo install state exists."
+      },
+      {
+        "id": "install_first_errors",
+        "category": "decision",
+        "role": "constraint",
+        "weight": 3,
+        "description": "Wrong-repo command failures should tell the user to run greplica install, not vague doctor/init guidance."
+      },
+      {
+        "id": "doctor_does_not_create_state",
+        "category": "decision",
+        "role": "constraint",
+        "weight": 4,
+        "description": "greplica doctor diagnoses install/config state but should not create repo memory state."
+      },
+      {
+        "id": "bootstrap_can_install_missing_repo",
+        "category": "component_flow",
+        "role": "flow_fact",
+        "weight": 3,
+        "description": "The bootstrap skill may install the current repo when missing, then retry once."
+      },
+      {
+        "id": "doctor_not_routine_preflight",
+        "category": "guidance_decision",
+        "role": "constraint",
+        "weight": 4,
+        "description": "Greplica guidance should not tell agents to run doctor before normal commands; run the intended command first and diagnose failure if needed."
+      },
+      {
+        "id": "session_source_is_provenance",
+        "category": "evidence_rule",
+        "role": "rationale",
+        "weight": 5,
+        "description": "Session sources are provenance/grouping for session-derived claims, not truth for code facts."
+      },
+      {
+        "id": "one_session_source_many_claims",
+        "category": "evidence_rule",
+        "role": "rationale",
+        "weight": 3,
+        "description": "One session source can evidence multiple claims from that transcript."
+      },
+      {
+        "id": "no_code_source_for_inspection",
+        "category": "rejected_alternative",
+        "role": "constraint",
+        "weight": 5,
+        "description": "Do not create Source(kind: code) merely because code was inspected."
+      },
+      {
+        "id": "code_truth_via_claim_anchors",
+        "category": "evidence_rule",
+        "role": "constraint",
+        "weight": 5,
+        "description": "Code facts should use code_verified claims plus anchors/components/flows, not session source truth."
+      },
+      {
+        "id": "memory_commit_sha_not_code_truth",
+        "category": "rejected_alternative",
+        "role": "rationale",
+        "weight": 4,
+        "description": "A memory commit's HEAD/SHA does not prove exact code truth when worktrees are dirty."
+      },
+      {
+        "id": "source_struct_stays_simple",
+        "category": "decision",
+        "role": "tradeoff",
+        "weight": 3,
+        "description": "Keep Source simple; put richer explanation on edges/claims instead of expanding Source prematurely."
+      },
+      {
+        "id": "evidence_reason_on_edge",
+        "category": "evidence_rule",
+        "role": "constraint",
+        "weight": 5,
+        "description": "Free-text evidence reason belongs on evidenced_by edge metadata."
+      },
+      {
+        "id": "evidence_reason_required",
+        "category": "evidence_rule",
+        "role": "constraint",
+        "weight": 5,
+        "description": "Every session-backed evidenced_by edge should explain why that transcript supports the claim."
+      },
+      {
+        "id": "proposal_json_remains_primitive",
+        "category": "rejected_alternative",
+        "role": "tradeoff",
+        "weight": 5,
+        "description": "Session/provenance work kept proposal JSON as the primitive instead of adding a session-apply command."
+      },
+      {
+        "id": "fixed_commit_eval_fixtures_not_churned",
+        "category": "risk_gotcha",
+        "role": "constraint",
+        "weight": 3,
+        "description": "Fixed-commit eval fixtures should not be casually updated during unrelated implementation work."
+      },
+      {
+        "id": "hooks_tracking_vs_memory_current_gap",
+        "category": "risk_gotcha",
+        "role": "drift",
+        "weight": 5,
+        "description": "Session tracking can work while memory-current marking/accountability is still weak."
+      },
+      {
+        "id": "background_update_noop_gap",
+        "category": "risk_gotcha",
+        "role": "drift",
+        "weight": 4,
+        "description": "Background memory updates can succeed or no-op without clearly marking each tracked session current."
+      },
+      {
+        "id": "installed_cli_vs_checkout_confusion",
+        "category": "risk_gotcha",
+        "role": "drift",
+        "weight": 3,
+        "description": "Hook diagnostics may observe installed CLI behavior, not the current source checkout, unless explicitly controlled."
+      },
+      {
+        "id": "transcript_projection_was_planning_only",
+        "category": "corrected_assumption",
+        "role": "constraint",
+        "weight": 5,
+        "description": "Session 019e8d51 should not be treated as proof that transcript Markdown projection was implemented; early changes were reverted."
+      },
+      {
+        "id": "codex_guidance_not_repo_agents",
+        "category": "corrected_assumption",
+        "role": "constraint",
+        "weight": 5,
+        "description": "Always-loaded Greplica usage guidance for Codex should live in Codex-specific/global context, not repo AGENTS.md, unless explicitly requested."
+      },
+      {
+        "id": "start_with_agent_md_not_skill",
+        "category": "guidance_decision",
+        "role": "tradeoff",
+        "weight": 3,
+        "description": "Greplica usage/search guidance may start as agent instruction; a dedicated skill was considered overkill until repeated usage proves need."
+      },
+      {
+        "id": "graph_export_entity_indexes",
+        "category": "component_flow",
+        "role": "flow_fact",
+        "weight": 5,
+        "description": "Graph export should use one index.md per component/flow, nested by entity relationships."
+      },
+      {
+        "id": "graph_export_no_claim_folders",
+        "category": "rejected_alternative",
+        "role": "constraint",
+        "weight": 5,
+        "description": "Claims should not become their own noisy folder hierarchy in graph export."
+      },
+      {
+        "id": "graph_export_group_claims_compactly",
+        "category": "decision",
+        "role": "flow_fact",
+        "weight": 4,
+        "description": "Claims in graph export should be grouped compactly by kind, not rendered as verbose per-claim blocks."
+      },
+      {
+        "id": "graph_export_sources_compact",
+        "category": "decision",
+        "role": "flow_fact",
+        "weight": 3,
+        "description": "Source evidence in graph export should be compact source labels, not wordy inline evidence dumps."
+      },
+      {
+        "id": "exact_markdown_unit_test_rejected",
+        "category": "rejected_alternative",
+        "role": "tradeoff",
+        "weight": 4,
+        "description": "An exact-output unit test for graph folder export was tried/explained and then removed as not useful enough."
+      },
+      {
+        "id": "task_shaped_graph_context_guidance",
+        "category": "guidance_decision",
+        "role": "constraint",
+        "weight": 5,
+        "description": "Greplica guidance should push agents to ask task-shaped graph-context queries before broad manual exploration."
+      },
+      {
+        "id": "stable_session_refs_for_backfill",
+        "category": "evidence_rule",
+        "role": "constraint",
+        "weight": 5,
+        "description": "Transcript bootstrap should use stable session refs from bundle metadata, not generic current-session sources."
+      },
+      {
+        "id": "no_blanket_transcript_evidence",
+        "category": "evidence_rule",
+        "role": "constraint",
+        "weight": 5,
+        "description": "Do not attach every claim to every transcript; evidence should point only to supporting sessions."
+      }
+    ],
+    "expected_supersedes": [],
+    "expected_anchor_sets": [
+      {
+        "expected_memory_id": "install_repo_opt_in",
+        "anchors": [
+          {
+            "file": "libs/install/install.ts",
+            "symbol": "installGreplica"
+          }
+        ]
+      },
+      {
+        "expected_memory_id": "hook_ingest_noop_uninstalled",
+        "anchors": [
+          {
+            "file": "apps/cli/main.ts",
+            "symbol": "runHookIngest"
+          }
+        ]
+      },
+      {
+        "expected_memory_id": "evidence_reason_required",
+        "anchors": [
+          {
+            "file": "libs/knowledge-graph/validate-proposal.ts",
+            "symbol": "validateEvidenceMetadata"
+          }
+        ]
+      },
+      {
+        "expected_memory_id": "no_code_source_for_inspection",
+        "anchors": [
+          {
+            "file": "libs/knowledge-graph/schema.ts",
+            "symbol": "SourceKind"
+          }
+        ]
+      },
+      {
+        "expected_memory_id": "graph_export_entity_indexes",
+        "anchors": [
+          {
+            "file": "libs/knowledge-graph/folder-export.ts",
+            "symbol": "buildGraphFolderExport"
+          }
+        ]
+      }
+    ],
+    "bad_memory_categories": {
+      "unsupported": "A candidate claim says something not supported by the bundle, current repo code, or initial memory.",
+      "wrong_role": "A candidate claim is semantically assigned to the wrong memory role.",
+      "wrong_evidence": "A candidate claim has incorrect truth/evidence semantics, such as a session-derived claim without stable session evidence, a code fact represented only as transcript truth, a generic current-session source, or every claim attached to every transcript source.",
+      "duplicate_bootstrap": "A candidate claim repeats initial bootstrap memory without adding transcript-derived nuance.",
+      "transcript_noise": "A candidate claim stores raw transcript noise, system/developer prompts, encrypted reasoning, command logs, or generic conversation.",
+      "over_specific": "A candidate claim stores one-off implementation steps, file-change summaries, test-run summaries, command output, or line-level trivia without extracting a durable reusable repo rule.",
+      "generic_agent_behavior": "A candidate claim stores generic coding-agent etiquette instead of repo/product memory.",
+      "stale_or_reverted_as_implemented": "A candidate claim treats planned, reverted, exploratory, or unlanded transcript work as implemented behavior.",
+      "bad_supersedes": "A candidate claim incorrectly supersedes a broader true memory instead of adding a narrower adjacent constraint."
+    }
+  }
+}

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 export type InstallPlatform = "codex" | "claude" | "opencode" | "openhands";
 export type InstallEmbedding = "local" | "openai";
 
-export const skillNames = ["greplica-bootstrap", "greplica-update-working-memory"] as const;
+export const skillNames = ["greplica-bootstrap", "greplica-update-working-memory", "greplica-fast-session-bootstrap"] as const;
 export type SkillName = (typeof skillNames)[number];
 
 export function packageRoot(): string {
