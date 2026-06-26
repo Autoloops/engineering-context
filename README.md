@@ -78,31 +78,28 @@ Running `greplica graph context "how does proposal apply work?"` outputs:
 ```markdown
 # Graph Context
 
-Query: how does proposal apply work?
+## Best Claims
 
-## Components
+### 1. claim.apply_validates_before_writing
 
-- `component.knowledge_graph_service` Knowledge Graph Service
-  Anchor: `libs/knowledge-graph/service.ts`
-- `component.sqlite_repository` SQLite Repository
-  Anchor: `libs/storage/sqlite/repository.ts`
+applyProposal validates the proposal before writing any records.
 
-## Flows
+Trust: fact | code_verified | intended.
 
-### Proposal Apply
+Anchor: `libs/knowledge-graph/service.ts:105-138#applyProposal`. About: flow Proposal Apply.
 
-ID: `flow.proposal_apply`
+Evidence: session Bootstrap run (`codex-session:abc`) - captured the validated apply workflow.
 
-Claims:
-- `claim.apply_validates_before_writing` (fact, code_verified): applyProposal validates the proposal before writing any records.
-- `claim.memory_commits_chain_with_parent` (fact, code_verified): Each memory commit stores a reference to its predecessor.
+## Related Components
 
-## Other Relevant Claims
+- 1. Knowledge Graph Service. ID: `component.knowledge_graph_service`. Anchor: `libs/knowledge-graph/service.ts`. Supporting claims: `claim.apply_validates_before_writing`.
 
-- `claim.apply_prints_commit_scope_and_counts` (fact, code_verified): proposal apply prints the memory commit ID, scope ID, and created object counts.
+## Related Flows
+
+- 1. Proposal Apply. ID: `flow.proposal_apply`. Supporting claims: `claim.apply_validates_before_writing`.
 ```
 
-The agent gets the relevant file anchors, the decision trail, and the constraints - without reading the whole codebase.
+The agent gets the relevant file anchors, trust metadata, evidence, the decision trail, and the constraints - without reading the whole codebase.
 
 ---
 

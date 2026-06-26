@@ -58,14 +58,19 @@ function renderRankedClaims(
 ): string[] {
   if (claims.length === 0) return ["- None."];
   return claims.flatMap((claim, index) => {
+    const trust = `Trust: ${claim.object.kind} | ${claim.object.truth} | ${claim.object.intent}.`;
     const anchors = claim.code_anchors.length === 0 ? "" : ` Anchor: ${claim.code_anchors.map(anchorLabel).join("; ")}.`;
     const about = aboutLabel(claim.about, componentsById, flowsById);
+    const detail = `${anchors}${about}`.trim();
+    const evidence = evidenceLabel(claim.evidence);
     return [
       `### ${index + 1}. ${claim.object.id}`,
       "",
       claim.object.text,
       "",
-      `${anchors}${about}`.trim(),
+      trust,
+      ...(detail.length === 0 ? [] : ["", detail]),
+      ...(evidence.length === 0 ? [] : [evidence]),
       "",
     ];
   });
@@ -94,6 +99,22 @@ function aboutLabel(
     return `flow ${flowsById.get(target.id) ?? target.id}`;
   });
   return ` About: ${labels.join("; ")}.`;
+}
+
+function evidenceLabel(evidence: Extract<RankedGraphContextResult, { type: "claim" }>["evidence"]): string {
+  if (evidence.length === 0) return "";
+  return `Evidence: ${evidence.map(evidenceItemLabel).join("; ")}.`;
+}
+
+function evidenceItemLabel(evidence: Extract<RankedGraphContextResult, { type: "claim" }>["evidence"][number]): string {
+  const label = sourceLabel(evidence.source);
+  const reason = evidence.reason.trim();
+  return reason.length === 0 ? label : `${label} - ${reason}`;
+}
+
+function sourceLabel(source: Extract<RankedGraphContextResult, { type: "claim" }>["evidence"][number]["source"]): string {
+  if (source.title === undefined || source.title === source.ref) return `${source.kind} \`${source.ref}\``;
+  return `${source.kind} ${source.title} (\`${source.ref}\`)`;
 }
 
 function lines(...values: string[]): string {

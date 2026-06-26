@@ -20,6 +20,7 @@
     "prepare": "npm run build",
     "typecheck": "tsc --noEmit",
     "test:transcript-bundle": "npm run build && node scripts/check-transcript-bundle.js",
+    "test:graph-context-render": "npm run build && node scripts/check-graph-context-render.js",
     "eval:bootstrap-current": "npm run build && node dist/evals/cases/bootstrap-current-repo-at-8038fe8/run.js",
     "eval:coding-proposal-apply-atomicity": "npm run build && node dist/evals/cases/coding-proposal-apply-atomicity-at-d6ebf80/run.js",
     "eval:curated-doc-bootstrap-vercel-chat": "npm run build && node dist/evals/cases/curated-doc-bootstrap-vercel-chat-at-f3de128/run.js",
