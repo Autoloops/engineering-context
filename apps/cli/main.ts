@@ -5,7 +5,7 @@ import { isatty } from "node:tty";
 import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { createLocalKnowledgeGraphService, KnowledgeGraphService } from "../../libs/knowledge-graph/service.js";
-import type { KnowledgeGraphService as KnowledgeGraphServiceType, RepoRef } from "../../libs/knowledge-graph/service.js";
+import type { ClaimAnchorAuditResult, RepoRef } from "../../libs/knowledge-graph/service.js";
 import { envVarSource, loadRepoEnv, type LoadedRepoEnv } from "../../libs/env/load-local-env.js";
 import {
   ensureGreplicaConfig,
@@ -15,14 +15,16 @@ import {
 } from "../../libs/config/greplica-config.js";
 import { graphContextConfigFromGreplicaConfig } from "../../libs/knowledge-graph/graph-context/config.js";
 import { createEmbedder } from "../../libs/knowledge-graph/graph-context/embedder.js";
-import { compactGraphContextResult, renderGraphContextMarkdown } from "../../libs/knowledge-graph/graph-context/render.js";
+import { renderGraphContextMarkdown } from "../../libs/knowledge-graph/graph-context/render.js";
 import { buildGraphFolderExport } from "../../libs/knowledge-graph/folder-export.js";
+import { buildTranscriptBundle } from "../../libs/session-transcript/bundle.js";
 import { installGreplica, platformDisplayName } from "../../libs/install/install.js";
 import { allPlatformInstallers } from "../../libs/install/platforms/index.js";
 import type { InstallEmbedding, InstallPlatform } from "../../libs/install/paths.js";
 import { hookCwd, hookEventName, hookSessionId, hookTranscriptPath, readHookInput } from "../../libs/hooks/hook-input.js";
 import { HookSessionStore } from "../../libs/hooks/session-state.js";
 import { runHookWorker, startHookWorker } from "../../libs/hooks/worker.js";
+import { withLocalModelLock } from "../../libs/knowledge-graph/graph-context/local-model-lock.js";
 import { openDatabase } from "../../libs/storage/sqlite/db.js";
 import { SqliteRepository as SqliteKnowledgeGraphRepository } from "../../libs/storage/sqlite/repository.js";
 import { detectRepoContext } from "./repo-context.js";
@@ -31,7 +33,7 @@ interface CommandContext {
   repo: RepoRef;
   env: LoadedRepoEnv;
   config: GreplicaConfig;
-  service: KnowledgeGraphServiceType;
+  service: KnowledgeGraphService;
 }
 
 async function main(argv: string[]): Promise<void> {
@@ -62,6 +64,11 @@ async function main(argv: string[]): Promise<void> {
     return;
   }
 
+  if (area === "transcript" && action === "bundle") {
+    runTranscriptBundle(rest);
+    return;
+  }
+
   if (area === "config") {
     runConfigCommand([action, ...rest].filter((arg): arg is string => arg !== undefined));
     return;
@@ -69,6 +76,11 @@ async function main(argv: string[]): Promise<void> {
 
   if (area === "doctor") {
     await runDoctor([action, ...rest].filter((arg): arg is string => arg !== undefined));
+    return;
+  }
+
+  if (area === "embeddings" && action === "prewarm") {
+    await runEmbeddingsPrewarm(rest);
     return;
   }
 
@@ -86,14 +98,12 @@ async function main(argv: string[]): Promise<void> {
 
   if (area === "graph" && action === "context") {
     const output = parseGraphContextOutput(rest);
-    const query = rest.filter((arg) => arg !== "--json" && arg !== "--debug").join(" ").trim();
+    const query = rest.filter((arg) => arg !== "--debug").join(" ").trim();
     if (query.length === 0) throw new Error(`Usage: greplica graph ${action} <query>`);
     const { repo, service } = createCommandContext();
     const result = await service.contextGraph(repo, query);
     if (output === "debug") {
       console.log(JSON.stringify(result, null, 2));
-    } else if (output === "json") {
-      console.log(JSON.stringify(compactGraphContextResult(result), null, 2));
     } else {
       console.log(renderGraphContextMarkdown(result));
     }
@@ -132,11 +142,19 @@ async function main(argv: string[]): Promise<void> {
     return;
   }
 
+  if (area === "graph" && action === "audit" && rest[0] === "anchors") {
+    const { repo, service } = createCommandContext();
+    const result = await service.auditCodeAnchors(repo);
+    printAnchorAudit(result);
+    if (anchorAuditIssueCount(result) > 0) process.exitCode = 1;
+    return;
+  }
+
   if (area === "proposal" && action === "validate") {
     const file = requireFile(rest[0], "Usage: greplica proposal validate <file>");
     const { repo, service } = createCommandContext();
     const proposal = readProposal(file);
-    const result = service.validateProposal(repo, proposal);
+    const result = await service.validateProposal(repo, proposal);
     if (result.valid) {
       console.log("Proposal is valid.");
       return;
@@ -170,6 +188,39 @@ async function main(argv: string[]): Promise<void> {
 
   printHelp();
   process.exitCode = area === undefined ? 0 : 1;
+}
+
+function printAnchorAudit(result: ClaimAnchorAuditResult): void {
+  console.log("Code anchor audit");
+  console.log("");
+  printAuditSection("Missing anchors", result.missing_anchors, (issue) => issue.claim_id);
+  printAuditSection("Invalid files", result.missing_files, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
+  printAuditSection("Missing symbols", result.missing_symbols, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
+  printAuditSection("Ambiguous symbols", result.ambiguous_symbols, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
+  printAuditSection("Unsupported languages", result.unsupported_languages, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
+}
+
+function anchorAuditIssueCount(result: ClaimAnchorAuditResult): number {
+  return result.missing_anchors.length +
+    result.missing_files.length +
+    result.missing_symbols.length +
+    result.ambiguous_symbols.length +
+    result.unsupported_languages.length;
+}
+
+function printAuditSection<T>(title: string, items: T[], render: (item: T) => string): void {
+  console.log(`${title}:`);
+  if (items.length === 0) {
+    console.log("- None.");
+  } else {
+    for (const item of items) console.log(`- ${render(item)}`);
+  }
+  console.log("");
+}
+
+function formatAuditAnchor(anchor: { file: string; symbol?: string } | undefined): string {
+  if (anchor === undefined) return "<missing>";
+  return anchor.symbol === undefined ? anchor.file : `${anchor.file}#${anchor.symbol}`;
 }
 
 function createCommandContext(): CommandContext {
@@ -243,6 +294,24 @@ function runSessionMarkMemoryCurrent(args: string[]): void {
     process.exitCode = 1;
   } finally {
     db.close();
+  }
+}
+
+function runTranscriptBundle(args: string[]): void {
+  const options = parseTranscriptBundleArgs(args);
+  const result = buildTranscriptBundle({
+    platform: options.platform,
+    files: options.files,
+  });
+  mkdirSync(dirname(options.outputPath), { recursive: true });
+  writeFileSync(options.outputPath, result.markdown, "utf8");
+
+  console.log(`Wrote transcript bundle to ${options.outputPath}`);
+  console.log(`Platform: ${options.platform}`);
+  console.log(`Transcripts: ${result.entries.length}`);
+  console.log("Session refs:");
+  for (const entry of result.entries) {
+    console.log(`- ${entry.sessionRef ?? "unknown"} (${entry.file})`);
   }
 }
 
@@ -355,6 +424,23 @@ async function runDoctor(args: string[]): Promise<void> {
   process.exitCode = ready ? 0 : 1;
 }
 
+async function runEmbeddingsPrewarm(args: string[]): Promise<void> {
+  if (args.length > 0) throw new Error("Usage: greplica embeddings prewarm");
+
+  const config = ensureGreplicaConfig();
+  if (config.embedding.provider === "openai") {
+    console.log("Embedding provider is openai; local prewarm is not needed.");
+    return;
+  }
+
+  const result = await withLocalModelLock(config.embedding, { wait: false }, () => checkEmbeddings(config.embedding));
+  if (!result.acquired) {
+    console.log("Local embedding prewarm is already running; skipping.");
+    return;
+  }
+  process.exitCode = result.value === true ? 0 : 1;
+}
+
 async function checkEmbeddings(config: EmbeddingConfig): Promise<boolean> {
   try {
     console.log(`Checking ${config.provider} embeddings...`);
@@ -430,6 +516,62 @@ function parseInstallArgs(args: string[]): { platform: InstallPlatform; embeddin
   return { platform, embedding };
 }
 
+interface TranscriptBundleOptions {
+  platform: InstallPlatform;
+  files: string[];
+  outputPath: string;
+}
+
+function parseTranscriptBundleArgs(args: string[]): TranscriptBundleOptions {
+  let platform: InstallPlatform | undefined;
+  let outputPath: string | undefined;
+  const files: string[] = [];
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--platform") {
+      if (platform !== undefined) throw new Error(`Specify --platform only once.\n${transcriptBundleUsage()}`);
+      platform = parseTranscriptBundlePlatform(requireFlagValue(args, index, "--platform", transcriptBundleUsage()));
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--platform=")) {
+      if (platform !== undefined) throw new Error(`Specify --platform only once.\n${transcriptBundleUsage()}`);
+      platform = parseTranscriptBundlePlatform(arg.slice("--platform=".length));
+      continue;
+    }
+    if (arg === "--file") {
+      files.push(resolve(requireFlagValue(args, index, "--file", transcriptBundleUsage())));
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--file=")) {
+      files.push(resolve(arg.slice("--file=".length)));
+      continue;
+    }
+    if (arg === "--out") {
+      if (outputPath !== undefined) throw new Error(`Specify --out only once.\n${transcriptBundleUsage()}`);
+      outputPath = resolve(requireFlagValue(args, index, "--out", transcriptBundleUsage()));
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--out=")) {
+      if (outputPath !== undefined) throw new Error(`Specify --out only once.\n${transcriptBundleUsage()}`);
+      outputPath = resolve(arg.slice("--out=".length));
+      continue;
+    }
+    throw new Error(transcriptBundleUsage());
+  }
+
+  if (platform === undefined || outputPath === undefined || files.length === 0) throw new Error(transcriptBundleUsage());
+  return { platform, files, outputPath };
+}
+
+function parseTranscriptBundlePlatform(value: string): InstallPlatform {
+  if (value === "codex" || value === "claude" || value === "opencode") return value;
+  throw new Error(`Invalid --platform ${value}.\n${transcriptBundleUsage()}`);
+}
+
 function requireFlagValue(args: string[], index: number, flag: string, usage = installUsage()): string {
   const value = args[index + 1];
   if (value === undefined || value.startsWith("--")) throw new Error(`Missing value for ${flag}.\n${usage}`);
@@ -448,58 +590,38 @@ function parseInstallEmbedding(value: string): InstallEmbedding {
 
 function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>): void {
   console.log(`Installed Greplica for ${platformDisplayName(result.platform)}.`);
-  console.log("");
-  console.log("Skills:");
-  if (result.skills.length === 0) {
-    console.log("- none installed for this platform");
-  } else {
-    for (const skill of result.skills) console.log(`- ${skill}`);
-  }
-  console.log("");
   if (result.guidanceFiles !== undefined && result.guidanceFiles.length > 0) {
-    console.log("Guidance:");
+    console.log(`Guidance: ${result.guidanceFiles.length} installed.`);
     for (const file of result.guidanceFiles) console.log(`- ${file}`);
-    console.log("");
   }
+  console.log(`Skills: ${result.skills.length} installed.`);
   if (result.hooks !== undefined) {
-    console.log("Hooks:");
-    console.log(`- events: ${result.hooks.events.join(", ")}`);
-    console.log(`- command: ${result.hooks.command}`);
-    for (const configFile of result.hooks.configFiles) console.log(`- config: ${configFile}`);
-    console.log("- note: your agent may ask you to trust or accept these hooks the next time it starts.");
-    console.log("");
+    console.log(`Hooks: installed for ${result.hooks.events.join(", ")}.`);
+  } else {
+    console.log("Hooks: not installed for this platform.");
   }
-  console.log("Embedding:");
-  console.log(`- ${result.embedding}`);
-  console.log(`- config: ${result.configFile}`);
-  console.log(`- database: ${result.databasePath}`);
-  console.log(`- session stop threshold: ${result.session.stopThreshold}`);
-  console.log(`- session time threshold: ${result.session.timeThresholdMinutes} minutes`);
-  console.log(`- session current grace: ${result.session.currentGraceMinutes} minutes`);
+  console.log(`Embedding: ${result.embedding}.`);
+  console.log(`Config: ${result.configFile}`);
+  console.log(`Database: ${result.databasePath}`);
   console.log("");
   console.log("Next steps:");
   if (result.skills.length > 0 || result.hooks !== undefined) {
     console.log("- Restart your coding agent if the new skills or hooks do not appear immediately.");
   }
   if (result.hooks !== undefined) {
-    console.log("- Accept or trust the installed hooks if your agent asks. Hook dispatchers ignore repos where greplica install was not run.");
-    console.log("- Hooks record session activity and attempt background working-memory updates for this repo.");
-    console.log("- If you do not accept the hooks, background saves will not run; manually ask the agent to use greplica-update-working-memory near the end of useful sessions.");
+    console.log("- Accept or trust the installed hooks if your agent asks.");
   } else {
-    console.log("- Hooks were not installed for this platform. Manually ask the agent to use greplica-update-working-memory near the end of useful sessions.");
+    console.log("- Ask the agent to use greplica-update-working-memory near the end of useful sessions.");
   }
   if (result.platform === "cline") {
     console.log("- Review the generated .clinerules guidance if you want to customize it.");
     console.log("- Reload or restart Cline if the new .clinerules guidance does not appear immediately.");
-  } else {
-    console.log("- Add a short AGENTS.md/CLAUDE.md instruction if hooks are unavailable or not accepted: use greplica graph context \"<question>\" before broad manual exploration.");
   }
   console.log("- Ask the agent to use greplica-bootstrap once for repos that do not have memory yet.");
-  console.log("- During work, the agent can run greplica graph context \"<question>\" to fetch relevant repo memory.");
   if (result.embedding === "local") {
-    console.log(`- OpenAI embeddings are also available if you want better retrieval quality later: greplica install --platform ${result.platform} --embedding openai`);
+    console.log(`- Optional later: greplica install --platform ${result.platform} --embedding openai`);
   } else {
-    console.log(`- Local embeddings are also available if you want to switch back later: greplica install --platform ${result.platform} --embedding local`);
+    console.log(`- Optional later: greplica install --platform ${result.platform} --embedding local`);
   }
   for (const note of result.notes) console.log(`- ${note}`);
 }
@@ -507,6 +629,11 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
 function installUsage(): string {
   const cli = basename(process.argv[1] ?? "greplica");
   return `Usage: ${cli} install --platform codex|claude|opencode|cline --embedding local|openai`;
+}
+
+function transcriptBundleUsage(): string {
+  const cli = basename(process.argv[1] ?? "greplica");
+  return `Usage: ${cli} transcript bundle --platform codex|claude --file <path> [--file <path>...] --out <bundle.md>`;
 }
 
 function printEmbeddingConfig(config: EmbeddingConfig): void {
@@ -544,12 +671,10 @@ function parseRequiredOption(args: string[], name: string, usage: string): strin
   throw new Error(usage);
 }
 
-function parseGraphContextOutput(args: string[]): "markdown" | "json" | "debug" {
-  const json = args.includes("--json");
+function parseGraphContextOutput(args: string[]): "markdown" | "debug" {
+  if (args.includes("--json")) throw new Error("greplica graph context --json was removed; use Markdown output or --debug.");
   const debug = args.includes("--debug");
-  if (json && debug) throw new Error("Use either --json or --debug, not both.");
   if (debug) return "debug";
-  if (json) return "json";
   return "markdown";
 }
 
@@ -656,10 +781,13 @@ function printHelp(): void {
   ${cli} install --platform codex|claude|opencode|cline --embedding local|openai
   ${cli} config
   ${cli} doctor [--check-embeddings]
+  ${cli} embeddings prewarm
   ${cli} graph read
-  ${cli} graph context <query> [--json|--debug]
+  ${cli} graph context <query> [--debug]
+  ${cli} graph audit anchors
   ${cli} graph export <dir>
   ${cli} graph view [--out <file>] [--no-open]
+  ${cli} transcript bundle --platform codex|claude --file <path> [--file <path>...] --out <bundle.md>
   ${cli} session mark-memory-current --session-ref <ref>
   ${cli} proposal validate <file>
   ${cli} proposal apply <file>`);

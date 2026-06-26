@@ -1,164 +1,99 @@
-import type { Claim } from "../claim.js";
-import type { Source } from "../schema.js";
 import type {
-  ClaimContextResult,
-  ComponentContextResult,
-  FlowContextResult,
   GraphContextResult,
+  RankedGraphContextResult,
 } from "./types.js";
 
-interface CompactGraphContextResult {
-  query: string;
-  components: CompactComponentResult[];
-  flows: CompactFlowResult[];
-  claims: CompactClaimResult[];
-  sources: Source[];
-}
-
-interface CompactComponentResult {
-  id: string;
-  name: string;
-  code_anchor?: string;
-  matched_claim_ids: string[];
-}
-
-interface CompactFlowResult {
-  id: string;
-  name: string;
-  matched_claim_ids: string[];
-}
-
-interface CompactClaimResult {
-  id: string;
-  kind: Claim["kind"];
-  text: string;
-  truth: Claim["truth"];
-  intent: Claim["intent"];
-  about: ClaimContextResult["about"];
-  evidence: Array<{
-    source_id: string;
-    title?: string;
-    ref: string;
-    reason?: string;
-  }>;
-}
-
 export function renderGraphContextMarkdown(result: GraphContextResult): string {
-  const claimById = new Map(result.claims.map((claim) => [claim.object.id, claim]));
-  const shownClaimIds = new Set<string>();
+  const rankedComponents = result.ranked_results.filter((item) => item.type === "component");
+  const rankedFlows = result.ranked_results.filter((item) => item.type === "flow");
+  const rankedClaims = result.ranked_results.filter((item) => item.type === "claim");
+  const componentsById = new Map(result.components.map((component) => [component.object.id, component.object.name]));
+  const flowsById = new Map(result.flows.map((flow) => [flow.object.id, flow.object.name]));
   const content = [
     "# Graph Context",
     "",
-    `Query: ${result.query}`,
+    "## Best Claims",
     "",
-    "## Components",
+    ...renderRankedClaims(rankedClaims, componentsById, flowsById),
     "",
-    ...renderComponents(result.components),
+    "## Related Components",
     "",
-    "## Flows",
+    ...renderRankedComponents(rankedComponents),
     "",
-    ...renderFlows(result.flows, claimById, shownClaimIds),
+    "## Related Flows",
+    "",
+    ...renderRankedFlows(rankedFlows),
   ];
-  const remainingClaims = result.claims.filter((claim) => !shownClaimIds.has(claim.object.id));
-  if (remainingClaims.length > 0) {
-    content.push("", "## Other Relevant Claims", "", ...renderClaimItems(remainingClaims));
-  }
-  if (result.sources.length > 0) {
-    content.push("", "## Sources", "", ...renderSources(result.sources));
-  }
 
   return lines(...content);
 }
 
-export function compactGraphContextResult(result: GraphContextResult): CompactGraphContextResult {
-  return {
-    query: result.query,
-    components: result.components.map((component) => ({
-      id: component.object.id,
-      name: component.object.name,
-      code_anchor: component.object.code_anchor,
-      matched_claim_ids: component.matched_claim_ids,
-    })),
-    flows: result.flows.map((flow) => ({
-      id: flow.object.id,
-      name: flow.object.name,
-      matched_claim_ids: flow.matched_claim_ids,
-    })),
-    claims: result.claims.map((claim) => ({
-      id: claim.object.id,
-      kind: claim.object.kind,
-      text: claim.object.text,
-      truth: claim.object.truth,
-      intent: claim.object.intent,
-      about: claim.about,
-      evidence: claim.evidence.map((evidence) => ({
-        source_id: evidence.source.id,
-        title: evidence.source.title,
-        ref: evidence.source.ref,
-        reason: evidence.reason.length > 0 ? evidence.reason : undefined,
-      })),
-    })),
-    sources: result.sources,
-  };
-}
-
-function renderComponents(components: ComponentContextResult[]): string[] {
+function renderRankedComponents(
+  components: Array<Extract<RankedGraphContextResult, { type: "component" }>>,
+): string[] {
   if (components.length === 0) return ["- None."];
-  return components.map((component) => {
-    const anchor = component.object.code_anchor === undefined ? "" : `\n  Anchor: \`${component.object.code_anchor}\``;
-    return `- \`${component.object.id}\` ${component.object.name}${anchor}`;
+  return components.map((component, index) => {
+    const relation = component.context_relation === "additional" ? " additional" : "";
+    const anchor = component.object.code_anchor === undefined ? "" : ` Anchor: \`${component.object.code_anchor}\`.`;
+    const claims = component.matched_claim_ids.length === 0 ? "" : ` Supporting claims: ${component.matched_claim_ids.map((id) => `\`${id}\``).join(", ")}.`;
+    return `- ${index + 1}. ${component.object.name}${relation}. ID: \`${component.object.id}\`.${anchor}${claims}`;
   });
 }
 
-function renderFlows(
-  flows: FlowContextResult[],
-  claimById: Map<string, ClaimContextResult>,
-  shownClaimIds: Set<string>,
+function renderRankedFlows(
+  flows: Array<Extract<RankedGraphContextResult, { type: "flow" }>>,
 ): string[] {
   if (flows.length === 0) return ["- None."];
-  return flows.flatMap((flow) => {
-    const claims = claimsForFlow(flow, claimById);
-    for (const claim of claims) shownClaimIds.add(claim.object.id);
+  return flows.map((flow, index) => {
+    const relation = flow.context_relation === "additional" ? " additional" : "";
+    const claims = flow.matched_claim_ids.length === 0 ? "" : ` Supporting claims: ${flow.matched_claim_ids.map((id) => `\`${id}\``).join(", ")}.`;
+    return `- ${index + 1}. ${flow.object.name}${relation}. ID: \`${flow.object.id}\`.${claims}`;
+  });
+}
+
+function renderRankedClaims(
+  claims: Array<Extract<RankedGraphContextResult, { type: "claim" }>>,
+  componentsById: Map<string, string>,
+  flowsById: Map<string, string>,
+): string[] {
+  if (claims.length === 0) return ["- None."];
+  return claims.flatMap((claim, index) => {
+    const anchors = claim.code_anchors.length === 0 ? "" : ` Anchor: ${claim.code_anchors.map(anchorLabel).join("; ")}.`;
+    const about = aboutLabel(claim.about, componentsById, flowsById);
     return [
-      `### ${flow.object.name}`,
+      `### ${index + 1}. ${claim.object.id}`,
       "",
-      `ID: \`${flow.object.id}\``,
+      claim.object.text,
       "",
-      "Claims:",
-      ...renderClaimItems(claims),
+      `${anchors}${about}`.trim(),
       "",
     ];
   });
 }
 
-function claimsForFlow(flow: FlowContextResult, claimById: Map<string, ClaimContextResult>): ClaimContextResult[] {
-  const claims = new Map<string, ClaimContextResult>();
-  for (const claimId of flow.matched_claim_ids) {
-    const claim = claimById.get(claimId);
-    if (claim !== undefined) claims.set(claim.object.id, claim);
+function anchorLabel(anchor: Extract<RankedGraphContextResult, { type: "claim" }>["code_anchors"][number]): string {
+  const base = anchor.symbol === undefined ? anchor.file : `${anchor.file}#${anchor.symbol}`;
+  if (anchor.status === "resolved" && anchor.start_line !== undefined) {
+    const suffix = anchor.end_line !== undefined && anchor.end_line !== anchor.start_line
+      ? `${anchor.start_line}-${anchor.end_line}`
+      : `${anchor.start_line}`;
+    return `\`${anchor.file}:${suffix}${anchor.symbol === undefined ? "" : `#${anchor.symbol}`}\``;
   }
-  for (const claim of claimById.values()) {
-    if (claim.about.some((subject) => subject.type === "flow" && subject.id === flow.object.id)) {
-      claims.set(claim.object.id, claim);
-    }
-  }
-  return [...claims.values()].sort((left, right) => left.object.kind.localeCompare(right.object.kind) || left.object.id.localeCompare(right.object.id));
+  if (anchor.status === "file_only") return `\`${anchor.file}\``;
+  return `\`${base}\` (${anchor.status.replace(/_/g, " ")})`;
 }
 
-function renderClaimItems(claims: ClaimContextResult[]): string[] {
-  if (claims.length === 0) return ["- None."];
-  return claims.map((claim) => {
-    const evidence = claim.evidence.length === 0 ? "" : ` Source: ${claim.evidence.map(evidenceLabel).join("; ")}.`;
-    return `- \`${claim.object.id}\` (${claim.object.kind}, ${claim.object.truth}): ${claim.object.text}${evidence}`;
+function aboutLabel(
+  about: Extract<RankedGraphContextResult, { type: "claim" }>["about"],
+  componentsById: Map<string, string>,
+  flowsById: Map<string, string>,
+): string {
+  if (about.length === 0) return "";
+  const labels = about.map((target) => {
+    if (target.type === "component") return `component ${componentsById.get(target.id) ?? target.id}`;
+    return `flow ${flowsById.get(target.id) ?? target.id}`;
   });
-}
-
-function evidenceLabel(evidence: ClaimContextResult["evidence"][number]): string {
-  return evidence.source.title ?? evidence.source.ref ?? evidence.source.id;
-}
-
-function renderSources(sources: Source[]): string[] {
-  return sources.map((source) => `- \`${source.id}\` ${source.title ?? source.ref}`);
+  return ` About: ${labels.join("; ")}.`;
 }
 
 function lines(...values: string[]): string {

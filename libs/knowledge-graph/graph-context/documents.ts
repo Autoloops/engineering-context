@@ -80,27 +80,84 @@ function claimText(
   flows: Map<string, Flow>,
 ): string {
   return [
-    `claim id: ${claim.id}`,
-    `kind: ${claim.kind}`,
-    `truth: ${claim.truth}`,
-    `intent: ${claim.intent}`,
-    `text: ${claim.text}`,
+    `Claim: ${claim.text}`,
+    "",
     ...about.flatMap((target) => {
       if (target.type === "component") {
         const component = components.get(target.id);
+        if (!component) return [];
         return [
-          `about component id: ${target.id}`,
-          component ? `about component name: ${component.name}` : "",
-          component?.code_anchor ? `about component code anchor: ${component.code_anchor}` : "",
+          "This claim is about component:",
+          `- Name: ${component.name}`,
+          component.code_anchor ? `- File anchor: ${component.code_anchor}` : "",
+          "",
         ];
       }
       const flow = flows.get(target.id);
+      if (!flow) return [];
       return [
-        `about flow id: ${target.id}`,
-        flow ? `about flow name: ${flow.name}` : "",
+        "This claim is about flow:",
+        `- Name: ${flow.name}`,
+        "",
       ];
     }),
+    ...relevantFileText(claim),
+    ...relatedTermText(claim),
   ]
     .filter((part) => part.length > 0)
     .join("\n");
 }
+
+function relatedTermText(claim: Claim): string[] {
+  const terms = relatedTerms(claim);
+  return terms.length === 0 ? [] : ["", `Related terms: ${terms.join(", ")}`];
+}
+
+function relevantFileText(claim: Claim): string[] {
+  const anchors = claim.code_anchors ?? [];
+  if (anchors.length === 0) return [];
+  return [
+    "Relevant files:",
+    ...anchors.map((anchor) => {
+      const symbol = anchor.symbol === undefined ? "" : `, symbol ${anchor.symbol}`;
+      return `- ${anchor.file}${symbol}`;
+    }),
+  ];
+}
+
+function relatedTerms(claim: Claim): string[] {
+  const terms = new Set<string>();
+  for (const token of claim.text.split(/[^A-Za-z0-9_./-]+/)) {
+    const normalized = cleanRelatedTerm(token);
+    if (normalized.length < 3) continue;
+    if (relatedTermStopwords.has(normalized.toLowerCase())) continue;
+    terms.add(normalized);
+  }
+  for (const anchor of claim.code_anchors ?? []) {
+    if (anchor.symbol !== undefined) terms.add(anchor.symbol);
+    terms.add(anchor.file);
+  }
+  return [...terms].slice(0, 20);
+}
+
+function cleanRelatedTerm(token: string): string {
+  const trimmed = token.trim();
+  if (trimmed.includes("/") || trimmed.includes("\\")) return trimmed;
+  return trimmed.replace(/^[^A-Za-z0-9_]+|[^A-Za-z0-9_]+$/g, "");
+}
+
+const relatedTermStopwords = new Set([
+  "and",
+  "are",
+  "but",
+  "for",
+  "from",
+  "has",
+  "into",
+  "that",
+  "the",
+  "then",
+  "this",
+  "when",
+  "with",
+]);

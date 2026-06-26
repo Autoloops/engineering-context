@@ -13,6 +13,10 @@ import {
   valueAfter,
   writeJson,
 } from "../../lib/common.js";
+import {
+  evaluateProposalAnchorQuality,
+  type ProposalAnchorQualityResult,
+} from "../../lib/code-anchor-quality.js";
 import { runCodexAgent } from "../../../libs/agent-runner/codex.js";
 import type { AgentRunResult } from "../../../libs/agent-runner/types.js";
 import { loadRepoEnv } from "../../../libs/env/load-local-env.js";
@@ -49,7 +53,12 @@ interface EvalResult {
   greplica_home_dir: string;
   proposal_path: string;
   success: boolean;
+  install_time_seconds: number;
+  generation_time_seconds?: number;
+  command_time_seconds: number;
+  total_time_seconds: number;
   commands: CommandResult[];
+  anchor_quality: ProposalAnchorQualityResult;
   generation?: AgentRunResult;
   judge?: {
     model: string;
@@ -134,23 +143,40 @@ main().catch((error: unknown) => {
 });
 
 async function main(): Promise<void> {
+  const runStartedAt = Date.now();
   const args = parseArgs(process.argv.slice(2));
   const context = prepareRun();
   prepareTargetRepo(context);
   prepareGreplicaHome(context);
+  const installStartedAt = Date.now();
   const installCommand = runProductCommand(context, "install", "--platform", "codex", "--embedding", "local");
+  const installTimeSeconds = round((Date.now() - installStartedAt) / 1000, 2);
+  const generationStartedAt = Date.now();
   const generation = await getProposal(context, args);
+  const generationTimeSeconds = generation === undefined ? undefined : round((Date.now() - generationStartedAt) / 1000, 2);
+  const anchorQuality = await evaluateProposalAnchorQuality(readJson<unknown>(context.proposalPath), context.targetRepoDir);
+  const commandStartedAt = Date.now();
   const commands = [
     installCommand,
     ...runProductCommands(context),
   ];
+  const commandTimeSeconds = round((Date.now() - commandStartedAt) / 1000, 2);
   const commandsSucceeded = commands.every((command) => command.exit_code === 0);
   const judge = commandsSucceeded && args.judge === "openai" ? await runOpenAiJudge(context, args) : undefined;
-  const success = commandsSucceeded && (judge === undefined || judge.score.passed);
-  writeResult(context, commands, success, generation, judge);
+  const success = commandsSucceeded && anchorQuality.passed && (judge === undefined || judge.score.passed);
+  const totalTimeSeconds = round((Date.now() - runStartedAt) / 1000, 2);
+  writeResult(context, commands, anchorQuality, success, installTimeSeconds, generationTimeSeconds, commandTimeSeconds, totalTimeSeconds, generation, judge);
 
   console.log(success ? "Eval run passed." : "Eval run failed.");
   console.log(`Run directory: ${context.runDir}`);
+  console.log(`Install time: ${formatSeconds(installTimeSeconds)}`);
+  if (generationTimeSeconds !== undefined) console.log(`Generation time: ${formatSeconds(generationTimeSeconds)}`);
+  console.log(`Validate/apply command time: ${formatSeconds(commandTimeSeconds)}`);
+  console.log(`Total runner time: ${formatSeconds(totalTimeSeconds)}`);
+  console.log(
+    `Anchor quality: ${anchorQuality.error_count} errors, ${anchorQuality.warning_count} warnings across ${anchorQuality.checked_claim_count} code-verified claims.`,
+  );
+  printAnchorQualityIssues(anchorQuality);
   if (judge) {
     console.log(`Score: ${judge.score.final_score.toFixed(2)} / 100`);
   }
@@ -286,7 +312,12 @@ async function runOpenAiJudge(
 function writeResult(
   context: RunContext,
   commands: CommandResult[],
+  anchorQuality: ProposalAnchorQualityResult,
   success: boolean,
+  installTimeSeconds: number,
+  generationTimeSeconds: number | undefined,
+  commandTimeSeconds: number,
+  totalTimeSeconds: number,
   generation: AgentRunResult | undefined,
   judge: EvalResult["judge"],
 ): void {
@@ -299,12 +330,24 @@ function writeResult(
     greplica_home_dir: context.greplicaHomeDir,
     proposal_path: context.proposalPath,
     success,
+    install_time_seconds: installTimeSeconds,
+    generation_time_seconds: generationTimeSeconds,
+    command_time_seconds: commandTimeSeconds,
+    total_time_seconds: totalTimeSeconds,
     commands,
+    anchor_quality: anchorQuality,
     generation,
     judge,
   };
 
   writeJson(resolve(context.runDir, "result.json"), result);
+}
+
+function formatSeconds(seconds: number): string {
+  if (seconds < 60) return `${seconds.toFixed(2)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds - minutes * 60;
+  return `${minutes}m ${remainder.toFixed(2)}s`;
 }
 
 function parseArgs(args: string[]): Args {
@@ -420,6 +463,18 @@ function scoreJudgeOutput(rubric: Rubric, judge: JudgeOutput): ScoreResult {
     pass_threshold: rubric.score.pass_threshold,
     passed: finalScore >= rubric.score.pass_threshold,
   };
+}
+
+function printAnchorQualityIssues(anchorQuality: ProposalAnchorQualityResult): void {
+  for (const issue of anchorQuality.issues.slice(0, 8)) {
+    const anchor = issue.anchor === undefined
+      ? ""
+      : ` (${issue.anchor.file}${issue.anchor.symbol === undefined ? "" : `#${issue.anchor.symbol}`})`;
+    console.log(`- ${issue.severity}: ${issue.claim_id}${anchor}: ${issue.message}`);
+  }
+  if (anchorQuality.issues.length > 8) {
+    console.log(`- ... ${anchorQuality.issues.length - 8} more anchor quality issues in result.json`);
+  }
 }
 
 function extractOutputText(body: Record<string, unknown>): string {

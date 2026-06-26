@@ -9,6 +9,7 @@ const claimIntents = new Set(["intended", "accidental", "unknown"]);
 const sourceKinds = new Set(["session"]);
 const edgeKinds = new Set(["about", "contains", "touches", "supersedes", "evidenced_by"]);
 const graphObjectTypes = new Set(["component", "flow", "claim", "edge", "source"]);
+const maxCodeAnchorsPerClaim = 3;
 
 export interface ExistingSubjectLookup {
   subjectExists(type: GraphObjectType, id: string): boolean;
@@ -82,6 +83,7 @@ export function validateProposal(
     if (!isNonEmptyString(claim.text)) errors.push(`Claim ${stringId(claim.id)} needs text.`);
     if (!claimTruths.has(String(claim.truth))) errors.push(`Claim ${stringId(claim.id)} has invalid truth.`);
     if (!claimIntents.has(String(claim.intent))) errors.push(`Claim ${stringId(claim.id)} has invalid intent.`);
+    validateClaimCodeAnchors(claim, errors);
   }
 
   for (const source of sources) {
@@ -152,6 +154,60 @@ function validateEvidenceMetadata(edge: Record<string, unknown>, errors: string[
   if (!isNonEmptyString(reason)) {
     errors.push(`Edge ${stringId(edge.id)} evidenced_by metadata.reason must be a non-empty string.`);
   }
+}
+
+function validateClaimCodeAnchors(claim: Record<string, unknown>, errors: string[]): void {
+  const claimId = stringId(claim.id);
+  const anchors = claim.code_anchors;
+
+  if (claim.truth === "code_verified" && (!Array.isArray(anchors) || anchors.length === 0)) {
+    errors.push(`Claim ${claimId} is code_verified and must include code_anchors.`);
+    return;
+  }
+
+  if (anchors === undefined) return;
+  if (!Array.isArray(anchors)) {
+    errors.push(`Claim ${claimId} code_anchors must be an array when present.`);
+    return;
+  }
+
+  if (anchors.length > maxCodeAnchorsPerClaim) {
+    errors.push(
+      `Claim ${claimId} has ${anchors.length} code_anchors; split broad claims so each claim has at most ${maxCodeAnchorsPerClaim} code_anchors.`,
+    );
+  }
+
+  const seen = new Set<string>();
+  for (const [index, anchor] of anchors.entries()) {
+    if (!isRecord(anchor)) {
+      errors.push(`Claim ${claimId} code_anchors[${index}] must be an object.`);
+      continue;
+    }
+
+    if (!isNonEmptyString(anchor.file)) {
+      errors.push(`Claim ${claimId} code_anchors[${index}].file must be a non-empty string.`);
+      continue;
+    }
+    if (isAbsoluteOrLineAnchor(anchor.file)) {
+      errors.push(`Claim ${claimId} code_anchors[${index}].file must be repo-relative and must not include line numbers.`);
+    }
+    if (anchor.symbol !== undefined && typeof anchor.symbol !== "string") {
+      errors.push(`Claim ${claimId} code_anchors[${index}].symbol must be a string when present.`);
+    }
+    if (typeof anchor.symbol === "string" && anchor.symbol.trim().length === 0) {
+      errors.push(`Claim ${claimId} code_anchors[${index}].symbol must not be empty when present.`);
+    }
+
+    const key = `${anchor.file}#${typeof anchor.symbol === "string" ? anchor.symbol : ""}`;
+    if (seen.has(key)) {
+      errors.push(`Claim ${claimId} has duplicate code anchor ${key}.`);
+    }
+    seen.add(key);
+  }
+}
+
+function isAbsoluteOrLineAnchor(file: string): boolean {
+  return file.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(file) || /:\d+(:\d+)?$/.test(file);
 }
 
 function validateSubjectBase(

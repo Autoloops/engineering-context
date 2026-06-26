@@ -267,7 +267,10 @@ function runChecks(context: RunContext, verificationCommands: CommandResult[]): 
 }
 
 function runGreplicaCommand(command: string[], cwd: string, greplicaHomeDir: string, ...args: string[]): CommandResult {
-  return run([...command, ...args], cwd, { ...process.env, GREPLICA_HOME: greplicaHomeDir });
+  return run([...command, ...args], cwd, {
+    ...process.env,
+    GREPLICA_HOME: greplicaHomeDir,
+  });
 }
 
 function runSetupCommand(command: string[], cwd: string): CommandResult {

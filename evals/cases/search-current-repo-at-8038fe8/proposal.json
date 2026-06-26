@@ -335,6 +335,17 @@
         "about": [
           "component.cli_app",
           "flow.cli_command_dispatch"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          },
+          {
+            "file": "apps/cli/repo-context.ts"
+          }
         ]
       },
       {
@@ -346,6 +357,14 @@
         "about": [
           "component.cli_app",
           "component.knowledge_graph_service"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          }
         ]
       },
       {
@@ -357,6 +376,17 @@
         "about": [
           "component.cli_init_command",
           "flow.repo_initialization"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "apps/cli/repo-context.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          }
         ]
       },
       {
@@ -368,6 +398,17 @@
         "about": [
           "component.cli_graph_read_command",
           "flow.graph_read"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/repository.ts"
+          }
         ]
       },
       {
@@ -379,6 +420,17 @@
         "about": [
           "component.cli_graph_context_command",
           "flow.graph_context"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/repository.ts"
+          }
         ]
       },
       {
@@ -402,6 +454,14 @@
         "about": [
           "component.repo_context_detection",
           "flow.repo_context_detection"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/cli/repo-context.ts"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          }
         ]
       },
       {
@@ -413,6 +473,14 @@
         "about": [
           "component.repo_context_detection",
           "flow.repo_context_detection"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/cli/repo-context.ts"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          }
         ]
       },
       {
@@ -421,7 +489,12 @@
         "text": "Repo name is derived from the remote URL last path segment, with the local repository basename as fallback.",
         "truth": "code_verified",
         "intent": "intended",
-        "about": "component.repo_context_detection"
+        "about": "component.repo_context_detection",
+        "code_anchors": [
+          {
+            "file": "apps/cli/repo-context.ts"
+          }
+        ]
       },
       {
         "id": "claim.default_branch_from_origin_head",
@@ -429,7 +502,12 @@
         "text": "Default branch detection reads refs/remotes/origin/HEAD when available and falls back to main.",
         "truth": "code_verified",
         "intent": "intended",
-        "about": "component.repo_context_detection"
+        "about": "component.repo_context_detection",
+        "code_anchors": [
+          {
+            "file": "apps/cli/repo-context.ts"
+          }
+        ]
       },
       {
         "id": "claim.service_boundary_operations",
@@ -440,6 +518,17 @@
         "about": [
           "component.knowledge_graph_service",
           "flow.cli_command_dispatch"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "apps/cli/repo-context.ts"
+          }
         ]
       },
       {
@@ -452,6 +541,17 @@
           "component.knowledge_graph_service",
           "flow.repo_initialization",
           "component.scope_model"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/scope.ts"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          }
         ]
       },
       {
@@ -464,6 +564,17 @@
           "component.knowledge_graph_service",
           "flow.graph_read",
           "flow.graph_context"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/repository.ts"
+          }
         ]
       },
       {
@@ -475,6 +586,17 @@
         "about": [
           "component.knowledge_graph_service",
           "flow.proposal_apply"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/proposal.ts"
+          }
         ]
       },
       {
@@ -487,6 +609,17 @@
           "component.cli_proposal_commands",
           "flow.proposal_apply",
           "component.knowledge_graph_service"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/proposal.ts"
+          }
         ]
       },
       {
@@ -498,6 +631,17 @@
         "about": [
           "component.cli_app",
           "flow.cli_command_dispatch"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          },
+          {
+            "file": "apps/cli/repo-context.ts"
+          }
         ]
       },
       {
@@ -509,6 +653,17 @@
         "about": [
           "component.proposal_model",
           "flow.compact_relationships_to_edges"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/proposal.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/edge.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/schema.ts"
+          }
         ]
       },
       {
@@ -520,6 +675,17 @@
         "about": [
           "component.proposal_model",
           "flow.compact_relationships_to_edges"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/proposal.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/edge.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/schema.ts"
+          }
         ]
       },
       {
@@ -531,6 +697,17 @@
         "about": [
           "component.proposal_model",
           "flow.compact_relationships_to_edges"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/proposal.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/edge.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/schema.ts"
+          }
         ]
       },
       {
@@ -542,6 +719,17 @@
         "about": [
           "component.proposal_normalization",
           "flow.compact_relationships_to_edges"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/proposal.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/edge.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/schema.ts"
+          }
         ]
       },
       {
@@ -553,6 +741,14 @@
         "about": [
           "component.proposal_normalization",
           "component.edge_rules"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/proposal.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/edge.ts"
+          }
         ]
       },
       {
@@ -561,7 +757,12 @@
         "text": "Proposal normalization deduplicates generated edges by edge ID.",
         "truth": "code_verified",
         "intent": "intended",
-        "about": "component.proposal_normalization"
+        "about": "component.proposal_normalization",
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/proposal.ts"
+          }
+        ]
       },
       {
         "id": "claim.validation_requires_title_and_creates",
@@ -572,6 +773,17 @@
         "about": [
           "component.proposal_validation",
           "flow.proposal_validation"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/validate-proposal.ts"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          }
         ]
       },
       {
@@ -583,6 +795,17 @@
         "about": [
           "component.proposal_validation",
           "component.graph_schema"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/validate-proposal.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/schema.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/claim.ts"
+          }
         ]
       },
       {
@@ -594,6 +817,17 @@
         "about": [
           "component.proposal_validation",
           "component.graph_schema"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/validate-proposal.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/schema.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/claim.ts"
+          }
         ]
       },
       {
@@ -605,6 +839,17 @@
         "about": [
           "component.proposal_validation",
           "flow.edge_validation"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/validate-proposal.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/edge.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/schema.ts"
+          }
         ]
       },
       {
@@ -616,6 +861,17 @@
         "about": [
           "component.edge_rules",
           "flow.edge_validation"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/edge.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/validate-proposal.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/schema.ts"
+          }
         ]
       },
       {
@@ -624,7 +880,12 @@
         "text": "A contains edge must connect component to component or flow to flow.",
         "truth": "code_verified",
         "intent": "intended",
-        "about": "component.edge_rules"
+        "about": "component.edge_rules",
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/edge.ts"
+          }
+        ]
       },
       {
         "id": "claim.edge_touches_direction",
@@ -632,7 +893,12 @@
         "text": "A touches edge must go from a flow to a component.",
         "truth": "code_verified",
         "intent": "intended",
-        "about": "component.edge_rules"
+        "about": "component.edge_rules",
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/edge.ts"
+          }
+        ]
       },
       {
         "id": "claim.active_view_uses_main_and_working",
@@ -643,6 +909,17 @@
         "about": [
           "component.active_graph_view",
           "flow.active_graph_view"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/storage/sqlite/repository.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/scope.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/schema.ts"
+          }
         ]
       },
       {
@@ -654,6 +931,17 @@
         "about": [
           "component.active_graph_view",
           "flow.active_graph_view"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/storage/sqlite/repository.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/scope.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/schema.ts"
+          }
         ]
       },
       {
@@ -666,6 +954,17 @@
           "component.graph_context_retrieval",
           "component.active_graph_view",
           "flow.graph_context"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/graph-context"
+          },
+          {
+            "file": "libs/storage/sqlite/repository.ts"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          }
         ]
       },
       {
@@ -677,6 +976,17 @@
         "about": [
           "component.graph_context_retrieval",
           "flow.graph_context"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/graph-context"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          }
         ]
       },
       {
@@ -688,6 +998,17 @@
         "about": [
           "component.graph_context_retrieval",
           "flow.graph_context"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/graph-context"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          }
         ]
       },
       {
@@ -702,6 +1023,17 @@
           "component.sqlite_schema",
           "flow.sqlite_persistence",
           "flow.active_graph_view"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/scope.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/repository.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/schema.ts"
+          }
         ]
       },
       {
@@ -713,6 +1045,17 @@
         "about": [
           "component.graph_context_retrieval",
           "flow.graph_context"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/graph-context"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          }
         ]
       },
       {
@@ -721,7 +1064,12 @@
         "text": "Graph context combines semantic, BM25, and exact scores before applying the claim selection threshold.",
         "truth": "code_verified",
         "intent": "intended",
-        "about": "component.graph_context_retrieval"
+        "about": "component.graph_context_retrieval",
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/graph-context"
+          }
+        ]
       },
       {
         "id": "claim.repo_ids_are_deterministic",
@@ -732,6 +1080,17 @@
         "about": [
           "component.sqlite_repository",
           "flow.sqlite_persistence"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/storage/sqlite/repository.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/db.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/migrate.ts"
+          }
         ]
       },
       {
@@ -743,6 +1102,14 @@
         "about": [
           "component.sqlite_repository",
           "component.scope_model"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/storage/sqlite/repository.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/scope.ts"
+          }
         ]
       },
       {
@@ -755,6 +1122,17 @@
           "component.memory_commit_model",
           "component.sqlite_repository",
           "flow.proposal_apply"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/commit.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/repository.ts"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          }
         ]
       },
       {
@@ -766,6 +1144,17 @@
         "about": [
           "component.sqlite_schema",
           "flow.sqlite_persistence"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/storage/sqlite/schema.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/db.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/migrate.ts"
+          }
         ]
       },
       {
@@ -777,6 +1166,17 @@
         "about": [
           "component.sqlite_database",
           "flow.local_database_isolation"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/storage/sqlite/db.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/migrate.ts"
+          },
+          {
+            "file": "evals/cases/bootstrap-current-repo-at-8038fe8/run.ts"
+          }
         ]
       },
       {
@@ -790,6 +1190,17 @@
           "component.bootstrap_eval_runner",
           "component.search_eval_fixture",
           "flow.local_database_isolation"
+        ],
+        "code_anchors": [
+          {
+            "file": "package.json"
+          },
+          {
+            "file": "tsconfig.json"
+          },
+          {
+            "file": "tsconfig.build.json"
+          }
         ]
       },
       {
@@ -801,6 +1212,17 @@
         "about": [
           "component.sqlite_database",
           "component.sqlite_schema"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/storage/sqlite/db.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/migrate.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/schema.ts"
+          }
         ]
       },
       {
@@ -812,6 +1234,17 @@
         "about": [
           "component.agent_runner_codex",
           "flow.bootstrap_eval_generation"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/agent-runner/codex.ts"
+          },
+          {
+            "file": "evals/cases/bootstrap-current-repo-at-8038fe8/run.ts"
+          },
+          {
+            "file": "skills/greplica-bootstrap/SKILL.md"
+          }
         ]
       },
       {
@@ -823,6 +1256,14 @@
         "about": [
           "component.agent_runner_metrics",
           "component.bootstrap_eval_runner"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/agent-runner/metrics.ts"
+          },
+          {
+            "file": "evals/cases/bootstrap-current-repo-at-8038fe8/run.ts"
+          }
         ]
       },
       {
@@ -834,6 +1275,17 @@
         "about": [
           "component.bootstrap_eval_runner",
           "flow.bootstrap_eval_generation"
+        ],
+        "code_anchors": [
+          {
+            "file": "evals/cases/bootstrap-current-repo-at-8038fe8/run.ts"
+          },
+          {
+            "file": "libs/agent-runner/codex.ts"
+          },
+          {
+            "file": "skills/greplica-bootstrap/SKILL.md"
+          }
         ]
       },
       {
@@ -845,6 +1297,17 @@
         "about": [
           "component.bootstrap_eval_runner",
           "flow.bootstrap_eval_generation"
+        ],
+        "code_anchors": [
+          {
+            "file": "evals/cases/bootstrap-current-repo-at-8038fe8/run.ts"
+          },
+          {
+            "file": "libs/agent-runner/codex.ts"
+          },
+          {
+            "file": "skills/greplica-bootstrap/SKILL.md"
+          }
         ]
       },
       {
@@ -857,6 +1320,17 @@
           "component.bootstrap_eval_runner",
           "component.bootstrap_eval_rubric",
           "flow.bootstrap_eval_judging"
+        ],
+        "code_anchors": [
+          {
+            "file": "evals/cases/bootstrap-current-repo-at-8038fe8/run.ts"
+          },
+          {
+            "file": "evals/cases/bootstrap-current-repo-at-8038fe8/rubric.json"
+          },
+          {
+            "file": "libs/agent-runner/metrics.ts"
+          }
         ]
       },
       {
@@ -910,7 +1384,18 @@
         "text": "The package build script runs TypeScript build output into dist using tsconfig.build.json, and TypeScript includes apps, libs, and evals.",
         "truth": "code_verified",
         "intent": "intended",
-        "about": "component.package_scripts"
+        "about": "component.package_scripts",
+        "code_anchors": [
+          {
+            "file": "package.json"
+          },
+          {
+            "file": "tsconfig.json"
+          },
+          {
+            "file": "tsconfig.build.json"
+          }
+        ]
       },
       {
         "id": "claim.package_exposes_greplica_binary",
@@ -921,6 +1406,17 @@
         "about": [
           "component.package_scripts",
           "component.cli_app"
+        ],
+        "code_anchors": [
+          {
+            "file": "package.json"
+          },
+          {
+            "file": "tsconfig.json"
+          },
+          {
+            "file": "tsconfig.build.json"
+          }
         ]
       },
       {

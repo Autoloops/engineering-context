@@ -149,6 +149,17 @@
         "about": [
           "component.cli_app",
           "component.greplica_skills"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "skills/greplica-bootstrap/SKILL.md"
+          },
+          {
+            "file": "skills/greplica-update-working-memory/SKILL.md"
+          }
         ]
       },
       {
@@ -161,6 +172,17 @@
           "component.cli_app",
           "component.knowledge_graph_service",
           "component.repo_env_context"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          },
+          {
+            "file": "apps/cli/repo-context.ts"
+          }
         ]
       },
       {
@@ -172,6 +194,17 @@
         "about": [
           "component.repo_env_context",
           "flow.doctor_and_init"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/cli/repo-context.ts"
+          },
+          {
+            "file": "libs/env/load-local-env.ts"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          }
         ]
       },
       {
@@ -183,6 +216,17 @@
         "about": [
           "component.repo_env_context",
           "flow.doctor_and_init"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/cli/repo-context.ts"
+          },
+          {
+            "file": "libs/env/load-local-env.ts"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          }
         ]
       },
       {
@@ -195,6 +239,17 @@
           "flow.doctor_and_init",
           "component.cli_app",
           "component.graph_context_retrieval"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/graph-context"
+          },
+          {
+            "file": "apps/cli/repo-context.ts"
+          }
         ]
       },
       {
@@ -206,6 +261,17 @@
         "about": [
           "component.sqlite_database_schema",
           "flow.doctor_and_init"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/storage/sqlite/db.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/schema.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/migrate.ts"
+          }
         ]
       },
       {
@@ -217,6 +283,14 @@
         "about": [
           "component.knowledge_graph_service",
           "component.cli_app"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          }
         ]
       },
       {
@@ -228,6 +302,17 @@
         "about": [
           "component.graph_schema",
           "component.proposal_validation"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/schema.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/claim.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/edge.ts"
+          }
         ]
       },
       {
@@ -240,6 +325,17 @@
           "component.sqlite_repository",
           "component.sqlite_database_schema",
           "flow.graph_read_and_context"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/storage/sqlite/repository.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/db.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/schema.ts"
+          }
         ]
       },
       {
@@ -251,6 +347,17 @@
         "about": [
           "component.sqlite_repository",
           "component.graph_schema"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/storage/sqlite/repository.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/schema.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/claim.ts"
+          }
         ]
       },
       {
@@ -262,6 +369,17 @@
         "about": [
           "component.proposal_model",
           "flow.compact_relationships_to_edges"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/proposal.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/schema.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/claim.ts"
+          }
         ]
       },
       {
@@ -274,6 +392,17 @@
           "component.proposal_validation",
           "component.graph_schema",
           "flow.proposal_validation"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/validate-proposal.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/schema.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/claim.ts"
+          }
         ]
       },
       {
@@ -287,6 +416,17 @@
           "component.knowledge_graph_service",
           "component.sqlite_repository",
           "component.graph_context_retrieval"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/repository.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/graph-context"
+          }
         ]
       },
       {
@@ -298,6 +438,17 @@
         "about": [
           "component.graph_context_retrieval",
           "flow.graph_read_and_context"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/graph-context"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          }
         ]
       },
       {
@@ -310,6 +461,17 @@
           "component.graph_context_retrieval",
           "flow.graph_read_and_context",
           "flow.proposal_apply"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/knowledge-graph/graph-context"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          },
+          {
+            "file": "libs/knowledge-graph/service.ts"
+          }
         ]
       },
       {
@@ -321,6 +483,17 @@
         "about": [
           "component.greplica_skills",
           "flow.greplica_skill_workflows"
+        ],
+        "code_anchors": [
+          {
+            "file": "skills/greplica-bootstrap/SKILL.md"
+          },
+          {
+            "file": "skills/greplica-update-working-memory/SKILL.md"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          }
         ]
       },
       {
@@ -332,6 +505,17 @@
         "about": [
           "component.evals_agent_runner",
           "flow.eval_workflows"
+        ],
+        "code_anchors": [
+          {
+            "file": "evals"
+          },
+          {
+            "file": "libs/agent-runner"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          }
         ]
       },
       {
@@ -343,6 +527,17 @@
         "about": [
           "component.evals_agent_runner",
           "flow.eval_workflows"
+        ],
+        "code_anchors": [
+          {
+            "file": "evals"
+          },
+          {
+            "file": "libs/agent-runner"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          }
         ]
       },
       {
@@ -353,6 +548,17 @@
         "intent": "unknown",
         "about": [
           "component.sqlite_database_schema"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/storage/sqlite/db.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/schema.ts"
+          },
+          {
+            "file": "libs/storage/sqlite/migrate.ts"
+          }
         ]
       }
     ],

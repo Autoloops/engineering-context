@@ -12,6 +12,17 @@
         "about": [
           "component.evals_agent_runner",
           "flow.eval_workflows"
+        ],
+        "code_anchors": [
+          {
+            "file": "evals"
+          },
+          {
+            "file": "libs/agent-runner"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          }
         ]
       },
       {
@@ -23,6 +34,17 @@
         "about": [
           "component.greplica_skills",
           "flow.greplica_skill_workflows"
+        ],
+        "code_anchors": [
+          {
+            "file": "skills/greplica-bootstrap/SKILL.md"
+          },
+          {
+            "file": "skills/greplica-update-working-memory/SKILL.md"
+          },
+          {
+            "file": "apps/cli/main.ts"
+          }
         ]
       },
       {

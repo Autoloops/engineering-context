@@ -9,5 +9,5 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["apps/**/*.ts", "libs/**/*.ts", "evals/**/*.ts"]
+  "include": ["apps/**/*.ts", "libs/**/*.ts", "evals/**/*.ts", "scripts/**/*.ts"]
 }

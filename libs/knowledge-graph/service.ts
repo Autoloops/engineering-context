@@ -7,11 +7,14 @@ import { GraphContextBuilder } from "./graph-context/context-builder.js";
 import { graphContextConfig, type GraphContextConfig } from "./graph-context/config.js";
 import type { EmbeddingStatus, GraphContextResult } from "./graph-context/types.js";
 import { buildGraphViewHtml } from "./graph-view/build-graph-view.js";
+import { auditClaimCodeAnchors } from "./code-anchors/audit.js";
+import type { ClaimAnchorAuditResult } from "./code-anchors/types.js";
 import { defaultDatabasePath, openDatabase } from "../storage/sqlite/db.js";
 import type { SqliteRepository } from "../storage/sqlite/repository.js";
 import { SqliteRepository as SqliteKnowledgeGraphRepository } from "../storage/sqlite/repository.js";
 
 export type { GraphContextResult } from "./graph-context/types.js";
+export type { ClaimAnchorAuditResult } from "./code-anchors/types.js";
 
 export interface RepoRef {
   repo_root?: string;
@@ -113,17 +116,35 @@ export class KnowledgeGraphService {
     return this.contextBuilder.build(initialized.repo_id, this.repository.readGraphView(initialized.repo_id), query, {
       config: this.contextConfig,
       warnOnCreatedEmbeddings: true,
+      repoRoot: input.repo_root,
     });
   }
 
-  validateProposal(input: RepoRef, proposal: unknown): ProposalValidationResult {
+  async auditCodeAnchors(input: RepoRef): Promise<ClaimAnchorAuditResult> {
+    const initialized = this.requireRepo(input);
+    return auditClaimCodeAnchors(input.repo_root, this.repository.readGraphView(initialized.repo_id).claims);
+  }
+
+  async validateProposal(input: RepoRef, proposal: unknown): Promise<ProposalValidationResult> {
     this.requireRepo(input);
-    return validateProposal(normalizeProposal(proposal, this.repository), this.repository);
+    const normalizedProposal = normalizeProposal(proposal, this.repository);
+    const validation = validateProposal(normalizedProposal, this.repository);
+    if (!validation.valid) return validation;
+
+    const anchorErrors = anchorAuditErrors(
+      await auditClaimCodeAnchors(input.repo_root, normalizedProposal.creates.claims ?? []),
+    );
+    if (anchorErrors.length === 0) return validation;
+
+    return {
+      valid: false,
+      errors: anchorErrors,
+    };
   }
 
   async applyProposal(input: RepoRef, proposal: unknown): Promise<ApplyProposalResult> {
     const normalizedProposal = normalizeProposal(proposal, this.repository);
-    const validation = this.validateProposal(input, normalizedProposal);
+    const validation = await this.validateProposal(input, normalizedProposal);
     if (!validation.valid) {
       throw new Error(`Proposal is invalid:\n${validation.errors.map((error) => `- ${error}`).join("\n")}`);
     }
@@ -159,6 +180,23 @@ export class KnowledgeGraphService {
 
 }
 
-export function createLocalKnowledgeGraphService(config: GraphContextConfig = graphContextConfig): KnowledgeGraphService {
+function anchorAuditErrors(result: ClaimAnchorAuditResult): string[] {
+  return [
+    ...result.missing_anchors.map((issue) => `${issue.claim_id} is code_verified but has no code anchors`),
+    ...result.missing_files.map((issue) => `${issue.claim_id} -> ${formatAnchor(issue.anchor)} file does not exist`),
+    ...result.missing_symbols.map((issue) => `${issue.claim_id} -> ${formatAnchor(issue.anchor)} symbol was not found`),
+    ...result.ambiguous_symbols.map((issue) => `${issue.claim_id} -> ${formatAnchor(issue.anchor)} symbol is ambiguous`),
+    ...result.unsupported_languages.map((issue) => `${issue.claim_id} -> ${formatAnchor(issue.anchor)} language is unsupported for symbol anchors`),
+  ];
+}
+
+function formatAnchor(anchor: { file: string; symbol?: string } | undefined): string {
+  if (anchor === undefined) return "<missing>";
+  return anchor.symbol === undefined ? anchor.file : `${anchor.file}#${anchor.symbol}`;
+}
+
+export function createLocalKnowledgeGraphService(
+  config: GraphContextConfig = graphContextConfig,
+): KnowledgeGraphService {
   return new KnowledgeGraphService(new SqliteKnowledgeGraphRepository(openDatabase()), config);
 }

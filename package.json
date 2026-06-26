@@ -1,6 +1,6 @@
 {
   "name": "greplica",
-  "version": "0.1.4",
+  "version": "0.1.8",
   "description": "Long-term, searchable AGENTS.md for coding agents.",
   "private": false,
   "type": "module",
@@ -20,11 +20,28 @@
     "prepare": "npm run build",
     "typecheck": "tsc --noEmit",
     "smoke:cline": "npm run build && node scripts/smoke-cline-install.mjs",
+    "test:transcript-bundle": "npm run build && node scripts/check-transcript-bundle.js",
     "eval:bootstrap-current": "npm run build && node dist/evals/cases/bootstrap-current-repo-at-8038fe8/run.js",
     "eval:coding-proposal-apply-atomicity": "npm run build && node dist/evals/cases/coding-proposal-apply-atomicity-at-d6ebf80/run.js",
     "eval:curated-doc-bootstrap-vercel-chat": "npm run build && node dist/evals/cases/curated-doc-bootstrap-vercel-chat-at-f3de128/run.js",
     "eval:search-current": "npm run build && node dist/evals/cases/search-current-repo-at-8038fe8/run.js",
-    "eval:update-working-memory-source-evidence": "npm run build && node dist/evals/cases/update-working-memory-source-evidence-at-0438915/run.js"
+    "eval:transcript-backfill-insights": "npm run build && node dist/evals/cases/transcript-backfill-insights/run.js --judge openai",
+    "eval:update-working-memory-source-evidence": "npm run build && node dist/evals/cases/update-working-memory-source-evidence-at-0438915/run.js",
+    "bench:contextbench": "npm run build && node dist/evals/cases/contextbench-retrieval-from-sqlite/run.js",
+    "optimize:search-ranking": "npm run build && node dist/evals/ranking-optimizer/train.js",
+    "memory:prepare-task": "npm run build && node dist/scripts/memory-build/prepare-task.js",
+    "memory:collect-repo": "npm run build && node dist/scripts/memory-build/collect-repo-snapshot.js",
+    "memory:extract-symbols": "npm run build && node dist/scripts/memory-build/extract-symbols.js",
+    "memory:collect-github": "npm run build && node dist/scripts/memory-build/collect-github.js",
+    "memory:prepare-github-packets": "npm run build && node dist/scripts/memory-build/prepare-github-packets.js",
+    "memory:generate-bootstrap": "npm run build && node dist/scripts/memory-build/generate-bootstrap-proposal.js",
+    "memory:deep-bootstrap": "npm run build && node dist/scripts/memory-build/run-deep-bootstrap-skill.js",
+    "memory:ingest-github-packets": "npm run build && node dist/scripts/memory-build/run-github-packets-ingest.js",
+    "memory:apply": "npm run build && node dist/scripts/memory-build/apply-proposals.js",
+    "memory:audit": "npm run build && node dist/scripts/memory-build/audit-anchors.js",
+    "memory:smoke": "npm run build && node dist/scripts/memory-build/run-retrieval-smoke.js",
+    "memory:smoke-github-packet-skill": "npm run build && node dist/scripts/memory-build/run-github-packet-skill-smoke.js",
+    "memory:build-task": "npm run build && node dist/scripts/memory-build/build-task-memory.js"
   },
   "files": [
     "dist/apps",
@@ -35,7 +52,9 @@
   ],
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
-    "better-sqlite3": "^12.11.1"
+    "better-sqlite3": "^12.11.1",
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.24.7"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

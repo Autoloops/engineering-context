@@ -4,6 +4,7 @@ import { schemaSql } from "./schema.js";
 export function migrate(db: Database.Database): void {
   db.exec(schemaSql);
   migrateReposTable(db);
+  migrateClaimsTable(db);
 }
 
 function migrateReposTable(db: Database.Database): void {
@@ -55,5 +56,16 @@ function migrateReposTable(db: Database.Database): void {
   } finally {
     db.pragma(`legacy_alter_table = ${legacyAlterTable ? "ON" : "OFF"}`);
     db.pragma(`foreign_keys = ${foreignKeys ? "ON" : "OFF"}`);
+  }
+}
+
+function migrateClaimsTable(db: Database.Database): void {
+  const columns = db.prepare("PRAGMA table_info(claims)").all() as Array<{ name: string }>;
+  if (columns.some((column) => column.name === "code_anchors")) return;
+  try {
+    db.exec("ALTER TABLE claims ADD COLUMN code_anchors TEXT");
+  } catch (error: unknown) {
+    if (error instanceof Error && /duplicate column name/i.test(error.message)) return;
+    throw error;
   }
 }

@@ -2,6 +2,7 @@ import { join } from "node:path";
 import type { EmbeddingConfig } from "../../config/greplica-config.js";
 import { greplicaHome } from "../../config/greplica-home.js";
 import type { Embedder } from "./embedder.js";
+import { withLocalModelLock } from "./local-model-lock.js";
 
 interface TensorLike {
   data: Float32Array | number[];
@@ -51,12 +52,18 @@ export class LocalEmbedder implements Embedder {
   }
 
   private async loadExtractor(): Promise<FeatureExtractionPipeline> {
-    this.extractor ??= loadFeatureExtractionPipeline(this.modelId, this.cacheDir);
+    this.extractor ??= loadFeatureExtractionPipeline(this.options, this.modelId, this.cacheDir);
     return this.extractor;
   }
 }
 
-async function loadFeatureExtractionPipeline(modelId: string, cacheDir: string): Promise<FeatureExtractionPipeline> {
+async function loadFeatureExtractionPipeline(config: EmbeddingConfig, modelId: string, cacheDir: string): Promise<FeatureExtractionPipeline> {
+  const result = await withLocalModelLock(config, { wait: true }, () => loadFeatureExtractionPipelineUnlocked(modelId, cacheDir));
+  if (!result.value) throw new Error(`Local embedding model ${modelId} could not be loaded.`);
+  return result.value;
+}
+
+async function loadFeatureExtractionPipelineUnlocked(modelId: string, cacheDir: string): Promise<FeatureExtractionPipeline> {
   const { pipeline } = await import("@huggingface/transformers");
   const options = {
     cache_dir: cacheDir,
