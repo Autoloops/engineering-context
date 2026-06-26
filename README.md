@@ -30,14 +30,16 @@ Most users should not install Greplica by hand. Paste this into your coding agen
 
 Greplica requires Node.js 22-26.
 
-`````txt
+<div style="max-height: 34rem; overflow-y: auto; border: 1px solid #d0d7de; border-radius: 6px;">
+
+<pre><code class="language-text">
 Install Greplica for this repo.
 
 Run:
 
 ```bash
 npm install -g greplica
-greplica install --platform <codex|claude|opencode> --embedding local
+greplica install --platform &lt;codex|claude|opencode&gt; --embedding local
 ```
 
 Use the platform matching this agent. Do not manually copy skills. After installation, summarize the installer output, including skills, embedding mode, whether hooks were installed, and whether I need to restart or trust hooks.
@@ -61,7 +63,7 @@ If I opted into prior-session learning:
 - Since I already opted in, continue without asking a second confirmation and run:
 
 ```bash
-greplica transcript bundle --platform <codex-or-claude> --file <path-1> --file <path-2> --file <path-3> --file <path-4> --file <path-5> --out .greplica-transcript-backfill.md
+greplica transcript bundle --platform &lt;codex-or-claude&gt; --file &lt;path-1&gt; --file &lt;path-2&gt; --file &lt;path-3&gt; --file &lt;path-4&gt; --file &lt;path-5&gt; --out .greplica-transcript-backfill.md
 ```
 
 - Then use the `greplica-fast-session-bootstrap` skill on `.greplica-transcript-backfill.md`.
@@ -72,18 +74,20 @@ Applied transcript backfill to working memory: .greplica-transcript-backfill.md
 
 Three useful things I learned from your previous sessions:
 
-1. **<short title>**
-   <specific stored memory>.
-   Why it matters: <why this helps the next session>.
-   Backed by: <session/code evidence>; connected to <component/flow>.
+1. **&lt;short title&gt;**
+   &lt;specific stored memory&gt;.
+   Why it matters: &lt;why this helps the next session&gt;.
+   Backed by: &lt;session/code evidence&gt;; connected to &lt;component/flow&gt;.
 ```
 
 Then tell me how to use Greplica:
-- Tell me that during work, the agent can use `greplica graph context "<question about the current task>"` to fetch relevant repo context, including prior working memory, before broad manual exploration.
+- Tell me that during work, the agent can use `greplica graph context "&lt;question about the current task&gt;"` to fetch relevant repo context, including prior working memory, before broad manual exploration.
 - Tell me that near the end of a useful session, I should run "Use greplica-update-working-memory for this session." so decisions, changed flows, constraints, and follow-up work are stored.
-- Tell me that OpenAI embeddings are also available later by rerunning `greplica install --platform <codex-or-claude-or-opencode> --embedding openai`.
+- Tell me that OpenAI embeddings are also available later by rerunning `greplica install --platform &lt;codex-or-claude-or-opencode&gt; --embedding openai`.
 - IMPORTANT: tell me that hooks and installed skills are the primary integration. Add a short AGENTS.md or CLAUDE.md instruction only if hooks are unavailable, not accepted, or I want extra repo-local guidance.
-`````
+</code></pre>
+
+</div>
 
 After that, the normal onboarding flow is:
 
