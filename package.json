@@ -27,6 +27,7 @@
     "eval:transcript-backfill-insights": "npm run build && node dist/evals/cases/transcript-backfill-insights/run.js --judge openai",
     "eval:update-working-memory-source-evidence": "npm run build && node dist/evals/cases/update-working-memory-source-evidence-at-0438915/run.js",
     "bench:contextbench": "npm run build && node dist/evals/cases/contextbench-retrieval-from-sqlite/run.js",
+    "bench:agentmemory-coding-life": "npm run build && node dist/evals/cases/agentmemory-coding-life/run.js",
     "optimize:search-ranking": "npm run build && node dist/evals/ranking-optimizer/train.js",
     "memory:prepare-task": "npm run build && node dist/scripts/memory-build/prepare-task.js",
     "memory:collect-repo": "npm run build && node dist/scripts/memory-build/collect-repo-snapshot.js",
