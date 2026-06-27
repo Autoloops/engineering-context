@@ -86,7 +86,7 @@ interface Rubric {
     supersedes_points: number;
     anchor_correctness_points: number;
     quality_points: number;
-    summary_quality_points: number;
+    output_quality_points: number;
     generation_time_points: number;
     generation_time_full_credit_seconds: number;
     generation_time_limit_seconds: number;
@@ -219,11 +219,12 @@ interface JudgeOutput {
     category: BadMemoryCategory;
     reason: string;
   }>;
-  summary_quality: {
-    specific: boolean;
-    shows_corrected_assumptions: boolean;
-    explains_why_useful: boolean;
-    avoids_generic_summary: boolean;
+  output_quality: {
+    has_concrete_flow_section: boolean;
+    reconstructs_useful_context: boolean;
+    explains_one_shot_retrieval_value: boolean;
+    says_stored_in_graph: boolean;
+    includes_supported_correction_when_available: boolean;
     reason: string;
   };
   noise: Record<NoiseKey, boolean> & {
@@ -258,7 +259,7 @@ interface ScoreResult {
   supersedes_score: number;
   anchor_correctness_score: number;
   quality_score: number;
-  summary_quality_score: number;
+  output_quality_score: number;
   generation_time_score: number;
   generation_time_seconds: number | undefined;
   generation_time_full_credit_seconds: number;
@@ -354,7 +355,7 @@ async function main(): Promise<void> {
     console.log(
       `Category coverage: ${judge.score.covered_categories.join(", ") || "none"}, score ${judge.score.category_coverage_score.toFixed(2)}`,
     );
-    console.log(`Summary quality score: ${judge.score.summary_quality_score.toFixed(2)}`);
+    console.log(`Output quality score: ${judge.score.output_quality_score.toFixed(2)}`);
     console.log(
       `Generation time score: ${judge.score.generation_time_score.toFixed(2)} / ${readJson<Rubric>(context.rubricPath).score.generation_time_points}`,
     );
@@ -615,6 +616,8 @@ Important handling rules:
 - For code_verified claims, use one representative symbol anchor when possible, or two only for a truly cross-boundary claim. Do not attach three or more code anchors to one claim.
 - Do not use broad file-only anchors for large code or documentation files. If a doc/skill fact is primarily from the bundle, keep it source_verified with session evidence instead of forcing a code_verified file anchor.
 - For this eval, usually leave supersedes empty. Do not supersede a true bootstrap implementation fact with usage guidance, a narrower clarification, or an adjacent session decision.
+- Keep this fast-path proposal focused: one primary flow/component, 3-6 supporting claims, and at most one optional correction/gotcha outside that primary topic.
+- Prefer source_verified for doctor/guidance/eval/skill usage decisions unless a precise code symbol proves the entire implementation claim.
 - Do not include full local eval-run paths in the final user-facing message. Say the backfill was applied without printing the proposal path.
 - Do not edit repository source files. Only create the proposal JSON at ${context.backfillProposalPath}.
 - Validate and apply the proposal yourself. The eval runner will only verify that validation still passes and that the final graph contains at least one generated claim.
@@ -622,16 +625,16 @@ Important handling rules:
 Task:
 1. First, read the entire transcript bundle in one command. Use: node -e "console.log(require('fs').readFileSync(process.argv[1], 'utf8'))" ${context.transcriptBundlePath}
 2. From that full read, make an internal candidate inventory before any graph or code lookup. Do not re-read the bundle in page-sized chunks unless validation reveals a specific missing citation.
-3. Extract durable repo/product decisions, corrected repo assumptions, component/flow knowledge, risks/gotchas, rejected alternatives, future/deferred work, and evidence/provenance rules.
+3. Extract durable repo/product decisions, corrected repo assumptions, component/flow knowledge, risks/gotchas, rejected alternatives, future/deferred work, and evidence/provenance rules only insofar as they support one strong primary flow/component or one optional correction.
 4. Drop generic agent-behavior corrections. Keep a correction only when it reveals a repo-specific decision, rejected implementation, wrong assumption, durable workflow constraint, or future task.
-5. Use greplica graph context only for focused dedupe checks against existing bootstrap memory, with no more than six graph context queries.
+5. Use greplica graph context only for focused dedupe checks against existing bootstrap memory, with no more than two graph context queries.
 6. Verify current implementation facts against the current target repo before marking them code_verified. Inspect only targeted files/symbols needed for anchors.
-7. Prefer concrete reusable facts over broad summaries.
+7. Prefer concrete reusable facts over broad summaries, but stop once the primary flow/component is well supported.
 8. Create a compact fast-session-bootstrap proposal JSON at ${context.backfillProposalPath}.
 9. Validate it with: ${greplica} proposal validate ${context.backfillProposalPath}
 10. Fix validation errors until valid.
 11. Apply it with: ${greplica} proposal apply ${context.backfillProposalPath}
-12. In the final answer, say it was applied and show exactly three selected high-signal memories using the skill's output shape.
+12. In the final answer, say it was applied and show one important flow/component that can now be reconstructed without grepping, plus the optional trajectory-correction section only when strongly supported.
 
 The proposal should add high-signal incremental memory from the transcript bundle. It should not duplicate broad bootstrap memory unless a previous session changed, corrected, narrowed, or clarified it.`;
 }
@@ -649,7 +652,7 @@ async function requestJudge(apiKey: string, model: string, input: JudgeInput): P
         {
           role: "system",
           content:
-            "You are an evaluator for Greplica fast-session-bootstrap proposals. Return JSON only. Classify gold-pool memories, supersedes, bad memories, final-summary quality, and transcript noise. Do not calculate numeric scores.",
+            "You are an evaluator for Greplica fast-session-bootstrap proposals. Return JSON only. Classify gold-pool memories, supersedes, bad memories, final output quality, and transcript noise. Do not calculate numeric scores.",
         },
         {
           role: "user",
@@ -730,7 +733,7 @@ function scoreJudgeOutput(
     }),
   ].reduce((sum, penalty) => sum + penalty, 0);
   const qualityScore = Math.max(0, rubric.score.quality_points - qualityPenalty);
-  const summaryQualityScore = scoreSummaryQuality(rubric, judge);
+  const outputQualityScore = scoreOutputQuality(rubric, judge);
   const generationTime = scoreGenerationTime(rubric, generationTimeSeconds);
   const finalScore =
     expectedMemoryScore +
@@ -740,7 +743,7 @@ function scoreJudgeOutput(
     supersedesScore +
     anchorCorrectnessScore +
     qualityScore +
-    summaryQualityScore +
+    outputQualityScore +
     generationTime.score;
 
   return {
@@ -754,7 +757,7 @@ function scoreJudgeOutput(
     supersedes_score: round(supersedesScore, 2),
     anchor_correctness_score: round(anchorCorrectnessScore, 2),
     quality_score: round(qualityScore, 2),
-    summary_quality_score: round(summaryQualityScore, 2),
+    output_quality_score: round(outputQualityScore, 2),
     generation_time_score: round(generationTime.score, 2),
     generation_time_seconds: generationTimeSeconds,
     generation_time_full_credit_seconds: rubric.score.generation_time_full_credit_seconds,
@@ -794,15 +797,16 @@ function scoreCategoryCoverage(
   return { score, covered: [...covered].sort() };
 }
 
-function scoreSummaryQuality(rubric: Rubric, judge: JudgeOutput): number {
+function scoreOutputQuality(rubric: Rubric, judge: JudgeOutput): number {
   const checks = [
-    judge.summary_quality.specific,
-    judge.summary_quality.shows_corrected_assumptions,
-    judge.summary_quality.explains_why_useful,
-    judge.summary_quality.avoids_generic_summary,
+    judge.output_quality.has_concrete_flow_section,
+    judge.output_quality.reconstructs_useful_context,
+    judge.output_quality.explains_one_shot_retrieval_value,
+    judge.output_quality.says_stored_in_graph,
+    judge.output_quality.includes_supported_correction_when_available,
   ];
   const passed = checks.filter(Boolean).length;
-  return (passed / checks.length) * rubric.score.summary_quality_points;
+  return (passed / checks.length) * rubric.score.output_quality_points;
 }
 
 function scoreGenerationTime(
@@ -1032,21 +1036,23 @@ function judgeOutputSchema(): Record<string, unknown> {
       expected_memories: { type: "array", items: expectedMemoryItem },
       supersedes: { type: "array", items: supersedesItem },
       bad_memories: { type: "array", items: badMemoryItem },
-      summary_quality: {
+      output_quality: {
         type: "object",
         additionalProperties: false,
         properties: {
-          specific: { type: "boolean" },
-          shows_corrected_assumptions: { type: "boolean" },
-          explains_why_useful: { type: "boolean" },
-          avoids_generic_summary: { type: "boolean" },
+          has_concrete_flow_section: { type: "boolean" },
+          reconstructs_useful_context: { type: "boolean" },
+          explains_one_shot_retrieval_value: { type: "boolean" },
+          says_stored_in_graph: { type: "boolean" },
+          includes_supported_correction_when_available: { type: "boolean" },
           reason: { type: "string" },
         },
         required: [
-          "specific",
-          "shows_corrected_assumptions",
-          "explains_why_useful",
-          "avoids_generic_summary",
+          "has_concrete_flow_section",
+          "reconstructs_useful_context",
+          "explains_one_shot_retrieval_value",
+          "says_stored_in_graph",
+          "includes_supported_correction_when_available",
           "reason",
         ],
       },
@@ -1069,7 +1075,7 @@ function judgeOutputSchema(): Record<string, unknown> {
         ],
       },
     },
-    required: ["expected_memories", "supersedes", "bad_memories", "summary_quality", "noise"],
+    required: ["expected_memories", "supersedes", "bad_memories", "output_quality", "noise"],
   };
 }
 

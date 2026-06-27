@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { envVarSource, loadRepoEnv } from "../env/load-local-env.js";
 import { greplicaConfigPath, updateEmbeddingConfig, type EmbeddingProvider, type SessionConfig } from "../config/greplica-config.js";
@@ -37,7 +38,11 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
 
   const notes: string[] = [];
   if (options.embedding === "local") {
-    notes.push("Local embeddings were configured without prewarming; the first graph-context query may download the local model.");
+    if (startLocalEmbeddingPrewarm()) {
+      notes.push("Local embedding model prewarm was queued in the background; if another prewarm is already running, this one will skip. The first query may still download the model if prewarm has not finished.");
+    } else {
+      notes.push("Local embeddings were configured, but background prewarm could not be started; the first query may download the local model.");
+    }
   }
 
   return {
@@ -73,4 +78,24 @@ function configureEmbedding(provider: EmbeddingProvider, repo: RepoRef): { confi
     config,
     configPath: resolve(greplicaConfigPath()),
   };
+}
+
+function startLocalEmbeddingPrewarm(): boolean {
+  const script = process.argv[1];
+  if (script === undefined) return false;
+
+  try {
+    const child = spawn(process.execPath, [script, "embeddings", "prewarm"], {
+      detached: true,
+      stdio: "ignore",
+      env: process.env,
+    });
+    child.on("error", () => {
+      // Local model prewarm is best-effort; install should never fail because of it.
+    });
+    child.unref();
+    return true;
+  } catch {
+    return false;
+  }
 }

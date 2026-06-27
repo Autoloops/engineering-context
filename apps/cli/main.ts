@@ -24,6 +24,7 @@ import type { InstallEmbedding, InstallPlatform } from "../../libs/install/paths
 import { hookCwd, hookEventName, hookSessionId, hookTranscriptPath, readHookInput } from "../../libs/hooks/hook-input.js";
 import { HookSessionStore } from "../../libs/hooks/session-state.js";
 import { runHookWorker, startHookWorker } from "../../libs/hooks/worker.js";
+import { withLocalModelLock } from "../../libs/knowledge-graph/graph-context/local-model-lock.js";
 import { openDatabase } from "../../libs/storage/sqlite/db.js";
 import { SqliteRepository as SqliteKnowledgeGraphRepository } from "../../libs/storage/sqlite/repository.js";
 import { detectRepoContext } from "./repo-context.js";
@@ -75,6 +76,11 @@ async function main(argv: string[]): Promise<void> {
 
   if (area === "doctor") {
     await runDoctor([action, ...rest].filter((arg): arg is string => arg !== undefined));
+    return;
+  }
+
+  if (area === "embeddings" && action === "prewarm") {
+    await runEmbeddingsPrewarm(rest);
     return;
   }
 
@@ -424,6 +430,23 @@ async function runDoctor(args: string[]): Promise<void> {
   process.exitCode = ready ? 0 : 1;
 }
 
+async function runEmbeddingsPrewarm(args: string[]): Promise<void> {
+  if (args.length > 0) throw new Error("Usage: greplica embeddings prewarm");
+
+  const config = ensureGreplicaConfig();
+  if (config.embedding.provider === "openai") {
+    console.log("Embedding provider is openai; local prewarm is not needed.");
+    return;
+  }
+
+  const result = await withLocalModelLock(config.embedding, { wait: false }, () => checkEmbeddings(config.embedding));
+  if (!result.acquired) {
+    console.log("Local embedding prewarm is already running; skipping.");
+    return;
+  }
+  process.exitCode = result.value === true ? 0 : 1;
+}
+
 async function checkEmbeddings(config: EmbeddingConfig): Promise<boolean> {
   try {
     console.log(`Checking ${config.provider} embeddings...`);
@@ -573,42 +596,28 @@ function parseInstallEmbedding(value: string): InstallEmbedding {
 
 function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>): void {
   console.log(`Installed Greplica for ${platformDisplayName(result.platform)}.`);
-  console.log("");
-  console.log("Skills:");
-  for (const skill of result.skills) console.log(`- ${skill}`);
-  console.log("");
+  console.log(`Skills: ${result.skills.length} installed.`);
   if (result.hooks !== undefined) {
-    console.log("Hooks:");
-    console.log(`- events: ${result.hooks.events.join(", ")}`);
-    console.log(`- command: ${result.hooks.command}`);
-    for (const configFile of result.hooks.configFiles) console.log(`- config: ${configFile}`);
-    console.log("- note: your agent may ask you to trust or accept these hooks the next time it starts.");
-    console.log("");
+    console.log(`Hooks: installed for ${result.hooks.events.join(", ")}.`);
+  } else {
+    console.log("Hooks: not installed for this platform.");
   }
-  console.log("Embedding:");
-  console.log(`- ${result.embedding}`);
-  console.log(`- config: ${result.configFile}`);
-  console.log(`- database: ${result.databasePath}`);
-  console.log(`- session stop threshold: ${result.session.stopThreshold}`);
-  console.log(`- session time threshold: ${result.session.timeThresholdMinutes} minutes`);
-  console.log(`- session current grace: ${result.session.currentGraceMinutes} minutes`);
+  console.log(`Embedding: ${result.embedding}.`);
+  console.log(`Config: ${result.configFile}`);
+  console.log(`Database: ${result.databasePath}`);
   console.log("");
   console.log("Next steps:");
   console.log("- Restart your coding agent if the new skills or hooks do not appear immediately.");
   if (result.hooks !== undefined) {
-    console.log("- Accept or trust the installed hooks if your agent asks. Hook dispatchers ignore repos where greplica install was not run.");
-    console.log("- Hooks record session activity and attempt background working-memory updates for this repo.");
-    console.log("- If you do not accept the hooks, background saves will not run; manually ask the agent to use greplica-update-working-memory near the end of useful sessions.");
+    console.log("- Accept or trust the installed hooks if your agent asks.");
   } else {
-    console.log("- Hooks were not installed for this platform. Manually ask the agent to use greplica-update-working-memory near the end of useful sessions.");
+    console.log("- Ask the agent to use greplica-update-working-memory near the end of useful sessions.");
   }
-  console.log("- Add a short AGENTS.md/CLAUDE.md instruction if hooks are unavailable or not accepted: use greplica graph context \"<question>\" before broad manual exploration.");
   console.log("- Ask the agent to use greplica-bootstrap once for repos that do not have memory yet.");
-  console.log("- During work, the agent can run greplica graph context \"<question>\" to fetch relevant repo memory.");
   if (result.embedding === "local") {
-    console.log(`- OpenAI embeddings are also available if you want better retrieval quality later: greplica install --platform ${result.platform} --embedding openai`);
+    console.log(`- Optional later: greplica install --platform ${result.platform} --embedding openai`);
   } else {
-    console.log(`- Local embeddings are also available if you want to switch back later: greplica install --platform ${result.platform} --embedding local`);
+    console.log(`- Optional later: greplica install --platform ${result.platform} --embedding local`);
   }
   for (const note of result.notes) console.log(`- ${note}`);
 }
@@ -768,6 +777,7 @@ function printHelp(): void {
   ${cli} install --platform codex|claude|opencode|openhands --embedding local|openai
   ${cli} config
   ${cli} doctor [--check-embeddings]
+  ${cli} embeddings prewarm
   ${cli} graph read
   ${cli} graph context <query> [--debug]
   ${cli} graph audit anchors

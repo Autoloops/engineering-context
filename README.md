@@ -30,86 +30,19 @@ Most users should not install Greplica by hand. Paste this into your coding agen
 
 Greplica requires Node.js 22-26.
 
-<div style="max-height: 34rem; overflow-y: auto; border: 1px solid #d0d7de; border-radius: 6px;">
-
-<pre><code class="language-text">
-Install Greplica for this repo.
-
-Run:
-
-```bash
-npm install -g greplica
-greplica install --platform &lt;codex|claude|opencode&gt; --embedding local
+```txt
+Install Greplica for this repo using https://raw.githubusercontent.com/Autoloops/greplica/refs/heads/main/docs/agent-install-prompt.md.
 ```
 
-Use the platform matching this agent. Do not manually copy skills. After installation, summarize the installer output, including skills, embedding mode, whether hooks were installed, and whether I need to restart or trust hooks.
+Full prompt: [docs/agent-install-prompt.md](https://raw.githubusercontent.com/Autoloops/greplica/refs/heads/main/docs/agent-install-prompt.md)
 
-Before running install or bootstrap, ask me one question:
-"Should I use the last five prior sessions for this same repo to create richer Greplica memory?"
-
-Recommend yes, but do not read old transcripts deeply until I answer.
-
-Then bootstrap shallow memory for this repo:
-- Prefer using the `greplica-bootstrap` skill.
-- If the skill is not visible until restart, read the installed `greplica-bootstrap/SKILL.md` file and follow it directly.
-- Create, validate, and apply the bootstrap proposal.
-- Keep bootstrap output brief: give a one-sentence summary of what this repo does and say baseline memory was applied.
-
-If I opted into prior-session learning:
-- Find the five most recent prior sessions for this same repo and platform.
-- Candidate locations: Codex `~/.codex/sessions/**/*.jsonl`; Claude Code `~/.claude/projects/**/*.jsonl`.
-- For OpenCode, tell me transcript backfill is not supported yet.
-- Show me the five selected transcripts before bundling them: title if available, date/time, path, and why each matched this repo.
-- Since I already opted in, continue without asking a second confirmation and run:
-
-```bash
-greplica transcript bundle --platform &lt;codex-or-claude&gt; --file &lt;path-1&gt; --file &lt;path-2&gt; --file &lt;path-3&gt; --file &lt;path-4&gt; --file &lt;path-5&gt; --out .greplica-transcript-backfill.md
-```
-
-- Then use the `greplica-fast-session-bootstrap` skill on `.greplica-transcript-backfill.md`.
-- After apply, show exactly three compact, high-signal memories in this style:
-
-```markdown
-Applied transcript backfill to working memory: .greplica-transcript-backfill.md
-
-Three useful things I learned from your previous sessions:
-
-1. **&lt;short title&gt;**
-   &lt;specific stored memory&gt;.
-   Why it matters: &lt;why this helps the next session&gt;.
-   Backed by: &lt;session/code evidence&gt;; connected to &lt;component/flow&gt;.
-```
-
-OpenCode:
-```bash
-greplica install --platform opencode --embedding local
-```
-
-OpenHands:
-```bash
-greplica install --platform openhands --embedding local
-```
-
-Do not manually copy skills. Let the installer do it.
-
-After installation, tell me where the skills were installed, which embedding mode was configured, whether I should restart the agent, and how to switch later to OpenAI embeddings if I want that.
-
-Then tell me how to use Greplica:
-- Tell me that during work, the agent can use `greplica graph context "&lt;question about the current task&gt;"` to fetch relevant repo context, including prior working memory, before broad manual exploration.
-- Tell me that near the end of a useful session, I should run "Use greplica-update-working-memory for this session." so decisions, changed flows, constraints, and follow-up work are stored.
-- Tell me that OpenAI embeddings are also available later by rerunning `greplica install --platform &lt;codex-or-claude-or-opencode-or-openhands&gt; --embedding openai`.
-- IMPORTANT: tell me that hooks and installed skills are the primary integration. Add a short AGENTS.md or CLAUDE.md instruction only if hooks are unavailable, not accepted, or I want extra repo-local guidance.
-</code></pre>
-
-</div>
-
-After that, the normal onboarding flow is:
+That prompt runs the full onboarding flow:
 
 | Step | Ask your agent | What happens |
 | --- | --- | --- |
-| 1 | Paste the prompt above | Installs the CLI, installs the matching agent integration, and reports hooks/skills status. |
-| 2 | `Use greplica-bootstrap for this repo.` | Creates the first repo memory map. |
-| 3 | Optional prior-session learning | Shows five same-repo transcripts, bundles them, and stores three high-signal memories. |
+| 1 | Paste the prompt above | Agent asks about prior sessions, installs the CLI, installs the matching repo integration, and reports hooks/skills status. |
+| 2 | Same prompt continues | Agent bootstraps baseline repo memory. |
+| 3 | If you opted in | Agent shows 1-3 recent same-repo transcripts, bundles them, and stores reconstructable flow/component memory. |
 | 4 | Work normally | The agent can query `greplica graph context "<question>"` before broad exploration. |
 | 5 | Accept hooks, or run `Use greplica-update-working-memory for this session.` manually | Durable decisions, constraints, changed flows, and follow-ups are saved. |
 
@@ -233,12 +166,13 @@ The agent reads your repository shallowly - README, config files, key entrypoint
 
 ### 5. Optionally backfill from prior sessions
 
-Ask your agent to find five recent prior sessions for this repo and show you the selected transcript paths before it reads them deeply. If you already asked it to use prior sessions, it should continue from the shown list without asking a second confirmation.
+Ask your agent to find 1-3 recent prior sessions for this repo and show you the selected transcript paths before it reads them deeply. Prefer same-repo sessions from the last 1-2 days. If one large, high-signal session is enough, use one; otherwise use two by default and three only when the sessions are smaller or cover distinct work. If you already asked it to use prior sessions, it should continue from the shown list without asking a second confirmation.
 
 Candidate locations:
 
-- Codex: `~/.codex/sessions/**/*.jsonl`; prefer transcripts whose metadata `cwd` matches this repo.
-- Claude Code: `~/.claude/projects/<sanitized-current-cwd>/*.jsonl`; if needed, fall back to `~/.claude/projects/**/*.jsonl` and filter by transcript metadata `cwd`.
+- Codex: `~/.codex/sessions/**/*.jsonl`.
+- Claude Code: search both `~/.claude/projects/<sanitized-current-cwd>/*.jsonl` and `~/.claude/projects/**/*.jsonl`.
+- Same-repo matching should handle worktrees and renamed folders. Prefer exact metadata `cwd` matches, but also accept transcripts whose metadata `cwd` still exists and has the same Git `remote.origin.url` or normalized repo identity as the current repo. If the old path no longer exists, use cwd text, repo name, branch, and recent session content as weaker matching evidence.
 - OpenCode: transcript backfill is not supported yet.
 
 Bundle them:
@@ -253,7 +187,7 @@ Then ask:
 Use greplica-fast-session-bootstrap on .greplica-transcript-backfill.md.
 ```
 
-The skill reads the bundle, extracts durable decisions/gotchas/rejected approaches/follow-up work, validates and applies the proposal, then shows three compact memories that demonstrate what Greplica learned.
+The skill reads the bundle, extracts durable flow/component context plus high-signal decisions/gotchas/rejected approaches/follow-up work, validates and applies the proposal, then shows one important flow/component it can now reconstruct without broad grepping. If there is a strong repo-specific user correction or risk, it shows that too.
 
 ---
 

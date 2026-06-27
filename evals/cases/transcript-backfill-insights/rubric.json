@@ -12,7 +12,7 @@
     "supersedes_points": 0,
     "anchor_correctness_points": 10,
     "quality_points": 15,
-    "summary_quality_points": 10,
+    "output_quality_points": 10,
     "generation_time_points": 5,
     "generation_time_full_credit_seconds": 300,
     "generation_time_limit_seconds": 600,
@@ -55,7 +55,11 @@
       "Evidence edges for session-backed claims should point only to the transcript source that actually supports the claim and should include a meaningful metadata.reason.",
       "Do not require every claim to cite every transcript source; that is a wrong-evidence pattern.",
       "Bad memories should contain candidate claims that are harmful, unsupported, misleading, duplicated, noisy, stale/reverted-as-implemented, generic agent behavior, bad supersedes, or too implementation-specific.",
-      "Use candidate_update.final_message to judge summary_quality. It should show exactly three compact, non-obvious memories from the applied proposal. Each item should name a concrete repo-specific memory, explain why it helps the next session, and include a compact evidence/connection line. Do not penalize for omitting a 5-8 item summary; that old format is no longer desired.",
+      "Use candidate_update.final_message to judge output_quality. It should show one concrete repo flow or component that can now be reconstructed without broad grepping, with 3-5 concise useful facts about that flow/component.",
+      "The final message should explicitly explain one-shot retrieval value, for example that the topic is stored in the graph and a future agent can ask one greplica graph context query instead of reconstructing it by grepping.",
+      "The final message should be terse. Do not require a separate evidence or graph-connection line.",
+      "Because this bundle contains user corrections and gotchas, a strong final message should include an optional correction/risk section only when it names a repo-specific correction or gotcha and explains what future behavior changes.",
+      "Do not require the old exactly-three-memories output format; penalize final messages that still optimize around isolated claim lists instead of a reconstructable flow/component.",
       "Flag generic project summaries, raw transcript chatter, historical system/developer prompt content, command logs, unsupported claims, duplicate bootstrap memory without transcript nuance, over-broad capability lists, code facts sourced only from transcript text, and blanket evidence links."
     ],
     "allowed_memory_roles": [
