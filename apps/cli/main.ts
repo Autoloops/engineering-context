@@ -148,7 +148,7 @@ const cliCommands = [
   {
     key: "hookIngest",
     path: ["hook", "ingest"],
-    usage: "hook ingest --platform codex|claude|cline",
+    usage: "hook ingest --platform codex|claude",
     handler: runHookIngest,
   },
   {
@@ -516,7 +516,7 @@ function parseHookIngestPlatform(args: string[]): InstallPlatform {
 }
 
 function parseHookPlatform(value: string | undefined): InstallPlatform {
-  if (value === "codex" || value === "claude" || value === "cline") return value;
+  if (value === "codex" || value === "claude") return value;
   throw new Error(usage("hookIngest"));
 }
 

@@ -13,11 +13,10 @@ export function mergeHookConfig(
   base: Record<string, unknown>,
   platform: InstallPlatform,
   command: string,
-  events: readonly HookEvent[] = hookEvents,
 ): Record<string, unknown> {
   const hooks = isRecord(base.hooks) ? { ...base.hooks } : {};
 
-  for (const event of events) {
+  for (const event of hookEvents) {
     const existingGroups = Array.isArray(hooks[event]) ? hooks[event] : [];
     const keptGroups = existingGroups.map((group) => removeCommandFromHookGroup(group, command)).filter(groupHasHandlers);
     hooks[event] = [
