@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Focused smoke check for `greplica install --platform cline`.
-// Verifies Cline-compatible guidance is generated under .clinerules, install
-// output points at the rule, and user-authored Cline rules are preserved.
+// Verifies Cline-compatible guidance is generated under .clinerules, shared
+// skills and hooks are installed, and user-authored Cline rules/hooks survive.
 //
 // Hermetic: GREPLICA_HOME points at a temp dir so it never touches ~/.greplica.
 // Usage: node scripts/smoke-cline-install.mjs [--keep-temp] [--result-json <path>]
@@ -20,6 +20,7 @@ const ownsTempDir = args.keepTemp !== true;
 const tempDir = mkdtempSync(resolve(tmpdir(), "greplica-cline-smoke-"));
 const workspace = resolve(tempDir, "repo");
 const greplicaHome = resolve(tempDir, "home");
+const command = "greplica hook ingest --platform cline";
 
 const env = { ...process.env, GREPLICA_HOME: greplicaHome };
 delete env.GREPLICA_HOOK_DISABLE;
@@ -31,6 +32,8 @@ try {
   runOrThrow(["git", "init", "-q", workspace], repoRoot);
 
   checks.push(checkRuleInstall());
+  checks.push(checkSkillsAndHooks());
+  checks.push(checkGuidanceOutput());
   checks.push(checkNonDestructiveReinstall());
 } catch (error) {
   checks = [{ id: "smoke_script", passed: false, details: [error instanceof Error ? error.stack ?? error.message : String(error)] }];
@@ -62,20 +65,61 @@ function checkRuleInstall() {
       "greplica-bootstrap",
       "greplica graph context",
       "greplica-update-working-memory",
-      "greplica proposal validate",
-      "greplica proposal apply",
+      ".agents/skills",
+      "UserPromptSubmit",
     ]) {
       if (!rule.includes(pattern)) details.push(`generated rule missing ${JSON.stringify(pattern)}`);
     }
   }
 
   if (readFileSync(customRule, "utf8") !== "custom rule\n") details.push("existing .clinerules/custom.md was modified");
-  for (const pattern of ["Installed Greplica for Cline", "Guidance:", ".clinerules/greplica.md", "Reload or restart Cline"]) {
+  for (const pattern of ["Installed Greplica for Cline", "Guidance:", ".clinerules/greplica.md", "Skills:", "Hooks: installed for UserPromptSubmit", "Reload or restart Cline"]) {
     if (!first.stdout.includes(pattern)) details.push(`install output missing ${JSON.stringify(pattern)}`);
   }
   if (!second.stdout.includes(".clinerules/greplica.md")) details.push("reinstall did not keep using the generated greplica.md rule");
 
   return { id: "cline_rule_install", passed: details.length === 0, details };
+}
+
+function checkSkillsAndHooks() {
+  const details = [];
+  for (const skill of ["greplica-bootstrap", "greplica-update-working-memory"]) {
+    const skillPath = resolve(workspace, ".agents/skills", skill, "SKILL.md");
+    if (!existsSync(skillPath)) details.push(`missing skill ${skillPath}`);
+  }
+
+  const hooksPath = resolve(workspace, ".cline/hooks.json");
+  if (!existsSync(hooksPath)) {
+    details.push(".cline/hooks.json was not created");
+  } else {
+    const hooks = JSON.parse(readFileSync(hooksPath, "utf8")).hooks ?? {};
+    if (!commandPresent(hooks.UserPromptSubmit, command)) {
+      details.push(`UserPromptSubmit hook missing command "${command}"`);
+    }
+    if (commandPresent(hooks.Stop, command)) {
+      details.push("Stop hook should not be installed without a Cline background runner");
+    }
+  }
+
+  return { id: "skills_and_hooks_installed", passed: details.length === 0, details };
+}
+
+function checkGuidanceOutput() {
+  const details = [];
+  const hookInput = JSON.stringify({ hook_event_name: "UserPromptSubmit", cwd: workspace, session_id: "smoke-session" });
+  const result = run(["node", cli, "hook", "ingest", "--platform", "cline"], workspace, hookInput);
+  let payload;
+  try {
+    payload = JSON.parse((result.stdout ?? "").trim());
+  } catch {
+    details.push(`hook ingest did not emit JSON. stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}`);
+    return { id: "guidance_output", passed: false, details };
+  }
+  const additionalContext = payload?.hookSpecificOutput?.additionalContext;
+  if (typeof additionalContext !== "string" || !additionalContext.includes("greplica graph context")) {
+    details.push(`expected hookSpecificOutput.additionalContext with graph guidance, got ${JSON.stringify(payload)}`);
+  }
+  return { id: "guidance_output", passed: details.length === 0, details };
 }
 
 function checkNonDestructiveReinstall() {
@@ -98,7 +142,27 @@ function checkNonDestructiveReinstall() {
   }
   if (!output.includes(".clinerules/greplica-1.md")) details.push("install output did not report fallback rule path");
 
+  const hooksPath = resolve(safeWorkspace, ".cline/hooks.json");
+  const hooks = {
+    hooks: {
+      UserPromptSubmit: [{ matcher: "", hooks: [{ type: "command", command: "echo user-custom-hook" }] }],
+      PreToolUse: [{ matcher: "", hooks: [{ type: "command", command: "echo user-pretool" }] }],
+    },
+  };
+  writeFileSync(hooksPath, `${JSON.stringify(hooks, null, 2)}\n`);
+  runOrThrow(["node", cli, "install", "--platform", "cline", "--embedding", "local"], safeWorkspace);
+  const after = readFileSync(hooksPath, "utf8");
+  if (!after.includes("user-custom-hook")) details.push("user's UserPromptSubmit hook was dropped on re-install");
+  if (!after.includes("user-pretool")) details.push("user's unrelated PreToolUse event was dropped on re-install");
+  const occurrences = after.split(command).length - 1;
+  if (occurrences !== 1) details.push(`expected greplica command exactly once after re-install, found ${occurrences}`);
+
   return { id: "cline_rule_non_destructive", passed: details.length === 0, details };
+}
+
+function commandPresent(groups, value) {
+  if (!Array.isArray(groups)) return false;
+  return groups.some((group) => Array.isArray(group?.hooks) && group.hooks.some((handler) => handler?.command === value));
 }
 
 function run(commandArgs, cwd, input) {

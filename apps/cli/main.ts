@@ -148,7 +148,7 @@ const cliCommands = [
   {
     key: "hookIngest",
     path: ["hook", "ingest"],
-    usage: "hook ingest --platform codex|claude",
+    usage: "hook ingest --platform codex|claude|cline",
     handler: runHookIngest,
   },
   {
@@ -516,7 +516,7 @@ function parseHookIngestPlatform(args: string[]): InstallPlatform {
 }
 
 function parseHookPlatform(value: string | undefined): InstallPlatform {
-  if (value === "codex" || value === "claude") return value;
+  if (value === "codex" || value === "claude" || value === "cline") return value;
   throw new Error(usage("hookIngest"));
 }
 
@@ -767,6 +767,7 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
   if (result.platform === "cline") {
     console.log("- Review the generated .clinerules guidance if you want to customize it.");
     console.log("- Reload or restart Cline if the new .clinerules guidance does not appear immediately.");
+    console.log("- Ask Cline to use greplica-update-working-memory near the end of useful sessions.");
   }
   console.log("- Ask the agent to use greplica-bootstrap once for repos that do not have memory yet.");
   if (result.embedding === "local") {

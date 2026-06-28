@@ -146,13 +146,13 @@ greplica install --platform opencode --embedding local
 greplica install --platform cline --embedding local
 ```
 
-This installs Greplica agent guidance, configures local embeddings (no API key needed), and initializes the memory database. Cline installs repo-local guidance under `.clinerules/` instead of hooks.
+This installs Greplica agent guidance, configures local embeddings (no API key needed), and initializes the memory database. Cline installs repo-local guidance under `.clinerules/`, shared skills under `.agents/skills/`, and a prompt hook under `.cline/hooks.json`.
 
 ### 3. Restart or trust hooks if needed
 
 After install, restart your coding agent if the new skills or hooks do not appear immediately. If your agent asks you to trust or accept the installed hooks, accept them for this repo.
 
-Hooks record session activity and attempt background working-memory updates. If hooks are unavailable or not accepted, manually ask the agent to use `greplica-update-working-memory` near the end of useful sessions. For Cline, reload or restart Cline if the generated `.clinerules` guidance does not appear immediately.
+Hooks record session activity and inject graph-context guidance. Codex and Claude Code hooks can also attempt background working-memory updates. If hooks are unavailable or not accepted, manually ask the agent to use `greplica-update-working-memory` near the end of useful sessions. For Cline, reload or restart Cline if the generated `.clinerules` guidance does not appear immediately.
 
 ### 4. Bootstrap memory for this repository (once)
 
