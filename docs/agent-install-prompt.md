@@ -10,7 +10,7 @@ Run:
 
 ```bash
 npm install -g greplica
-greplica install --platform <codex|claude|opencode|cline> --embedding local
+greplica install --platform <codex|claude|opencode|cline|openhands> --embedding local
 ```
 
 Use the platform matching this agent. Do not manually copy skills. After installation, do not echo the full installer output or repeat its next steps.

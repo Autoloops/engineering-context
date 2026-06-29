@@ -64,7 +64,8 @@ async function maybeUpdateWorkingMemory(attempt: ClaimedMemoryUpdateAttempt): Pr
 
   const runner = platformInstaller(attempt.session.platform);
   const sessionRef = runner.sessionSourceRef(attempt.session.session_id);
-  const transcriptMarkdown = runner.transcriptToMarkdown(readFileSync(transcriptPath, "utf8"));
+  const transcript = runner.loadTranscript ? runner.loadTranscript(transcriptPath) : readFileSync(transcriptPath, "utf8");
+  const transcriptMarkdown = runner.transcriptToMarkdown(transcript);
   if (transcriptMarkdown.trim().length === 0) return;
 
   const runDir = mkdtempSync(

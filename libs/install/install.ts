@@ -33,7 +33,9 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
   const embedding = configureEmbedding(options.embedding, options.repo);
   const service = createLocalKnowledgeGraphService(graphContextConfigFromGreplicaConfig(embedding.config));
   const init = service.initRepo(options.repo);
-  const platformInstall = installPlatform(options.platform, options.repo);
+  const platformInstall = installPlatform(options.platform, {
+    repoRoot: options.repo.repo_root ?? process.cwd(),
+  });
 
   const notes: string[] = [];
   if (options.embedding === "local") {
@@ -61,6 +63,7 @@ export function platformDisplayName(platform: InstallPlatform): string {
   if (platform === "codex") return "Codex";
   if (platform === "cline") return "Cline";
   if (platform === "opencode") return "OpenCode";
+  if (platform === "openhands") return "OpenHands";
   return "Claude Code";
 }
 

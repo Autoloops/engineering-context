@@ -3,20 +3,21 @@ import { claudeInstaller } from "./claude.js";
 import { clineInstaller } from "./cline.js";
 import { codexInstaller } from "./codex.js";
 import { opencodeInstaller } from "./opencode.js";
-import type { HookInstallResult, PlatformInstaller, PlatformInstallResult } from "./types.js";
-import type { RepoRef } from "../../knowledge-graph/service.js";
+import { openhandsInstaller } from "./openhands.js";
+import type { HookInstallResult, PlatformInstallContext, PlatformInstaller, PlatformInstallResult } from "./types.js";
 
 const platformInstallers: Partial<Record<InstallPlatform, PlatformInstaller>> = {
   claude: claudeInstaller,
   cline: clineInstaller,
   codex: codexInstaller,
   opencode: opencodeInstaller,
+  openhands: openhandsInstaller,
 };
 
 export type { HookInstallResult };
 
-export function installPlatform(platform: InstallPlatform, repo: RepoRef): PlatformInstallResult {
-  return platformInstaller(platform).install({ repo });
+export function installPlatform(platform: InstallPlatform, context: PlatformInstallContext): PlatformInstallResult {
+  return platformInstaller(platform).install(context);
 }
 
 export function platformInstaller(platform: InstallPlatform): PlatformInstaller {

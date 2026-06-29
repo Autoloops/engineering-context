@@ -11,11 +11,11 @@ import {
   sanitizeTranscriptMessage,
   type SessionTranscriptMessage,
 } from "../../session-transcript/markdown.js";
-import type { PlatformInstallResult, PlatformInstaller, WorkingMemoryUpdateInput } from "./types.js";
+import type { PlatformInstallContext, PlatformInstallResult, PlatformInstaller, WorkingMemoryUpdateInput } from "./types.js";
 
 export const codexInstaller: PlatformInstaller = {
   platform: "codex",
-  install(): PlatformInstallResult {
+  install(_context: PlatformInstallContext): PlatformInstallResult {
     const codexHome = process.env.CODEX_HOME ?? join(homedir(), ".codex");
     const skills = copyBundledSkills(join(codexHome, "skills"));
     const hookConfigPath = join(codexHome, "hooks.json");

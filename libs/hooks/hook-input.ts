@@ -5,6 +5,10 @@ export interface HookInput {
   hook_event_name?: unknown;
   turn_id?: unknown;
   prompt?: unknown;
+  // OpenHands variants of hook_event_name / cwd.
+  event_type?: unknown;
+  working_dir?: unknown;
+  message?: unknown;
 }
 
 export function readHookInput(stdin: string): HookInput {
@@ -22,11 +26,11 @@ export function readHookInput(stdin: string): HookInput {
 }
 
 export function hookEventName(hook: HookInput): string | undefined {
-  return stringField(hook.hook_event_name);
+  return stringField(hook.hook_event_name) ?? stringField(hook.event_type);
 }
 
 export function hookCwd(hook: HookInput): string | undefined {
-  return stringField(hook.cwd);
+  return stringField(hook.cwd) ?? stringField(hook.working_dir);
 }
 
 export function hookSessionId(hook: HookInput): string | undefined {

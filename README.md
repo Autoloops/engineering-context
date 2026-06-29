@@ -6,7 +6,7 @@
 
 <p>
   <a href="https://www.npmjs.com/package/greplica"><img alt="npm package" src="https://img.shields.io/npm/v/greplica?color=111111"></a>
-  <img alt="Agents" src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20OpenCode%20%7C%20Cline-2563eb">
+  <img alt="Agents" src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20OpenCode%20%7C%20Cline%20%7C%20OpenHands-2563eb">
   <img alt="Storage" src="https://img.shields.io/badge/storage-local%20SQLite-475569">
   <img alt="Embeddings" src="https://img.shields.io/badge/embeddings-local%20%7C%20OpenAI-16a34a">
   <a href="https://discord.gg/q2R6AYXh9"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2"></a>
@@ -144,6 +144,9 @@ greplica install --platform opencode --embedding local
 
 # Cline
 greplica install --platform cline --embedding local
+
+# OpenHands
+greplica install --platform openhands --embedding local
 ```
 
 This installs Greplica agent guidance, configures local embeddings (no API key needed), and initializes the memory database. Cline installs repo-local guidance under `.clinerules/`, shared skills under `.cline/skills/`, and a prompt-guidance plugin under `.cline/plugins/`.
@@ -222,7 +225,7 @@ Switch at any time by rerunning `greplica install` with the new flag.
 ## Commands
 
 ```bash
-greplica install --platform codex|claude|opencode|cline --embedding local|openai
+greplica install --platform codex|claude|opencode|cline|openhands --embedding local|openai
 greplica config
 greplica doctor [--check-embeddings]
 greplica graph read
@@ -241,6 +244,8 @@ greplica proposal apply <proposal.json>
 - `greplica transcript bundle` - converts one or more Codex or Claude Code JSONL transcripts into a sanitized Markdown bundle for `greplica-fast-session-bootstrap`.
 - `greplica doctor` - verifies installation and diagnoses embedding configuration failures. Not a required preflight before every command.
 - `greplica install` prepares repo memory state; normal repo commands require install first.
+
+For **OpenHands**, install is repo-local: skills are written to `.agents/skills/` and the `UserPromptSubmit`/`Stop` hooks to `.openhands/hooks.json` (Claude/Codex install to the agent's home config instead). The hooks inject `graph context` guidance and trigger background working-memory updates the same way; OpenHands must trust the repo hooks for the background save to run.
 
 ---
 
