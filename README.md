@@ -274,9 +274,3 @@ The search eval scores `greplica graph context` retrieval with `Precision@10`, `
 Broader context-retrieval benchmarking, including SWE-Context benchmark work, is ongoing and showing promising early results. We will publish those numbers when the harness and methodology are stable enough to compare fairly.
 
 ---
-
-## Factory Droid
-
-Factory Droid is a fully supported platform, on par with Codex and Claude Code. `greplica install --platform factory-droid` installs the Greplica skills under `~/.factory/skills` and registers `UserPromptSubmit` and `Stop` hooks in `~/.factory/hooks.json` (the hook config is merged non-destructively, preserving any existing hooks). Accept or trust the hooks when Droid next starts.
-
-With hooks active, Greplica works automatically: the `UserPromptSubmit` hook reminds Droid to run `greplica graph context "<question>"` before broad exploration, and the `Stop` hook records session activity and runs background working-memory updates (via `droid exec`) so decisions, constraints, changed flows, and follow-ups are saved. You can still invoke `greplica-bootstrap` and `greplica-update-working-memory` manually at any time.
