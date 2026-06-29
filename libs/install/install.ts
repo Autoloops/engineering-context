@@ -61,6 +61,7 @@ export function platformDisplayName(platform: InstallPlatform): string {
   if (platform === "codex") return "Codex";
   if (platform === "opencode") return "OpenCode";
   if (platform === "openhands") return "OpenHands";
+  if (platform === "factory-droid") return "Factory Droid";
   return "Claude Code";
 }
 

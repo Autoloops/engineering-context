@@ -29,6 +29,7 @@
     "eval:search-current": "npm run build && node dist/evals/cases/search-current-repo-at-8038fe8/run.js",
     "eval:transcript-backfill-insights": "npm run build && node dist/evals/cases/transcript-backfill-insights/run.js --judge openai",
     "eval:update-working-memory-source-evidence": "npm run build && node dist/evals/cases/update-working-memory-source-evidence-at-0438915/run.js",
+    "smoke:factory-droid": "npm run build && node scripts/smoke-factory-droid.mjs",
     "bench:contextbench": "npm run build && node dist/evals/cases/contextbench-retrieval-from-sqlite/run.js",
     "optimize:search-ranking": "npm run build && node dist/evals/ranking-optimizer/train.js",
     "memory:prepare-task": "npm run build && node dist/scripts/memory-build/prepare-task.js",
