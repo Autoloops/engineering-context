@@ -62,6 +62,13 @@ assert.match(copilotHooks.output, /Automatic memory updates: enabled\./);
 assert.ok(existsSync(join(copilotHooks.copilotHome, "hooks", "greplica.json")));
 assert.equal(readConfig(copilotHooks.greplicaHome).session.autoMemoryUpdates, true);
 
+const geminiHooks = installInTempRepo("gemini-hooks", ["--hooks", "enabled", "--auto-memory", "enabled"], "gemini");
+assert.match(geminiHooks.output, /Installed Greplica for Gemini CLI\./);
+assert.match(geminiHooks.output, /Hooks: installed for BeforeAgent, AfterAgent\./);
+assert.match(geminiHooks.output, /Automatic memory updates: enabled\./);
+assert.ok(existsSync(join(geminiHooks.geminiHome, "settings.json")));
+assert.equal(readConfig(geminiHooks.greplicaHome).session.autoMemoryUpdates, true);
+
 const invalid = spawnSync(
   process.execPath,
   [
@@ -104,6 +111,7 @@ function installInTempRepo(name, flags, platform = "codex") {
   const greplicaHome = join(tmp, name, "greplica-home");
   const codexHome = join(tmp, name, "codex-home");
   const copilotHome = join(tmp, name, "copilot-home");
+  const geminiHome = join(tmp, name, "gemini-home");
   mkdirSync(repo, { recursive: true });
   execFileSync("git", ["init", "--quiet"], { cwd: repo, encoding: "utf8" });
 
@@ -112,6 +120,7 @@ function installInTempRepo(name, flags, platform = "codex") {
     GREPLICA_HOME: greplicaHome,
     CODEX_HOME: codexHome,
     COPILOT_HOME: copilotHome,
+    GEMINI_HOME: geminiHome,
     XDG_CONFIG_HOME: join(tmp, name, "xdg-config-home"),
     GREPLICA_INSTALL_SKIP_PREWARM: "1",
   };
@@ -129,7 +138,7 @@ function installInTempRepo(name, flags, platform = "codex") {
     encoding: "utf8",
     env,
   });
-  return { repo, greplicaHome, codexHome, copilotHome, output, env };
+  return { repo, greplicaHome, codexHome, copilotHome, geminiHome, output, env };
 }
 
 function readConfig(greplicaHome) {

@@ -57,7 +57,7 @@ export class HookSessionStore {
     const sessionId = input.sessionId ?? fallbackSessionId(input);
     const existing = this.find(input.platform, sessionId);
     const shouldInjectGuidance = isGuidanceEvent(input.platform, input.eventName) && existing?.guidance_injected_at == null;
-    const incrementStop = input.eventName === "Stop" ? 1 : 0;
+    const incrementStop = isStopEvent(input.platform, input.eventName) ? 1 : 0;
 
     if (existing === undefined) {
       const session: AgentSession = {
@@ -201,7 +201,13 @@ function fallbackSessionId(input: RecordHookInput): string {
 
 function isGuidanceEvent(platform: InstallPlatform, eventName: string | undefined): boolean {
   if (platform === "copilot") return eventName === "SessionStart";
+  if (platform === "gemini") return eventName === "BeforeAgent";
   return eventName === "UserPromptSubmit";
+}
+
+function isStopEvent(platform: InstallPlatform, eventName: string | undefined): boolean {
+  if (platform === "gemini") return eventName === "AfterAgent";
+  return eventName === "Stop";
 }
 
 function iso(date: Date | undefined): string {
