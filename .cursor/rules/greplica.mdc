@@ -1,0 +1,9 @@
+---
+description: Greplica rule for repo-memory search
+globs: *
+alwaysApply: true
+---
+Greplica provides local, searchable repository memory for this repo.
+- Before broad manual exploration, run `greplica graph context "<question>"` with a focused natural-language query.
+- Greplica installs shared agent skills under `~/.cursor/skills/`; use `greplica-bootstrap` for initial repo memory and `greplica-update-working-memory` near the end of useful sessions.
+- When Greplica provides useful context, mention that you used it and briefly say what it helped with.

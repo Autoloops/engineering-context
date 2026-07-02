@@ -5,6 +5,7 @@ import { codexInstaller } from "./codex.js";
 import { droidInstaller } from "./droid.js";
 import { opencodeInstaller } from "./opencode.js";
 import { openhandsInstaller } from "./openhands.js";
+import { cursorInstaller } from "./cursor.js";
 import type { HookInstallResult, PlatformInstallContext, PlatformInstaller, PlatformInstallResult } from "./types.js";
 
 const platformInstallers: Partial<Record<InstallPlatform, PlatformInstaller>> = {
@@ -14,6 +15,7 @@ const platformInstallers: Partial<Record<InstallPlatform, PlatformInstaller>> = 
   opencode: opencodeInstaller,
   openhands: openhandsInstaller,
   "factory-droid": droidInstaller,
+  cursor: cursorInstaller,
 };
 
 export type { HookInstallResult };

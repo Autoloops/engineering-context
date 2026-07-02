@@ -57,7 +57,7 @@ const cliCommands = [
   {
     key: "install",
     path: ["install"],
-    usage: "install --platform codex|claude|copilot|opencode|openhands|factory-droid --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]",
+    usage: "install --platform codex|claude|copilot|opencode|openhands|factory-droid|cursor --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]",
     handler: runInstallCommand,
     showInTopLevelHelp: true,
   },
@@ -766,7 +766,7 @@ function requireFlagValue(args: string[], index: number, flag: string, usageText
 }
 
 function parseInstallPlatform(value: string): InstallPlatform {
-  if (value === "codex" || value === "claude" || value === "copilot" || value === "opencode" || value === "openhands" || value === "factory-droid") return value;
+  if (value === "codex" || value === "claude" || value === "copilot" || value === "opencode" || value === "openhands" || value === "factory-droid" || value === "cursor") return value;
   throw new Error(`Invalid --platform ${value}.\n${usage("install")}`);
 }
 
@@ -784,7 +784,13 @@ function parseEnabledFlag(value: string): boolean {
 function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>): void {
   console.log(`Installed Greplica for ${platformDisplayName(result.platform)}.`);
   console.log(`Skills: ${result.skills.length} installed.`);
-  if (result.hooks !== undefined) {
+  if (result.platform === "cursor") {
+    if (result.hooksRequested) {
+      console.log("Cursor rules: installed to .cursor/rules/greplica.mdc.");
+    } else {
+      console.log("Cursor rules: not installed.");
+    }
+  } else if (result.hooks !== undefined) {
     console.log(`Hooks: installed for ${result.hooks.events.join(", ")}.`);
   } else if (result.hooksRequested) {
     console.log("Hooks: not installed for this platform.");
@@ -798,7 +804,11 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
   console.log("");
   console.log("Next steps:");
   console.log("- Restart your coding agent if the new skills or hooks do not appear immediately.");
-  if (result.hooks !== undefined) {
+  if (result.platform === "cursor") {
+    if (result.hooksRequested) {
+      console.log("- Reload the Cursor window or restart Cursor if the new rule does not take effect.");
+    }
+  } else if (result.hooks !== undefined) {
     console.log("- Accept or trust the installed hooks if your agent asks.");
   } else {
     console.log("- Ask the agent to use greplica-update-working-memory near the end of useful sessions.");

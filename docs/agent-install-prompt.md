@@ -38,7 +38,7 @@ Then run:
 
 ```bash
 npm install -g greplica
-greplica install --platform <codex|claude|copilot|opencode|openhands|factory-droid> --embedding local <mapped-hook-and-memory-flags>
+greplica install --platform <codex|claude|copilot|opencode|openhands|factory-droid|cursor> --embedding local <mapped-hook-and-memory-flags>
 ```
 
 Use the platform matching this agent. Do not manually copy skills. After installation, do not echo the full installer output or repeat its next steps.
@@ -54,7 +54,7 @@ If I chose "Yes, recent sessions", analyze prior sessions:
 - Candidate locations: Codex `~/.codex/sessions/**/*.jsonl`; Claude Code `~/.claude/projects/**/*.jsonl`; GitHub Copilot CLI paths from `Stop` hook `transcript_path` values or `$COPILOT_HOME/session-state`.
 - Do not require transcript metadata `cwd` to equal the current checkout path. Users may use worktrees, renamed folders, or multiple checkouts of the same repo.
 - Treat a transcript as same-repo when its metadata `cwd` is the current path, or when that `cwd` still exists and Git reports the same `remote.origin.url` or same normalized repo identity as the current repo. If the old path no longer exists, use transcript cwd text, repo name, branch, and recent session content as weaker matching evidence.
-- For OpenCode, tell me transcript backfill is not supported yet and skip this step.
+- For OpenCode and Cursor, tell me transcript backfill is not supported yet and skip this step.
 - Select 1-3 transcripts. Use one if there is a large high-signal session, two by default when multiple sessions are useful, and three only when sessions are smaller or cover distinct work.
 - Show me the selected transcripts before bundling them: title if available, date/time, path, size/turn count if available, and why each matched this repo.
 - Do not ask for confirmation. Continue with a temporary bundle path:

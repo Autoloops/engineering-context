@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -62,6 +62,44 @@ assert.match(copilotHooks.output, /Automatic memory updates: enabled\./);
 assert.ok(existsSync(join(copilotHooks.copilotHome, "hooks", "greplica.json")));
 assert.equal(readConfig(copilotHooks.greplicaHome).session.autoMemoryUpdates, true);
 
+const cursorHooks = installInTempRepo("cursor-hooks", ["--hooks", "enabled", "--auto-memory", "disabled"], "cursor");
+assert.match(cursorHooks.output, /Installed Greplica for Cursor\./);
+assert.match(cursorHooks.output, /Cursor rules: installed to \.cursor\/rules\/greplica\.mdc\./);
+assert.match(cursorHooks.output, /Automatic memory updates: disabled\./);
+assert.ok(existsSync(join(cursorHooks.cursorHome, "skills", "greplica-bootstrap", "SKILL.md")));
+assert.ok(existsSync(join(cursorHooks.repo, ".cursor", "rules", "greplica.mdc")));
+
+// Test non-destructive behavior for Cursor rules
+const customRepo = join(tmp, "cursor-non-destructive", "repo");
+const customGreplicaHome = join(tmp, "cursor-non-destructive", "greplica-home");
+const customCursorHome = join(tmp, "cursor-non-destructive", "cursor-home");
+mkdirSync(join(customRepo, ".cursor", "rules"), { recursive: true });
+const existingRuleContent = "My custom rule content\n";
+const ruleFilePath = join(customRepo, ".cursor", "rules", "greplica.mdc");
+writeFileSync(ruleFilePath, existingRuleContent, "utf8");
+
+const customEnv = {
+  ...process.env,
+  GREPLICA_HOME: customGreplicaHome,
+  CURSOR_HOME: customCursorHome,
+  GREPLICA_INSTALL_SKIP_PREWARM: "1",
+};
+
+execFileSync("git", ["init", "--quiet"], { cwd: customRepo, encoding: "utf8" });
+execFileSync(
+  process.execPath,
+  [cli.pathname, "install", "--platform", "cursor", "--embedding", "local"],
+  {
+    cwd: customRepo,
+    encoding: "utf8",
+    env: customEnv,
+  },
+);
+
+const updatedRuleContent = readFileSync(ruleFilePath, "utf8");
+assert.ok(updatedRuleContent.includes("My custom rule content"));
+assert.ok(updatedRuleContent.includes("Greplica provides local, searchable repository memory"));
+
 const invalid = spawnSync(
   process.execPath,
   [
@@ -104,6 +142,7 @@ function installInTempRepo(name, flags, platform = "codex") {
   const greplicaHome = join(tmp, name, "greplica-home");
   const codexHome = join(tmp, name, "codex-home");
   const copilotHome = join(tmp, name, "copilot-home");
+  const cursorHome = join(tmp, name, "cursor-home");
   mkdirSync(repo, { recursive: true });
   execFileSync("git", ["init", "--quiet"], { cwd: repo, encoding: "utf8" });
 
@@ -112,6 +151,7 @@ function installInTempRepo(name, flags, platform = "codex") {
     GREPLICA_HOME: greplicaHome,
     CODEX_HOME: codexHome,
     COPILOT_HOME: copilotHome,
+    CURSOR_HOME: cursorHome,
     XDG_CONFIG_HOME: join(tmp, name, "xdg-config-home"),
     GREPLICA_INSTALL_SKIP_PREWARM: "1",
   };
@@ -129,7 +169,7 @@ function installInTempRepo(name, flags, platform = "codex") {
     encoding: "utf8",
     env,
   });
-  return { repo, greplicaHome, codexHome, copilotHome, output, env };
+  return { repo, greplicaHome, codexHome, copilotHome, cursorHome, output, env };
 }
 
 function readConfig(greplicaHome) {
