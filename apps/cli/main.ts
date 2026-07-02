@@ -5,7 +5,7 @@ import { isatty } from "node:tty";
 import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { createLocalKnowledgeGraphService, KnowledgeGraphService } from "../../libs/knowledge-graph/service.js";
-import type { ClaimAnchorAuditResult, RepoRef } from "../../libs/knowledge-graph/service.js";
+import type { ClaimAnchorAuditResult, GcApplyResult, GcScanResult, RepoRef } from "../../libs/knowledge-graph/service.js";
 import { envVarSource, loadRepoEnv, type LoadedRepoEnv } from "../../libs/env/load-local-env.js";
 import {
   ensureGreplicaConfig,
@@ -96,6 +96,13 @@ const cliCommands = [
     handler: runGraphContextCommand,
     showInTopLevelHelp: true,
     helpMode: "query-aware",
+  },
+  {
+    key: "graphGc",
+    path: ["graph", "gc"],
+    usage: "graph gc [--dry-run]",
+    handler: runGraphGcCommand,
+    showInTopLevelHelp: true,
   },
   {
     key: "graphAuditAnchors",
@@ -271,6 +278,25 @@ async function runGraphContextCommand(args: string[]): Promise<void> {
   }
 }
 
+async function runGraphGcCommand(args: string[]): Promise<void> {
+  const dryRun = args.includes("--dry-run");
+  const { repo, service } = createCommandContext();
+  const result = service.gcGraph(repo, dryRun);
+  if (dryRun) {
+    printGcDryRun((result as { scan: GcScanResult }).scan);
+  } else {
+    printGcApply(result as GcApplyResult);
+  }
+  const scan = dryRun ? (result as { scan: GcScanResult }).scan : (result as GcApplyResult).scan;
+  const totalIssues =
+    scan.stale_components.length +
+    scan.orphaned_components.length +
+    scan.orphaned_claims.length +
+    scan.orphaned_flows.length +
+    scan.dangling_edges.length;
+  if (totalIssues > 0) process.exitCode = 1;
+}
+
 async function runGraphAuditAnchorsCommand(_args: string[]): Promise<void> {
   const { repo, service } = createCommandContext();
   const result = await service.auditCodeAnchors(repo);
@@ -373,6 +399,55 @@ function printAuditSection<T>(title: string, items: T[], render: (item: T) => st
 function formatAuditAnchor(anchor: { file: string; symbol?: string } | undefined): string {
   if (anchor === undefined) return "<missing>";
   return anchor.symbol === undefined ? anchor.file : `${anchor.file}#${anchor.symbol}`;
+}
+
+function printGcDryRun(scan: GcScanResult): void {
+  console.log("Graph GC scan (--dry-run): no changes made.");
+  console.log("");
+  printGcSection("Stale components", scan.stale_components, (item) => `${item.name} (anchor: ${item.code_anchor})`);
+  printGcSection("Orphaned components", scan.orphaned_components, (item) => `${item.name ?? item.id}`);
+  printGcSection("Orphaned claims", scan.orphaned_claims, (item) => `${item.id}: ${item.name ?? ""}`);
+  printGcSection("Orphaned flows", scan.orphaned_flows, (item) => `${item.name ?? item.id}`);
+  printGcSection("Dangling edges", scan.dangling_edges, (item) =>
+    `${item.from_type}:${item.from_id} -[${item.kind}]-> ${item.to_type}:${item.to_id} (broken ${item.broken_end}: ${item.missing_type}:${item.missing_id})`,
+  );
+
+  const staleCount = scan.stale_components.length;
+  const orphanedComponentCount = scan.orphaned_components.length;
+  const orphanedClaimCount = scan.orphaned_claims.length;
+  const orphanedFlowCount = scan.orphaned_flows.length;
+  const danglingEdgeCount = scan.dangling_edges.length;
+  const total = staleCount + orphanedComponentCount + orphanedClaimCount + orphanedFlowCount + danglingEdgeCount;
+
+  console.log("Summary totals:");
+  console.log(`  Stale components:   ${staleCount}`);
+  console.log(`  Orphaned components: ${orphanedComponentCount}`);
+  console.log(`  Orphaned claims:    ${orphanedClaimCount}`);
+  console.log(`  Orphaned flows:     ${orphanedFlowCount}`);
+  console.log(`  Dangling edges:     ${danglingEdgeCount}`);
+  console.log(`  Total issues:       ${total}`);
+}
+
+function printGcApply(result: GcApplyResult): void {
+  const d = result.deleted;
+  console.log("Graph GC applied.");
+  console.log("Deleted:");
+  console.log(`  Components: ${d.components}`);
+  console.log(`  Claims:     ${d.claims}`);
+  console.log(`  Flows:      ${d.flows}`);
+  console.log(`  Edges:      ${d.edges}`);
+  console.log(`  Memberships: ${d.memberships}`);
+  console.log(`  Embeddings: ${d.embeddings}`);
+}
+
+function printGcSection<T>(title: string, items: T[], format: (item: T) => string): void {
+  console.log(`${title}:`);
+  if (items.length === 0) {
+    console.log("- None.");
+  } else {
+    for (const item of items) console.log(`- ${format(item)}`);
+  }
+  console.log("");
 }
 
 function createCommandContext(): CommandContext {

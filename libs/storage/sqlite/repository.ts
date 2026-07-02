@@ -1,11 +1,14 @@
 import type Database from "better-sqlite3";
+import { existsSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
+import { join } from "node:path";
 import type { MemoryCommit } from "../../knowledge-graph/commit.js";
 import type { Edge } from "../../knowledge-graph/edge.js";
 import type { MemoryCommitProposal } from "../../knowledge-graph/proposal.js";
 import type { Component, Flow, GraphObjectType, Source } from "../../knowledge-graph/schema.js";
 import type { Claim } from "../../knowledge-graph/claim.js";
 import type { GraphScope, GraphScopeKind } from "../../knowledge-graph/scope.js";
+import type { GcScanResult, GcStaleComponent, GcOrphanedEntity, GcDanglingEdge, GcApplyResult } from "../../knowledge-graph/graph-gc.js";
 
 export interface RepoRecord {
   id: string;
@@ -329,6 +332,205 @@ export class SqliteRepository {
     });
 
     write();
+  }
+
+  scanGc(repoRoot: string | undefined): GcScanResult {
+    const allComponents = this.db.prepare("SELECT id, name, code_anchor FROM components").all() as ComponentRow[];
+    const allFlows = this.db.prepare("SELECT id, name FROM flows").all() as Flow[];
+    const allClaims = this.db.prepare("SELECT id, text FROM claims").all() as { id: string; text: string }[];
+    const allEdges = this.db.prepare("SELECT id, from_id, from_type, to_id, to_type, kind FROM edges").all() as Pick<Edge, "id" | "from_id" | "from_type" | "to_id" | "to_type" | "kind">[];
+
+    const existingComponentIds = new Set(allComponents.map((c) => c.id));
+    const existingFlowIds = new Set(allFlows.map((f) => f.id));
+    const existingClaimIds = new Set(allClaims.map((c) => c.id));
+
+    const entityExists = (type: string, id: string): boolean => {
+      if (type === "component") return existingComponentIds.has(id);
+      if (type === "flow") return existingFlowIds.has(id);
+      if (type === "claim") return existingClaimIds.has(id);
+      if (type === "edge") return allEdges.some((e) => e.id === id);
+      if (type === "source") return true;
+      return false;
+    };
+
+    const staleComponents: GcStaleComponent[] = [];
+    const orphanedComponents: GcOrphanedEntity[] = [];
+    const orphanedClaims: GcOrphanedEntity[] = [];
+    const orphanedFlows: GcOrphanedEntity[] = [];
+    const danglingEdges: GcDanglingEdge[] = [];
+
+    for (const component of allComponents) {
+      if (component.code_anchor !== null && repoRoot !== undefined) {
+        const filePath = join(repoRoot, component.code_anchor);
+        if (!existsSync(filePath)) {
+          staleComponents.push({
+            id: component.id,
+            name: component.name,
+            code_anchor: component.code_anchor,
+          });
+        }
+      }
+    }
+
+    const staleComponentIds = new Set(staleComponents.map((c) => c.id));
+
+    const edgeEntities = new Set<string>();
+    const edgeTypes = new Map<string, string>();
+    for (const edge of allEdges) {
+      edgeEntities.add(subjectKey(edge.from_type, edge.from_id));
+      edgeTypes.set(subjectKey(edge.from_type, edge.from_id), edge.from_type);
+      edgeEntities.add(subjectKey(edge.to_type, edge.to_id));
+      edgeTypes.set(subjectKey(edge.to_type, edge.to_id), edge.to_type);
+
+      if (!entityExists(edge.from_type, edge.from_id)) {
+        danglingEdges.push({
+          id: edge.id,
+          from_id: edge.from_id,
+          from_type: edge.from_type,
+          to_id: edge.to_id,
+          to_type: edge.to_type,
+          kind: edge.kind,
+          broken_end: "from",
+          missing_id: edge.from_id,
+          missing_type: edge.from_type,
+        });
+      } else if (!entityExists(edge.to_type, edge.to_id) && edge.to_type !== "source") {
+        danglingEdges.push({
+          id: edge.id,
+          from_id: edge.from_id,
+          from_type: edge.from_type,
+          to_id: edge.to_id,
+          to_type: edge.to_type,
+          kind: edge.kind,
+          broken_end: "to",
+          missing_id: edge.to_id,
+          missing_type: edge.to_type,
+        });
+      }
+    }
+
+    const danglingEdgeToIds = new Set(danglingEdges.map((e) => e.id));
+    const danglingEntityKeys = new Set<string>();
+    for (const edge of danglingEdges) {
+      danglingEntityKeys.add(subjectKey(edge.missing_type as GraphObjectType, edge.missing_id));
+    }
+
+    for (const component of allComponents) {
+      const key = subjectKey("component", component.id);
+      if (staleComponentIds.has(component.id)) continue;
+      if (danglingEntityKeys.has(key)) continue;
+      if (!edgeEntities.has(key)) {
+        orphanedComponents.push({ id: component.id, name: component.name, type: "component" });
+      }
+    }
+
+    for (const flow of allFlows) {
+      const key = subjectKey("flow", flow.id);
+      if (danglingEntityKeys.has(key)) continue;
+      if (!edgeEntities.has(key)) {
+        orphanedFlows.push({ id: flow.id, name: flow.name, type: "flow" });
+      }
+    }
+
+    for (const claim of allClaims) {
+      const key = subjectKey("claim", claim.id);
+      if (danglingEntityKeys.has(key)) continue;
+      if (!edgeEntities.has(key)) {
+        orphanedClaims.push({ id: claim.id, name: claim.text.slice(0, 80), type: "claim" });
+      }
+    }
+
+    return {
+      stale_components: staleComponents,
+      orphaned_components: orphanedComponents,
+      orphaned_claims: orphanedClaims,
+      orphaned_flows: orphanedFlows,
+      dangling_edges: danglingEdges,
+    };
+  }
+
+  applyGc(repoRoot: string | undefined): GcApplyResult {
+    const scan = this.scanGc(repoRoot);
+
+    const deleteEdgeStmt = this.db.prepare("DELETE FROM edges WHERE id = ?");
+    const deleteMembershipStmt = this.db.prepare("DELETE FROM graph_memberships WHERE subject_type = ? AND subject_id = ?");
+    const deleteEmbeddingStmt = this.db.prepare("DELETE FROM graph_object_embeddings WHERE object_type = ? AND object_id = ?");
+    const deleteComponentStmt = this.db.prepare("DELETE FROM components WHERE id = ?");
+    const deleteFlowStmt = this.db.prepare("DELETE FROM flows WHERE id = ?");
+    const deleteClaimStmt = this.db.prepare("DELETE FROM claims WHERE id = ?");
+    const edgesByFrom = this.db.prepare("SELECT id FROM edges WHERE from_type = ? AND from_id = ?");
+    const edgesByTo = this.db.prepare("SELECT id FROM edges WHERE to_type = ? AND to_id = ?");
+    const allEdges = this.db.prepare("SELECT id FROM edges");
+
+    const cleanup = this.db.transaction(() => {
+      let deletedComponents = 0;
+      let deletedClaims = 0;
+      let deletedFlows = 0;
+      let deletedEdges = 0;
+      let deletedMemberships = 0;
+      let deletedEmbeddings = 0;
+
+      const allIdsToDelete = new Set<string>();
+      const remainingEdgeIds = new Set((allEdges.all() as { id: string }[]).map((r) => r.id));
+
+      const queueDelete = (type: string, id: string): void => {
+        const key = `${type}:${id}`;
+        if (allIdsToDelete.has(key)) return;
+        allIdsToDelete.add(key);
+
+        const cascadeEdges = new Set<string>();
+        for (const row of edgesByFrom.all(type, id) as { id: string }[]) cascadeEdges.add(row.id);
+        for (const row of edgesByTo.all(type, id) as { id: string }[]) cascadeEdges.add(row.id);
+
+        for (const edgeId of cascadeEdges) {
+          if (!remainingEdgeIds.has(edgeId)) continue;
+          remainingEdgeIds.delete(edgeId);
+          deletedMemberships += deleteMembershipStmt.run("edge", edgeId).changes;
+          deleteEdgeStmt.run(edgeId);
+          deletedEdges += 1;
+        }
+
+        deletedMemberships += deleteMembershipStmt.run(type, id).changes;
+        deletedEmbeddings += deleteEmbeddingStmt.run(type, id).changes;
+
+        switch (type) {
+          case "component": deleteComponentStmt.run(id); deletedComponents += 1; break;
+          case "flow": deleteFlowStmt.run(id); deletedFlows += 1; break;
+          case "claim": deleteClaimStmt.run(id); deletedClaims += 1; break;
+        }
+      };
+
+      for (const component of scan.stale_components) {
+        queueDelete("component", component.id);
+      }
+
+      for (const edge of scan.dangling_edges) {
+        const key = `edge:${edge.id}`;
+        if (!remainingEdgeIds.has(edge.id)) continue;
+        remainingEdgeIds.delete(edge.id);
+        allIdsToDelete.add(key);
+        deletedMemberships += deleteMembershipStmt.run("edge", edge.id).changes;
+        deleteEdgeStmt.run(edge.id);
+        deletedEdges += 1;
+      }
+
+      for (const entity of scan.orphaned_components) {
+        queueDelete("component", entity.id);
+      }
+
+      for (const entity of scan.orphaned_flows) {
+        queueDelete("flow", entity.id);
+      }
+
+      for (const entity of scan.orphaned_claims) {
+        queueDelete("claim", entity.id);
+      }
+
+      return { components: deletedComponents, claims: deletedClaims, flows: deletedFlows, edges: deletedEdges, memberships: deletedMemberships, embeddings: deletedEmbeddings };
+    });
+
+    const deleted = cleanup();
+    return { dry_run: false, scan, deleted };
   }
 
   subjectExists(type: GraphObjectType, id: string): boolean {

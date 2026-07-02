@@ -3,6 +3,7 @@ import { validateProposal, type ProposalValidationResult } from "./validate-prop
 import type { Claim } from "./claim.js";
 import type { Edge } from "./edge.js";
 import type { Component, Flow, Source } from "./schema.js";
+import type { GcApplyResult, GcScanResult } from "./graph-gc.js";
 import { GraphContextBuilder } from "./graph-context/context-builder.js";
 import { graphContextConfig, type GraphContextConfig } from "./graph-context/config.js";
 import type { EmbeddingStatus, GraphContextResult } from "./graph-context/types.js";
@@ -13,6 +14,7 @@ import { defaultDatabasePath, openDatabase } from "../storage/sqlite/db.js";
 import type { SqliteRepository } from "../storage/sqlite/repository.js";
 import { SqliteRepository as SqliteKnowledgeGraphRepository } from "../storage/sqlite/repository.js";
 
+export type { GcApplyResult, GcScanResult } from "./graph-gc.js";
 export type { GraphContextResult } from "./graph-context/types.js";
 export type { ClaimAnchorAuditResult } from "./code-anchors/types.js";
 
@@ -118,6 +120,15 @@ export class KnowledgeGraphService {
       warnOnCreatedEmbeddings: true,
       repoRoot: input.repo_root,
     });
+  }
+
+  gcGraph(input: RepoRef, dryRun: boolean): { scan: GcScanResult } | GcApplyResult {
+    const initialized = this.requireRepo(input);
+    if (dryRun) {
+      const scan = this.repository.scanGc(input.repo_root);
+      return { scan };
+    }
+    return this.repository.applyGc(input.repo_root);
   }
 
   async auditCodeAnchors(input: RepoRef): Promise<ClaimAnchorAuditResult> {
