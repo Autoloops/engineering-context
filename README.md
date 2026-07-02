@@ -118,7 +118,7 @@ Current showcase rows:
 ## Commands
 
 ```bash
-greplica install --platform codex|claude|copilot|opencode|openhands|factory-droid --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]
+greplica install --platform codex|claude|copilot|continue|opencode|openhands|factory-droid --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]
 greplica config
 greplica doctor [--check-embeddings]
 greplica graph read
@@ -138,4 +138,4 @@ greplica proposal apply <proposal.json>
 - `greplica doctor` - verifies installation and diagnoses configuration failures. Not a required preflight before every command.
 - `greplica install` prepares repo state, local storage, and agent integration; normal repo commands require install first.
 
-For **OpenHands**, install is repo-local: skills are written to `.agents/skills/` and the `UserPromptSubmit`/`Stop` hooks to `.openhands/hooks.json` (Claude/Codex/Copilot install to the agent's home config instead). GitHub Copilot CLI installs personal skills under `~/.copilot/skills` (or `$COPILOT_HOME/skills`) and user hooks under `~/.copilot/hooks/greplica.json`. The hooks inject `graph context` guidance and trigger background working-memory updates; OpenHands must trust the repo hooks for the background save to run.
+For **OpenHands** and **Continue**, install is repo-local: skills are written under `.agents/skills/` or `.continue/skills/`, rules under `.continue/rules/`, and hooks to `.openhands/hooks.json` or `.continue/settings.json` (Claude/Codex/Copilot install to the agent's home config instead). GitHub Copilot CLI installs personal skills under `~/.copilot/skills` (or `$COPILOT_HOME/skills`) and user hooks under `~/.copilot/hooks/greplica.json`. Continue also installs user-scoped skills under `~/.continue/skills` (or `$CONTINUE_HOME/skills`). The hooks inject `graph context` guidance and trigger background working-memory updates; OpenHands must trust the repo hooks for the background save to run.
