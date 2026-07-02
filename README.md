@@ -139,3 +139,35 @@ greplica proposal apply <proposal.json>
 - `greplica install` prepares repo state, local storage, and agent integration; normal repo commands require install first.
 
 For **OpenHands**, install is repo-local: skills are written to `.agents/skills/` and the `UserPromptSubmit`/`Stop` hooks to `.openhands/hooks.json` (Claude/Codex/Copilot install to the agent's home config instead). GitHub Copilot CLI installs personal skills under `~/.copilot/skills` (or `$COPILOT_HOME/skills`) and user hooks under `~/.copilot/hooks/greplica.json`. The hooks inject `graph context` guidance and trigger background working-memory updates; OpenHands must trust the repo hooks for the background save to run.
+
+---
+
+## MCP Server
+
+Agents that speak the [Model Context Protocol](https://modelcontextprotocol.io) (Claude Desktop, Cursor, and others) can talk to Greplica's memory as native tools and a resource, instead of shelling out to the CLI. The server runs locally over stdio, calls the Greplica library in-process (no subprocess per request), and keeps the local embedding model warm between calls.
+
+Add it to your MCP client config (e.g. `claude_desktop_config.json`). Point `GREPLICA_REPO_ROOT` at the repository whose memory you want to expose:
+
+```json
+{
+  "mcpServers": {
+    "greplica": {
+      "command": "npx",
+      "args": ["-y", "greplica-mcp"],
+      "env": { "GREPLICA_REPO_ROOT": "/absolute/path/to/your/repo" }
+    }
+  }
+}
+```
+
+The repository must already be set up with `greplica install`. The server exposes:
+
+| Kind | Name | What it does |
+| --- | --- | --- |
+| Tool | `query_graph_context` | Retrieve memory for a natural-language query (`greplica graph context`). Read-only. Pass `debug: true` for ranking signals. |
+| Tool | `validate_proposal` | Validate a memory proposal (schema, edge rules, code-anchor audit) without writing it. Read-only. |
+| Tool | `apply_proposal` | Validate and apply a memory proposal as a new memory commit. |
+| Tool | `audit_anchors` | Check every `code_verified` claim's anchors against the current files. Read-only. |
+| Resource | `greplica://graph/read` | The current merged graph view (components, flows, claims, sources, edges) as JSON. |
+
+Every tool accepts an optional `repo_root` argument that overrides `GREPLICA_REPO_ROOT` for that call, so a single server can serve multiple checkouts. Logs are structured JSON on stderr (`GREPLICA_MCP_LOG_LEVEL=silent|error|warn|info|debug`); stdout carries only the MCP protocol.
