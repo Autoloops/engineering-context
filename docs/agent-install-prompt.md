@@ -38,7 +38,7 @@ Then run:
 
 ```bash
 npm install -g greplica
-greplica install --platform <codex|claude|copilot|opencode|openhands|factory-droid> --embedding local <mapped-hook-and-memory-flags>
+greplica install --platform <codex|claude|copilot|gemini|opencode|openhands|factory-droid> --embedding local <mapped-hook-and-memory-flags>
 ```
 
 Use the platform matching this agent. Do not manually copy skills. After installation, do not echo the full installer output or repeat its next steps.
@@ -60,7 +60,7 @@ If I chose "Yes, recent sessions", analyze prior sessions:
 - Do not ask for confirmation. Continue with a temporary bundle path:
 
 ```bash
-greplica transcript bundle --platform <codex-or-claude-or-copilot> --file <path-1> [--file <path-2>] [--file <path-3>] --out <greplica-transcript-backfill.md>
+greplica transcript bundle --platform <codex-or-claude-or-copilot-or-gemini> --file <path-1> [--file <path-2>] [--file <path-3>] --out <greplica-transcript-backfill.md>
 ```
 
 - Then use the `greplica-fast-session-bootstrap` skill on `<greplica-transcript-backfill.md>` and include its final value summary naturally in the final answer.

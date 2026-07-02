@@ -15,6 +15,8 @@ const copilotOne = join(tmp, "copilot-one.jsonl");
 const codexOut = join(tmp, "codex-bundle.md");
 const claudeOut = join(tmp, "claude-bundle.md");
 const copilotOut = join(tmp, "copilot-bundle.md");
+const geminiOne = join(tmp, "gemini-one.jsonl");
+const geminiOut = join(tmp, "gemini-bundle.md");
 const opencodeOut = join(tmp, "opencode-bundle.md");
 
 writeFileSync(
@@ -197,6 +199,49 @@ assert.match(copilotBundle, /branch: copilot-test/);
 assert.match(copilotBundle, /Remember this durable Copilot insight/);
 assert.match(copilotBundle, /A Copilot assistant fact/);
 assert.doesNotMatch(copilotBundle, /remove this/);
+
+writeFileSync(
+  geminiOne,
+  [
+    JSON.stringify({
+      type: "session_metadata",
+      sessionId: "gemini-session-one",
+      startTime: "2026-07-02T12:00:00.000Z",
+    }),
+    JSON.stringify({
+      type: "user",
+      id: "msg-1",
+      content: [{ text: "Remember this durable Gemini insight." }],
+    }),
+    JSON.stringify({
+      type: "gemini",
+      id: "msg-2",
+      content: [{ text: "A Gemini assistant fact." }],
+    }),
+  ].join("\n"),
+  "utf8",
+);
+
+const geminiOutput = execFileSync(
+  process.execPath,
+  [
+    cli.pathname,
+    "transcript",
+    "bundle",
+    "--platform",
+    "gemini",
+    "--file",
+    geminiOne,
+    "--out",
+    geminiOut,
+  ],
+  { encoding: "utf8" },
+);
+const geminiBundle = readFileSync(geminiOut, "utf8");
+assert.match(geminiOutput, /gemini-session:gemini-session-one/);
+assert.match(geminiBundle, /session_ref: gemini-session:gemini-session-one/);
+assert.match(geminiBundle, /Remember this durable Gemini insight/);
+assert.match(geminiBundle, /A Gemini assistant fact/);
 
 assert.throws(
   () =>
