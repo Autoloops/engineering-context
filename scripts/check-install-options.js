@@ -62,6 +62,14 @@ assert.match(copilotHooks.output, /Automatic memory updates: enabled\./);
 assert.ok(existsSync(join(copilotHooks.copilotHome, "hooks", "greplica.json")));
 assert.equal(readConfig(copilotHooks.greplicaHome).session.autoMemoryUpdates, true);
 
+const continueHooks = installInTempRepo("continue-hooks", ["--hooks", "enabled", "--auto-memory", "enabled"], "continue");
+assert.match(continueHooks.output, /Installed Greplica for Continue\./);
+assert.match(continueHooks.output, /Hooks: installed for UserPromptSubmit, Stop\./);
+assert.match(continueHooks.output, /Automatic memory updates: enabled\./);
+assert.ok(existsSync(join(continueHooks.repo, ".continue", "settings.json")));
+assert.ok(existsSync(join(continueHooks.repo, ".continue", "rules", "greplica-guidance.md")));
+assert.equal(readConfig(continueHooks.greplicaHome).session.autoMemoryUpdates, true);
+
 const invalid = spawnSync(
   process.execPath,
   [
@@ -104,6 +112,7 @@ function installInTempRepo(name, flags, platform = "codex") {
   const greplicaHome = join(tmp, name, "greplica-home");
   const codexHome = join(tmp, name, "codex-home");
   const copilotHome = join(tmp, name, "copilot-home");
+  const continueHome = join(tmp, name, "continue-home");
   mkdirSync(repo, { recursive: true });
   execFileSync("git", ["init", "--quiet"], { cwd: repo, encoding: "utf8" });
 
@@ -112,6 +121,7 @@ function installInTempRepo(name, flags, platform = "codex") {
     GREPLICA_HOME: greplicaHome,
     CODEX_HOME: codexHome,
     COPILOT_HOME: copilotHome,
+    CONTINUE_HOME: continueHome,
     XDG_CONFIG_HOME: join(tmp, name, "xdg-config-home"),
     GREPLICA_INSTALL_SKIP_PREWARM: "1",
   };
@@ -129,7 +139,7 @@ function installInTempRepo(name, flags, platform = "codex") {
     encoding: "utf8",
     env,
   });
-  return { repo, greplicaHome, codexHome, copilotHome, output, env };
+  return { repo, greplicaHome, codexHome, copilotHome, continueHome, output, env };
 }
 
 function readConfig(greplicaHome) {
