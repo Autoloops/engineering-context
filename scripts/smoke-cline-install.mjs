@@ -32,6 +32,7 @@ try {
   checks.push(checkRuleInstall());
   checks.push(checkSkillsAndPlugin());
   checks.push(checkNonDestructiveReinstall());
+  checks.push(checkHooksDisabled());
 } catch (error) {
   checks = [{ id: "smoke_script", passed: false, details: [error instanceof Error ? error.stack ?? error.message : String(error)] }];
 } finally {
@@ -70,9 +71,10 @@ function checkRuleInstall() {
   }
 
   if (readFileSync(customRule, "utf8") !== "custom rule\n") details.push("existing .clinerules/custom.md was modified");
-  for (const pattern of ["Installed Greplica for Cline", "Guidance:", ".clinerules/greplica.md", ".cline/plugins/greplica.ts", "Skills:", "Hooks: installed for beforeModel", "Reload or restart Cline"]) {
+  for (const pattern of ["Installed Greplica for Cline", "Guidance:", ".clinerules/greplica.md", ".cline/plugins/greplica.ts", "Skills:", "Hooks: installed for beforeModel", "Automatic memory updates: disabled.", "Reload or restart Cline"]) {
     if (!first.stdout.includes(pattern)) details.push(`install output missing ${JSON.stringify(pattern)}`);
   }
+  if (readConfig().session.autoMemoryUpdates !== false) details.push("default Cline install should disable automatic memory updates");
   if (!second.stdout.includes(".clinerules/greplica.md")) details.push("reinstall did not keep using the generated greplica.md rule");
 
   return { id: "cline_rule_install", passed: details.length === 0, details };
@@ -134,6 +136,29 @@ function checkNonDestructiveReinstall() {
   return { id: "cline_rule_non_destructive", passed: details.length === 0, details };
 }
 
+function checkHooksDisabled() {
+  const details = [];
+  const noHookWorkspace = resolve(tempDir, "repo-no-hooks");
+  runOrThrow(["git", "init", "-q", noHookWorkspace], repoRoot);
+
+  const output = runOrThrow(["node", cli, "install", "--platform", "cline", "--embedding", "local", "--hooks", "disabled"], noHookWorkspace).stdout;
+  const rulePath = resolve(noHookWorkspace, ".clinerules", "greplica.md");
+  const pluginPath = resolve(noHookWorkspace, ".cline/plugins/greplica.ts");
+  const skillPath = resolve(noHookWorkspace, ".cline/skills", "greplica-bootstrap", "SKILL.md");
+
+  if (!existsSync(rulePath)) details.push("expected .clinerules/greplica.md to be created with hooks disabled");
+  else {
+    const rule = readFileSync(rulePath, "utf8");
+    if (!rule.includes("Cline hooks were not installed")) details.push("hooks-disabled rule did not explain that hooks were skipped");
+  }
+  if (!existsSync(skillPath)) details.push("expected skills to be installed with hooks disabled");
+  if (existsSync(pluginPath)) details.push("hooks-disabled install created .cline/plugins/greplica.ts");
+  if (!output.includes("Hooks: not installed.")) details.push("hooks-disabled output did not report hooks as not installed");
+  if (output.includes("Hooks: installed for beforeModel")) details.push("hooks-disabled output reported beforeModel hook as installed");
+
+  return { id: "cline_hooks_disabled", passed: details.length === 0, details };
+}
+
 function run(commandArgs, cwd, input) {
   return spawnSync(commandArgs[0], commandArgs.slice(1), { cwd, env, input, encoding: "utf8" });
 }
@@ -144,6 +169,10 @@ function runOrThrow(commandArgs, cwd, input) {
     throw new Error(`Command failed (${result.status}): ${commandArgs.join(" ")}\n${result.stderr ?? ""}`);
   }
   return result;
+}
+
+function readConfig() {
+  return JSON.parse(readFileSync(resolve(greplicaHome, "config.json"), "utf8"));
 }
 
 function findRepoRoot(startDir) {

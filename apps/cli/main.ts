@@ -22,8 +22,9 @@ import { installGreplica, platformDisplayName } from "../../libs/install/install
 import { allPlatformInstallers, platformInstaller } from "../../libs/install/platforms/index.js";
 import type { InstallEmbedding, InstallPlatform } from "../../libs/install/paths.js";
 import { hookCwd, hookEventName, hookSessionId, hookTranscriptPath, readHookInput } from "../../libs/hooks/hook-input.js";
+import { greplicaHookGuidance } from "../../libs/hooks/guidance.js";
 import { HookSessionStore } from "../../libs/hooks/session-state.js";
-import { runHookWorker, startHookWorker } from "../../libs/hooks/worker.js";
+import { runHookWorker, shouldRunAutoMemoryUpdates, startHookWorker } from "../../libs/hooks/worker.js";
 import { withLocalModelLock } from "../../libs/knowledge-graph/graph-context/local-model-lock.js";
 import { openDatabase } from "../../libs/storage/sqlite/db.js";
 import { SqliteRepository as SqliteKnowledgeGraphRepository } from "../../libs/storage/sqlite/repository.js";
@@ -56,7 +57,7 @@ const cliCommands = [
   {
     key: "install",
     path: ["install"],
-    usage: "install --platform codex|claude|opencode|cline|openhands --embedding local|openai",
+    usage: "install --platform codex|claude|copilot|opencode|cline|openhands|factory-droid --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]",
     handler: runInstallCommand,
     showInTopLevelHelp: true,
   },
@@ -141,14 +142,14 @@ const cliCommands = [
   {
     key: "transcriptBundle",
     path: ["transcript", "bundle"],
-    usage: "transcript bundle --platform codex|claude --file <path> [--file <path>...] --out <bundle.md>",
+    usage: "transcript bundle --platform codex|claude|copilot --file <path> [--file <path>...] --out <bundle.md>",
     handler: runTranscriptBundle,
     showInTopLevelHelp: true,
   },
   {
     key: "hookIngest",
     path: ["hook", "ingest"],
-    usage: "hook ingest --platform codex|claude|openhands",
+    usage: "hook ingest --platform codex|claude|copilot|openhands|factory-droid",
     handler: runHookIngest,
   },
   {
@@ -412,20 +413,18 @@ function runHookIngest(args: string[]): void {
       cwd,
       eventName,
     });
-    startHookWorker();
+    if (shouldRunAutoMemoryUpdates(ensureGreplicaConfig())) startHookWorker();
 
     if (!result.shouldInjectGuidance) return;
-    const additionalContext =
-      `${greplicaContextMarker}: greplica is a repo-memory search tool for finding relevant architecture, decisions, flows, and code anchors. Before broad manual exploration in this repository, run greplica graph context "<question>" with a focused natural-language query. When Greplica provides useful context, mention that you used it and briefly say what it helped with.`;
-    console.log(JSON.stringify(hookGuidanceOutput(platform, additionalContext)));
+    console.log(JSON.stringify(hookGuidanceOutput(platform, greplicaHookGuidance)));
   } finally {
     db.close();
   }
 }
 
-// OpenHands injects via top-level additionalContext; Claude/Codex use hookSpecificOutput.
+// OpenHands and Copilot inject via top-level additionalContext; Claude/Codex use hookSpecificOutput.
 function hookGuidanceOutput(platform: InstallPlatform, additionalContext: string): Record<string, unknown> {
-  if (platform === "openhands") return { additionalContext };
+  if (platform === "openhands" || platform === "copilot") return { additionalContext };
   return {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
@@ -433,8 +432,6 @@ function hookGuidanceOutput(platform: InstallPlatform, additionalContext: string
     },
   };
 }
-
-const greplicaContextMarker = "Greplica hook guidance";
 
 function runSessionMarkMemoryCurrent(args: string[]): void {
   const sessionRef = parseRequiredOption(args, "--session-ref", usage("sessionMarkMemoryCurrent"));
@@ -522,7 +519,7 @@ function parseHookIngestPlatform(args: string[]): InstallPlatform {
 }
 
 function parseHookPlatform(value: string | undefined): InstallPlatform {
-  if (value === "codex" || value === "claude" || value === "openhands") return value;
+  if (value === "codex" || value === "claude" || value === "copilot" || value === "openhands" || value === "factory-droid") return value;
   throw new Error(usage("hookIngest"));
 }
 
@@ -631,6 +628,7 @@ function runConfigCommand(args: string[]): void {
   console.log("- stopThreshold: run background memory update after this many Stop hooks since memory was current.");
   console.log("- timeThresholdMinutes: run after this much time if the session has activity not covered by current memory.");
   console.log("- currentGraceMinutes: skip time-based updates when memory was marked current close to last activity.");
+  console.log("- autoMemoryUpdates: run background memory updates from hooks. Guidance injection can still run when this is false.");
   console.log("");
   console.log("Common embedding examples:");
   console.log("- local MPNet base: provider=local, model=all-mpnet-base-v2, dimensions=768, batchSize=16");
@@ -638,9 +636,11 @@ function runConfigCommand(args: string[]): void {
   console.log("- OpenAI small: provider=openai, model=text-embedding-3-small, dimensions=1536, batchSize=100");
 }
 
-function parseInstallArgs(args: string[]): { platform: InstallPlatform; embedding: InstallEmbedding } {
+function parseInstallArgs(args: string[]): { platform: InstallPlatform; embedding: InstallEmbedding; hooks: boolean; autoMemoryUpdates: boolean } {
   let platform: InstallPlatform | undefined;
   let embedding: InstallEmbedding | undefined;
+  let hooks: boolean | undefined;
+  let autoMemoryUpdates: boolean | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -666,11 +666,41 @@ function parseInstallArgs(args: string[]): { platform: InstallPlatform; embeddin
       embedding = parseInstallEmbedding(arg.slice("--embedding=".length));
       continue;
     }
+    if (arg === "--hooks") {
+      if (hooks !== undefined) throw new Error(`Specify --hooks only once.\n${usage("install")}`);
+      hooks = parseEnabledFlag(requireFlagValue(args, index, "--hooks"));
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--hooks=")) {
+      if (hooks !== undefined) throw new Error(`Specify --hooks only once.\n${usage("install")}`);
+      hooks = parseEnabledFlag(arg.slice("--hooks=".length));
+      continue;
+    }
+    if (arg === "--auto-memory") {
+      if (autoMemoryUpdates !== undefined) throw new Error(`Specify --auto-memory only once.\n${usage("install")}`);
+      autoMemoryUpdates = parseEnabledFlag(requireFlagValue(args, index, "--auto-memory"));
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--auto-memory=")) {
+      if (autoMemoryUpdates !== undefined) throw new Error(`Specify --auto-memory only once.\n${usage("install")}`);
+      autoMemoryUpdates = parseEnabledFlag(arg.slice("--auto-memory=".length));
+      continue;
+    }
     throw new Error(usage("install"));
   }
 
   if (platform === undefined || embedding === undefined) throw new Error(usage("install"));
-  return { platform, embedding };
+  if (hooks === false && autoMemoryUpdates === true) {
+    throw new Error(`--auto-memory enabled requires --hooks enabled.\n${usage("install")}`);
+  }
+  return {
+    platform,
+    embedding,
+    hooks: hooks ?? true,
+    autoMemoryUpdates: hooks === false ? false : autoMemoryUpdates ?? true,
+  };
 }
 
 interface TranscriptBundleOptions {
@@ -725,7 +755,7 @@ function parseTranscriptBundleArgs(args: string[]): TranscriptBundleOptions {
 }
 
 function parseTranscriptBundlePlatform(value: string): InstallPlatform {
-  if (value === "codex" || value === "claude" || value === "opencode") return value;
+  if (value === "codex" || value === "claude" || value === "copilot" || value === "opencode") return value;
   throw new Error(`Invalid --platform ${value}.\n${usage("transcriptBundle")}`);
 }
 
@@ -736,13 +766,19 @@ function requireFlagValue(args: string[], index: number, flag: string, usageText
 }
 
 function parseInstallPlatform(value: string): InstallPlatform {
-  if (value === "codex" || value === "claude" || value === "opencode" || value === "cline" || value === "openhands") return value;
+  if (value === "codex" || value === "claude" || value === "copilot" || value === "opencode" || value === "cline" || value === "openhands" || value === "factory-droid") return value;
   throw new Error(`Invalid --platform ${value}.\n${usage("install")}`);
 }
 
 function parseInstallEmbedding(value: string): InstallEmbedding {
   if (value === "local" || value === "openai") return value;
   throw new Error(`Invalid --embedding ${value}.\n${usage("install")}`);
+}
+
+function parseEnabledFlag(value: string): boolean {
+  if (value === "enabled") return true;
+  if (value === "disabled") return false;
+  throw new Error(`Invalid flag value ${value}; expected enabled or disabled.\n${usage("install")}`);
 }
 
 function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>): void {
@@ -754,9 +790,12 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
   console.log(`Skills: ${result.skills.length} installed.`);
   if (result.hooks !== undefined) {
     console.log(`Hooks: installed for ${result.hooks.events.join(", ")}.`);
-  } else {
+  } else if (result.hooksRequested) {
     console.log("Hooks: not installed for this platform.");
+  } else {
+    console.log("Hooks: not installed.");
   }
+  console.log(`Automatic memory updates: ${result.session.autoMemoryUpdates ? "enabled" : "disabled"}.`);
   console.log(`Embedding: ${result.embedding}.`);
   console.log(`Config: ${result.configFile}`);
   console.log(`Database: ${result.databasePath}`);
@@ -769,6 +808,10 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
     console.log("- Accept or trust the installed hooks if your agent asks.");
   } else {
     console.log("- Ask the agent to use greplica-update-working-memory near the end of useful sessions.");
+    console.log("- To give future agents Greplica guidance without hooks, add this snippet to your agent instruction file:");
+    console.log("");
+    console.log(greplicaHookGuidance);
+    console.log("");
   }
   if (result.platform === "cline") {
     console.log("- Review the generated .clinerules guidance if you want to customize it.");
@@ -805,6 +848,7 @@ function printSessionConfig(config: GreplicaConfig["session"]): void {
   console.log(`Session stop threshold: ${config.stopThreshold}`);
   console.log(`Session time threshold minutes: ${config.timeThresholdMinutes}`);
   console.log(`Session current grace minutes: ${config.currentGraceMinutes}`);
+  console.log(`Session automatic memory updates: ${config.autoMemoryUpdates ? "enabled" : "disabled"}`);
 }
 
 function displayConfigPath(): string {

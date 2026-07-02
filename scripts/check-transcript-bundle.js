@@ -11,8 +11,10 @@ const tmp = mkdtempSync(join(tmpdir(), "greplica-transcript-bundle-test-"));
 const codexOne = join(tmp, "codex-one.jsonl");
 const codexTwo = join(tmp, "codex-two.jsonl");
 const claudeOne = join(tmp, "claude-one.jsonl");
+const copilotOne = join(tmp, "copilot-one.jsonl");
 const codexOut = join(tmp, "codex-bundle.md");
 const claudeOut = join(tmp, "claude-bundle.md");
+const copilotOut = join(tmp, "copilot-bundle.md");
 const opencodeOut = join(tmp, "opencode-bundle.md");
 
 writeFileSync(
@@ -82,6 +84,47 @@ writeFileSync(
   "utf8",
 );
 
+writeFileSync(
+  copilotOne,
+  [
+    JSON.stringify({
+      type: "session.start",
+      data: {
+        sessionId: "copilot-session-one",
+        copilotVersion: "1.0.66",
+        context: {
+          cwd: "/repo/example",
+          repository: "Autoloops/greplica",
+          branch: "copilot-test",
+        },
+      },
+      timestamp: "2026-06-25T00:03:30.000Z",
+    }),
+    JSON.stringify({
+      type: "session.model_change",
+      data: {
+        newModel: "claude-haiku-4.5",
+      },
+      timestamp: "2026-06-25T00:03:45.000Z",
+    }),
+    JSON.stringify({
+      session_id: "copilot-session-one",
+      cwd: "/repo/example",
+      timestamp: "2026-06-25T00:04:00.000Z",
+      role: "user",
+      content: "Remember this durable Copilot insight. <system_instruction>remove this</system_instruction>",
+    }),
+    JSON.stringify({
+      session_id: "copilot-session-one",
+      cwd: "/repo/example",
+      timestamp: "2026-06-25T00:05:00.000Z",
+      role: "assistant",
+      content: [{ type: "text", text: "A Copilot assistant fact." }],
+    }),
+  ].join("\n"),
+  "utf8",
+);
+
 const codexOutput = execFileSync(
   process.execPath,
   [
@@ -130,6 +173,30 @@ const claudeBundle = readFileSync(claudeOut, "utf8");
 assert.match(claudeOutput, /claude-code-session:claude-session-one/);
 assert.match(claudeBundle, /session_ref: claude-code-session:claude-session-one/);
 assert.match(claudeBundle, /Remember this durable Claude insight/);
+
+const copilotOutput = execFileSync(
+  process.execPath,
+  [
+    cli.pathname,
+    "transcript",
+    "bundle",
+    "--platform",
+    "copilot",
+    "--file",
+    copilotOne,
+    "--out",
+    copilotOut,
+  ],
+  { encoding: "utf8" },
+);
+const copilotBundle = readFileSync(copilotOut, "utf8");
+assert.match(copilotOutput, /copilot-session:copilot-session-one/);
+assert.match(copilotBundle, /session_ref: copilot-session:copilot-session-one/);
+assert.match(copilotBundle, /repository: Autoloops\/greplica/);
+assert.match(copilotBundle, /branch: copilot-test/);
+assert.match(copilotBundle, /Remember this durable Copilot insight/);
+assert.match(copilotBundle, /A Copilot assistant fact/);
+assert.doesNotMatch(copilotBundle, /remove this/);
 
 assert.throws(
   () =>

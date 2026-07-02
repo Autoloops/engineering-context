@@ -21,6 +21,7 @@ export interface SessionConfig {
   stopThreshold: number;
   timeThresholdMinutes: number;
   currentGraceMinutes: number;
+  autoMemoryUpdates: boolean;
 }
 
 export interface EmbeddingConfigInput {
@@ -49,6 +50,7 @@ export const defaultSessionConfig: SessionConfig = {
   stopThreshold: 7,
   timeThresholdMinutes: 40,
   currentGraceMinutes: 5,
+  autoMemoryUpdates: true,
 };
 
 export const defaultGreplicaConfig: GreplicaConfig = {
@@ -155,6 +157,7 @@ function normalizeSessionConfig(value: unknown, path: string): SessionConfig {
       "session.currentGraceMinutes",
       path,
     ),
+    autoMemoryUpdates: parseBoolean(value.autoMemoryUpdates, defaultSessionConfig.autoMemoryUpdates, "session.autoMemoryUpdates", path),
   };
 }
 
@@ -174,6 +177,12 @@ function parsePositiveInteger(value: unknown, fallback: number, field: string, p
   if (value === undefined) return fallback;
   if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
   throw new Error(`Invalid Greplica config at ${path}: ${field} must be a positive integer.`);
+}
+
+function parseBoolean(value: unknown, fallback: boolean, field: string, path: string): boolean {
+  if (value === undefined) return fallback;
+  if (typeof value === "boolean") return value;
+  throw new Error(`Invalid Greplica config at ${path}: ${field} must be a boolean.`);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

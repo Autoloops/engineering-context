@@ -6,7 +6,7 @@
 
 <p>
   <a href="https://www.npmjs.com/package/greplica"><img alt="npm package" src="https://img.shields.io/npm/v/greplica?color=111111"></a>
-  <img alt="Agents" src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20OpenCode%20%7C%20Cline%20%7C%20OpenHands-2563eb">
+  <img alt="Agents" src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20Copilot%20%7C%20OpenCode%20%7C%20Cline%20%7C%20OpenHands%20%7C%20Factory%20Droid-2563eb">
   <img alt="Storage" src="https://img.shields.io/badge/storage-local%20SQLite-475569">
   <img alt="Embeddings" src="https://img.shields.io/badge/embeddings-local%20%7C%20OpenAI-16a34a">
   <a href="https://discord.gg/q2R6AYXh9"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2"></a>
@@ -18,7 +18,7 @@
 
 Does your coding agent spend 5 minutes just grepping around when you give it a complex task?
 
-That's because it is re-learrning context. Every new session, your agent wastes tokens and time building context on work it already did. And still misses important facts.
+That's because it is re-learning context. Every new session, your agent wastes tokens and time building context on work it already did. And still misses important facts.
 
 **Greplica** explores your repo structure, code and session transcripts (fully local, no telemetry) to give your agent a persistent, maintained memory it can query before exploring.
 
@@ -36,15 +36,7 @@ Install Greplica for this repo using https://raw.githubusercontent.com/Autoloops
 
 Full prompt: [docs/agent-install-prompt.md](https://raw.githubusercontent.com/Autoloops/greplica/refs/heads/main/docs/agent-install-prompt.md)
 
-That prompt runs the full onboarding flow:
-
-| Step | Ask your agent | What happens |
-| --- | --- | --- |
-| 1 | Paste the prompt above | Agent asks about prior sessions, installs the CLI, installs the matching repo integration, and reports hooks/skills status. |
-| 2 | Same prompt continues | Agent bootstraps baseline repo memory. |
-| 3 | If you opted in | Agent shows 1-3 recent same-repo transcripts, bundles them, and stores reconstructable flow/component memory. |
-| 4 | Work normally | The agent can query `greplica graph context "<question>"` before broad exploration. |
-| 5 | Accept hooks, or run `Use greplica-update-working-memory for this session.` manually | Durable decisions, constraints, changed flows, and follow-ups are saved. |
+That prompt asks a short setup questionnaire, installs Greplica with your chosen hook mode, creates the first saved context from the repo, and can optionally pull durable learnings from recent sessions.
 
 To visualise your current memory in browser, run:
 
@@ -56,65 +48,70 @@ greplica graph view
 
 ## How It Works
 
-Greplica stores engineering context in a local SQLite database as a structured knowledge graph:
+Your past agent sessions contain repo context: decisions people made, constraints agents found, files behind workflows, gotchas, and approaches that failed. Greplica keeps the durable parts so the next agent can start with that history.
 
+| Step | What happens |
+| --- | --- |
+| Past sessions | Agents uncover repo-specific decisions, constraints, workflows, and file anchors. |
+| Greplica stores it | Greplica saves the durable parts as `components`, `flows`, `claims`. |
+| New agent asks | The agent runs `greplica graph context "<question>"` before broad exploration. |
+| Agent uses it | The agent starts with facts, target files, subsystem boundaries, prior decisions. |
+| Memory updates | Hooks or `greplica-update-working-memory` save useful new learnings after work sessions. |
 
-| Object        | What it represents                                                                                   |
-| ------------- | ---------------------------------------------------------------------------------------------------- |
-| **Component** | A distinct code module or subsystem, with a file anchor pointing where to look                       |
-| **Flow**      | A workflow or process that spans multiple components                                                 |
-| **Claim**     | A durable fact, decision, constraint, gotcha, or task linked to the components or flows it describes |
-| **Edge**      | A typed relationship: `about`, `touches`, `contains`, `supersedes`, `evidenced_by`                   |
+If you have old sessions, `greplica-fast-session-bootstrap` can ingest bundled transcripts during setup. That gives Greplica useful memory on day one.
 
+For example, a future task might ask about sync auth in a browser extension. The agent can start with:
 
-When your agent asks `greplica graph context "<question>"`, Greplica runs a hybrid retrieval pipeline - combining vector similarity, BM25 keyword scoring, and graph adjacency boosts - and returns a concise Markdown summary the agent can act on immediately.
+```bash
+greplica graph context "google sync auth startup identity browser settings"
+```
 
----
-
-## What the Agent Actually Sees
-
-Running `greplica graph context "how does proposal apply work?"` outputs:
+Greplica returns a small Markdown packet the agent can act on:
 
 ```markdown
 # Graph Context
 
-Query: how does proposal apply work?
+## Best Claims
 
-## Components
+### claim.sync_auth_mode_startup
+The sync service checks auth mode during startup before enabling Google Drive sync.
 
-- `component.knowledge_graph_service` Knowledge Graph Service
-  Anchor: `libs/knowledge-graph/service.ts`
-- `component.sqlite_repository` SQLite Repository
-  Anchor: `libs/storage/sqlite/repository.ts`
+Anchor: `src/background/sync-service.ts`
 
-## Flows
+### claim.edge_identity_gap
+Edge does not expose the same Google identity API behavior as Chrome.
 
-### Proposal Apply
+Anchor: `src/platform/browser-identity.ts`
 
-ID: `flow.proposal_apply`
+## Related Flows
 
-Claims:
-- `claim.apply_validates_before_writing` (fact, code_verified): applyProposal validates the proposal before writing any records.
-- `claim.memory_commits_chain_with_parent` (fact, code_verified): Each memory commit stores a reference to its predecessor.
-
-## Other Relevant Claims
-
-- `claim.apply_prints_commit_scope_and_counts` (fact, code_verified): proposal apply prints the memory commit ID, scope ID, and created object counts.
+- `flow.sync_startup`: startup settings, auth checks, and sync-service initialization.
+- `flow.browser_identity`: browser-specific identity API behavior.
 ```
 
-The agent gets the relevant file anchors, the decision trail, and the constraints - without reading the whole codebase.
+### How this helps the agent
+
+At task start, the agent gets a target list: the sync service, browser identity wrapper, startup flow, and the prior constraints that matter. It reads the current code before changing anything, but it verifies the right area first.
+
+That saves the work agents repeat across sessions: broad `rg` searches, adjacent module reads to infer ownership, and rediscovery of decisions a previous session found. This makes your agent more reliable, and leads to it generating better plans.
 
 ---
 
-## Normal Session Workflow
+## SWE-chat Benchmarks
 
+We also benchmark Greplica on held-out planning tasks built from [SWE-chat](https://www.swe-chat.com/), a dataset of real coding-agent sessions from public repositories ([dataset](https://huggingface.co/datasets/SALT-NLP/SWE-chat), [paper](https://arxiv.org/abs/2604.20779)).
 
-| When                    | Ask your agent                                         | What happens                                                               |
-| ----------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------- |
-| Before starting a task  | (automatic when hooks/agent guidance are active)       | Agent runs `greplica graph context "<task>"` before broad file exploration |
-| During work             | Agent uses context to navigate                         | Relevant components, flows, and past decisions surface immediately         |
-| End of a useful session | `Use greplica-update-working-memory for this session.` | Decisions, changed flows, constraints, and follow-up work are saved        |
+For each case, we start from a clean base snapshot of the repo and use 2-4 earlier sessions from that same repo to build Greplica context. Then we run the same held-out planning task in two modes: a baseline run with no Greplica context, and a Greplica run where the agent can query `greplica graph context` during the task. One bootstrap pass plus replayed session updates gives the agent saved repo-specific decisions and workflow knowledge.
 
+In several showcased planning cases, Greplica cut token usage by 40-50%. Stronger runs saved wall-clock time. Greplica improved the plan when the task depended on repo-specific constraints, decisions, and subsystem boundaries. In the strongest run we measured, Greplica used 75.0% fewer tokens and finished about 38% faster.
+
+Current showcase rows:
+
+| Case | Score | Tokens | Tokens Saved | Time Saved | Why It Helped |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Gemini Voyager sync/auth hardened | `100 -> 100` | `1,925,152 -> 480,988` | `1,444,164` fewer, `75.0%` | `140.4s` | Memory surfaced sync auth, startup, browser identity, and settings constraints. |
+| IPTVnator playback layout | `64 -> 100` | `1,592,080 -> 881,541` | `710,539` fewer, `44.6%` | `65s` | Memory pointed at player, workspace, playlist, and radio layout boundaries. |
+| Marin Harbor SWE eval support | `6 -> 100` | `2,992,034 -> 2,193,023` | `799,011` fewer, `26.7%` | `80.2s` | Memory surfaced vendored Harbor, mini-swe-agent compatibility, and validation constraints. |
 
 ---
 
@@ -139,6 +136,9 @@ greplica install --platform claude --embedding local
 # Codex
 greplica install --platform codex --embedding local
 
+# GitHub Copilot CLI
+greplica install --platform copilot --embedding local
+
 # OpenCode
 greplica install --platform opencode --embedding local
 
@@ -147,6 +147,9 @@ greplica install --platform cline --embedding local
 
 # OpenHands
 greplica install --platform openhands --embedding local
+
+# Factory Droid
+greplica install --platform factory-droid --embedding local
 ```
 
 This installs Greplica agent guidance, configures local embeddings (no API key needed), and initializes the memory database. Cline installs repo-local guidance under `.clinerules/`, shared skills under `.cline/skills/`, and a prompt-guidance plugin under `.cline/plugins/`.
@@ -155,7 +158,7 @@ This installs Greplica agent guidance, configures local embeddings (no API key n
 
 After install, restart your coding agent if the new skills or hooks do not appear immediately. If your agent asks you to trust or accept the installed hooks, accept them for this repo.
 
-Hooks record session activity and inject graph-context guidance. Codex and Claude Code hooks can also attempt background working-memory updates. If hooks are unavailable or not accepted, manually ask the agent to use `greplica-update-working-memory` near the end of useful sessions. For Cline, reload or restart Cline if the generated `.clinerules` guidance or `.cline/plugins/` hook does not appear immediately.
+Hooks record session activity and inject graph-context guidance. Hooks with session-stop events can also attempt background working-memory updates. If hooks are unavailable or not accepted, manually ask the agent to use `greplica-update-working-memory` near the end of useful sessions. For Cline, reload or restart Cline if the generated `.clinerules` guidance or `.cline/plugins/` hook does not appear immediately; Cline's plugin provides guidance only, so working-memory updates stay manual.
 
 ### 4. Bootstrap memory for this repository (once)
 
@@ -176,12 +179,13 @@ Candidate locations:
 - Codex: `~/.codex/sessions/**/*.jsonl`.
 - Claude Code: search both `~/.claude/projects/<sanitized-current-cwd>/*.jsonl` and `~/.claude/projects/**/*.jsonl`.
 - Same-repo matching should handle worktrees and renamed folders. Prefer exact metadata `cwd` matches, but also accept transcripts whose metadata `cwd` still exists and has the same Git `remote.origin.url` or normalized repo identity as the current repo. If the old path no longer exists, use cwd text, repo name, branch, and recent session content as weaker matching evidence.
-- OpenCode: transcript backfill is not supported yet.
+- OpenCode and Cline: transcript backfill is not supported yet.
+- GitHub Copilot CLI: paths from `Stop` hook `transcript_path` values or `$COPILOT_HOME/session-state`.
 
 Bundle them:
 
 ```bash
-greplica transcript bundle --platform codex|claude --file <path> [--file <path>...] --out .greplica-transcript-backfill.md
+greplica transcript bundle --platform codex|claude|copilot --file <path> [--file <path>...] --out .greplica-transcript-backfill.md
 ```
 
 Then ask:
@@ -225,7 +229,7 @@ Switch at any time by rerunning `greplica install` with the new flag.
 ## Commands
 
 ```bash
-greplica install --platform codex|claude|opencode|cline|openhands --embedding local|openai
+greplica install --platform codex|claude|copilot|opencode|cline|openhands|factory-droid --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]
 greplica config
 greplica doctor [--check-embeddings]
 greplica graph read
@@ -233,7 +237,7 @@ greplica graph context "<query>" [--debug]
 greplica graph audit anchors
 greplica graph view [--out <file>] [--no-open]
 greplica graph export <dir>
-greplica transcript bundle --platform codex|claude --file <path> [--file <path>...] --out <bundle.md>
+greplica transcript bundle --platform codex|claude|copilot --file <path> [--file <path>...] --out <bundle.md>
 greplica proposal validate <proposal.json>
 greplica proposal apply <proposal.json>
 ```
@@ -241,36 +245,8 @@ greplica proposal apply <proposal.json>
 - `greplica graph context "<query>"` - returns Markdown for agent use. Add `--debug` for the full retrieval payload with ranking signals.
 - `greplica graph read` - prints the current graph view: all components, flows, claims, sources, and edges in scope.
 - `greplica graph view` to visualise the current memory in a local HTML, opens in your default browser. Use `--out` to choose where the file is written; by default it goes to a temp path.
-- `greplica transcript bundle` - converts one or more Codex or Claude Code JSONL transcripts into a sanitized Markdown bundle for `greplica-fast-session-bootstrap`.
-- `greplica doctor` - verifies installation and diagnoses embedding configuration failures. Not a required preflight before every command.
-- `greplica install` prepares repo memory state; normal repo commands require install first.
+- `greplica transcript bundle` - converts one or more Codex, Claude Code, or GitHub Copilot CLI JSONL transcripts into a sanitized Markdown bundle for `greplica-fast-session-bootstrap`.
+- `greplica doctor` - verifies installation and diagnoses configuration failures. Not a required preflight before every command.
+- `greplica install` prepares repo state, local storage, and agent integration; normal repo commands require install first.
 
-For **OpenHands**, install is repo-local: skills are written to `.agents/skills/` and the `UserPromptSubmit`/`Stop` hooks to `.openhands/hooks.json` (Claude/Codex install to the agent's home config instead). The hooks inject `graph context` guidance and trigger background working-memory updates the same way; OpenHands must trust the repo hooks for the background save to run.
-
----
-
-## Evals and Benchmarks
-
-Greplica includes evals for the workflows that matter most:
-
-- bootstrapping repo memory
-- graph context retrieval
-- working-memory updates from real sessions
-- proposal validation and apply behavior
-
-The search eval scores `greplica graph context` retrieval with `Precision@10`, `Recall@10`, `MRR@10`, `nDCG@10`, and `GradeRecall@10` over 34 realistic task-sentence queries against a deep synthetic fixture.
-
-
-| Eval                          | Latest local result   |
-| ----------------------------- | --------------------- |
-| `npm run eval:search-current` | Passed, `80.59 / 100` |
-| `P@10`                        | `0.550`               |
-| `R@10`                        | `0.782`               |
-| `MRR@10`                      | `0.985`               |
-| `nDCG@10`                     | `0.802`               |
-| `GradeRecall@10`              | `0.828`               |
-
-
-Broader context-retrieval benchmarking, including SWE-Context benchmark work, is ongoing and showing promising early results. We will publish those numbers when the harness and methodology are stable enough to compare fairly.
-
----
+For **OpenHands**, install is repo-local: skills are written to `.agents/skills/` and the `UserPromptSubmit`/`Stop` hooks to `.openhands/hooks.json` (Claude/Codex/Copilot install to the agent's home config instead). GitHub Copilot CLI installs personal skills under `~/.copilot/skills` (or `$COPILOT_HOME/skills`) and user hooks under `~/.copilot/hooks/greplica.json`. The hooks inject `graph context` guidance and trigger background working-memory updates; OpenHands must trust the repo hooks for the background save to run.

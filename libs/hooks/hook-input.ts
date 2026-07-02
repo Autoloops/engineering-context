@@ -1,8 +1,11 @@
 export interface HookInput {
   session_id?: unknown;
+  sessionId?: unknown;
   transcript_path?: unknown;
+  transcriptPath?: unknown;
   cwd?: unknown;
   hook_event_name?: unknown;
+  hookEventName?: unknown;
   turn_id?: unknown;
   prompt?: unknown;
   // OpenHands variants of hook_event_name / cwd.
@@ -26,7 +29,7 @@ export function readHookInput(stdin: string): HookInput {
 }
 
 export function hookEventName(hook: HookInput): string | undefined {
-  return stringField(hook.hook_event_name) ?? stringField(hook.event_type);
+  return stringField(hook.hook_event_name) ?? stringField(hook.hookEventName) ?? stringField(hook.event_type);
 }
 
 export function hookCwd(hook: HookInput): string | undefined {
@@ -34,11 +37,11 @@ export function hookCwd(hook: HookInput): string | undefined {
 }
 
 export function hookSessionId(hook: HookInput): string | undefined {
-  return stringField(hook.session_id);
+  return stringField(hook.session_id) ?? stringField(hook.sessionId);
 }
 
 export function hookTranscriptPath(hook: HookInput): string | undefined {
-  return stringField(hook.transcript_path);
+  return stringField(hook.transcript_path) ?? stringField(hook.transcriptPath);
 }
 
 function stringField(value: unknown): string | undefined {

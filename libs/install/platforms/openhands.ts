@@ -23,9 +23,12 @@ const sessionRefPrefix = "openhands-session:";
 
 export const openhandsInstaller: PlatformInstaller = {
   platform: "openhands",
-  install({ repoRoot }: PlatformInstallContext): PlatformInstallResult {
+  install(context: PlatformInstallContext): PlatformInstallResult {
     // OpenHands loads skills and hooks from the repository, not a user home dir.
+    const { repoRoot } = context;
     const skills = copyBundledSkills(join(repoRoot, ".agents", "skills"));
+    if (!context.hooks) return { skills };
+
     const hookConfigPath = join(repoRoot, ".openhands", "hooks.json");
     const command = hookCommand("openhands");
     const hookConfig = mergeHookConfig(readJsonObject(hookConfigPath), "openhands", command);

@@ -15,9 +15,11 @@ import type { PlatformInstallContext, PlatformInstallResult, PlatformInstaller, 
 
 export const codexInstaller: PlatformInstaller = {
   platform: "codex",
-  install(_context: PlatformInstallContext): PlatformInstallResult {
+  install(context: PlatformInstallContext): PlatformInstallResult {
     const codexHome = process.env.CODEX_HOME ?? join(homedir(), ".codex");
     const skills = copyBundledSkills(join(codexHome, "skills"));
+    if (!context.hooks) return { skills };
+
     const hookConfigPath = join(codexHome, "hooks.json");
     const command = hookCommand("codex");
     const hookConfig = mergeHookConfig(readJsonObject(hookConfigPath), "codex", command);

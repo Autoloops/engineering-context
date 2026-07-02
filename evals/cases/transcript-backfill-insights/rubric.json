@@ -1,66 +1,88 @@
 {
   "case_id": "transcript-backfill-insights",
-  "base_commit": "cec10c26d4c219ad4410e2d05043dbdd2438f331",
+  "base_commit": "6c43bafc1fc861088281fec5bd003261c76e63e9",
   "score": {
     "pass_threshold": 80,
-    "expected_memory_points": 30,
-    "expected_memory_hit_cap": 12,
-    "role_correctness_points": 5,
+    "expected_memory_points": 45,
+    "expected_memory_hit_cap": 34,
+    "role_correctness_points": 10,
     "evidence_correctness_points": 15,
-    "category_coverage_points": 10,
-    "category_coverage_min_count": 5,
-    "supersedes_points": 0,
     "anchor_correctness_points": 10,
     "quality_points": 15,
-    "output_quality_points": 10,
-    "generation_time_points": 5,
-    "generation_time_full_credit_seconds": 300,
-    "generation_time_limit_seconds": 600,
+    "output_quality_points": 5,
+    "generation_time_points": 0,
+    "generation_time_full_credit_seconds": 1800,
+    "generation_time_limit_seconds": 3600,
     "bad_memory_penalties": {
-      "unsupported": 8,
-      "wrong_role": 3,
-      "wrong_evidence": 6,
-      "duplicate_bootstrap": 8,
-      "transcript_noise": 15,
-      "over_specific": 5,
-      "generic_agent_behavior": 8,
-      "stale_or_reverted_as_implemented": 10,
-      "bad_supersedes": 8
+      "unsupported": {
+        "points": 6,
+        "max": 12
+      },
+      "wrong_evidence": {
+        "points": 5,
+        "max": 15
+      },
+      "session_changelog": {
+        "points": 6,
+        "max": 12
+      },
+      "not_next_time_useful": {
+        "points": 5,
+        "max": 10
+      },
+      "planned_or_reverted_as_real": {
+        "points": 10,
+        "max": 15
+      },
+      "generic_agent_behavior": {
+        "points": 6,
+        "max": 12
+      },
+      "over_broad_summary": {
+        "points": 8,
+        "max": 16
+      }
     },
     "noise_penalties": {
-      "stores_raw_transcript_junk": 15,
-      "stores_system_or_developer_prompt": 15,
-      "stores_encrypted_reasoning": 15,
-      "stores_command_log_chatter": 8
+      "stores_raw_transcript_junk": {
+        "points": 12,
+        "max": 12
+      },
+      "stores_system_or_developer_prompt": {
+        "points": 15,
+        "max": 15
+      },
+      "stores_encrypted_reasoning": {
+        "points": 15,
+        "max": 15
+      },
+      "stores_command_log_chatter": {
+        "points": 8,
+        "max": 8
+      }
     }
   },
   "judge": {
     "instructions": [
       "Classify the candidate fast-session-bootstrap proposal for this exact previous-session bundle.",
       "Do not compute a numeric score. The eval runner computes all scores locally.",
-      "The expected memories are a gold pool of useful possibilities, not an exhaustive checklist the agent must fully recover.",
-      "A strong run should extract a fast, impressive subset with high precision, good category coverage, and useful final output.",
+      "The goal is durable next-time memory from the whole bundle, not a history of what happened in the sessions.",
       "Judge semantic equivalence, not exact claim IDs or exact wording.",
-      "Classify every gold-pool memory as present or absent. If an item is vague, only indirectly implied, or too incomplete to help a future coding agent, mark it absent.",
-      "This eval rewards high-signal incremental memory from previous sessions, especially decisions, rejected alternatives, risks/gotchas, corrected repo assumptions, and evidence/provenance rules.",
-      "A user correction is only valuable if it reveals repo-specific truth, a rejected implementation, stale memory/docs, a wrong assumption, a workflow constraint, or future work. Generic agent etiquette such as 'plan before implementing' is bad memory.",
-      "Do not award credit for planned, reverted, or exploratory work as implemented behavior unless current repo code verifies it.",
+      "A strong proposal scans the whole bundle and stores every high-signal durable repo memory represented by expected_memories.",
+      "Do not reward under-collection merely because the proposal is short or organized around a single topic.",
+      "Mark expected memories present only when the candidate explicitly preserves a reusable repo rule, boundary, risk, rejected alternative, correction, future-work boundary, or navigation fact.",
+      "Do not award credit for claims that only say the old session edited files, ran tests, investigated something, or discussed a topic.",
+      "Do not award credit for planned, reverted, or exploratory work as implemented behavior unless the candidate stores the final accepted current-code behavior as code_verified with code anchors.",
       "Do not award credit for simply repeating bootstrap memory unless a transcript narrowed, corrected, rejected, or clarified it in a way future agents should preserve.",
-      "Current implementation facts should be code_verified only when verified against current repo code. If a matched claim is code_verified, expected_anchor_sets require the listed anchors.",
-      "A code_verified claim with valid current-repo code anchors should not be marked wrong_evidence merely because the proposal does not separately narrate how the file was inspected; anchor validation is the verification signal.",
+      "Code facts should be code_verified only when the candidate anchors them to current repo code. Source-backed decisions, constraints, rationales, corrections, and rejected alternatives should use stable session sources from the bundle.",
+      "The eval runner separately checks code anchors. Treat code_anchors on a code_verified claim as the proposal's code grounding. Do not mark a code_verified claim as wrong_evidence merely because you cannot inspect the repo code in this judge call, because the runner handles anchor validation. Penalize code_verified only when the claim contradicts bundle facts, is unrelated to any bundle-raised candidate, lacks code anchors, or stores planned/reverted/exploratory work as real despite no later accepted implementation.",
       "Transcript-derived decisions, constraints, rationales, trade-offs, drift, tasks, and future work should usually be source_verified or otherwise evidenced by a stable session source from the bundle.",
-      "Do not penalize a source_verified transcript-derived claim for including a precise code anchor as a navigation hint when stable session provenance is present and the claim text is a decision, constraint, rationale, trade-off, drift, task, or future work rather than current implementation truth. Code anchors on source_verified claims are navigation, not truth, unless the claim text asserts current implementation behavior.",
-      "Penalize broad or unnecessary code upgrading: the proposal should not inspect or mark many transcript-derived memories code_verified unless their primary value is current implementation behavior.",
-      "For transcript backfill, supersedes should be rare. Penalize superseding a true bootstrap code fact with adjacent usage guidance, a narrower clarification, or a non-conflicting session decision.",
-      "Evidence edges for session-backed claims should point only to the transcript source that actually supports the claim and should include a meaningful metadata.reason.",
+      "Evidence edges for session-backed claims should point only to supporting transcript sources and include meaningful metadata.reason.",
       "Do not require every claim to cite every transcript source; that is a wrong-evidence pattern.",
-      "Bad memories should contain candidate claims that are harmful, unsupported, misleading, duplicated, noisy, stale/reverted-as-implemented, generic agent behavior, bad supersedes, or too implementation-specific.",
-      "Use candidate_update.final_message to judge output_quality. It should show one concrete repo flow or component that can now be reconstructed without broad grepping, with 3-5 concise useful facts about that flow/component.",
-      "The final message should explicitly explain one-shot retrieval value, for example that the topic is stored in the graph and a future agent can ask one greplica graph context query instead of reconstructing it by grepping.",
-      "The final message should be terse. Do not require a separate evidence or graph-connection line.",
-      "Because this bundle contains user corrections and gotchas, a strong final message should include an optional correction/risk section only when it names a repo-specific correction or gotcha and explains what future behavior changes.",
-      "Do not require the old exactly-three-memories output format; penalize final messages that still optimize around isolated claim lists instead of a reconstructable flow/component.",
-      "Flag generic project summaries, raw transcript chatter, historical system/developer prompt content, command logs, unsupported claims, duplicate bootstrap memory without transcript nuance, over-broad capability lists, code facts sourced only from transcript text, and blanket evidence links."
+      "Bad memories should identify candidate claims that are unsupported, wrong-evidence, session changelog, not useful next time, planned/reverted as real, generic agent behavior, or over-broad summaries. Use only IDs from candidate_update.proposal.creates.claims in bad_memories; never put component, flow, source, final_message, or expected-memory IDs in bad_memories.",
+      "Do not put final_message in bad_memories. Judge final-message problems only through output_quality.",
+      "The final message should be a compact memory slice: 3-4 high-signal bullets describing what Greplica can retrieve next time. Penalize separate correction sections, evidence lines, apply counts, raw claim lists, and prior-session recaps.",
+      "Flag generic project summaries, raw transcript chatter, historical system/developer prompt content, command logs, unsupported claims, duplicate bootstrap memory without transcript nuance, code facts sourced only from transcript text, and blanket evidence links."
     ],
     "allowed_memory_roles": [
       "code_fact",
@@ -384,14 +406,12 @@
     ],
     "bad_memory_categories": {
       "unsupported": "A candidate claim says something not supported by the bundle, current repo code, or initial memory.",
-      "wrong_role": "A candidate claim is semantically assigned to the wrong memory role.",
       "wrong_evidence": "A candidate claim has incorrect truth/evidence semantics, such as a session-derived claim without stable session evidence, a code fact represented only as transcript truth, a generic current-session source, or every claim attached to every transcript source.",
-      "duplicate_bootstrap": "A candidate claim repeats initial bootstrap memory without adding transcript-derived nuance.",
-      "transcript_noise": "A candidate claim stores raw transcript noise, system/developer prompts, encrypted reasoning, command logs, or generic conversation.",
-      "over_specific": "A candidate claim stores one-off implementation steps, file-change summaries, test-run summaries, command output, or line-level trivia without extracting a durable reusable repo rule.",
-      "generic_agent_behavior": "A candidate claim stores generic coding-agent etiquette instead of repo/product memory.",
-      "stale_or_reverted_as_implemented": "A candidate claim treats planned, reverted, exploratory, or unlanded transcript work as implemented behavior.",
-      "bad_supersedes": "A candidate claim incorrectly supersedes a broader true memory instead of adding a narrower adjacent constraint."
+      "session_changelog": "A candidate claim stores session chronology, edited file lists, commands, tests, or investigation steps instead of durable memory.",
+      "not_next_time_useful": "A candidate claim may be true but would not change what a future agent does next time in this repo.",
+      "planned_or_reverted_as_real": "A candidate claim treats planned, reverted, exploratory, or explicitly rejected transcript work as implemented behavior.",
+      "generic_agent_behavior": "A candidate claim stores generic coding-agent or testing advice instead of repo/product memory.",
+      "over_broad_summary": "A candidate claim summarizes many sessions or the transcript bundle instead of focused durable memories about concrete repo behavior, constraints, decisions, or future-work boundaries."
     }
   }
 }

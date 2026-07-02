@@ -224,8 +224,8 @@ function componentIdsForClaim(claimId: string, edges: Edge[]): string[] {
     .map((edge) => edge.to_id);
 }
 
-function parseAnchors(codeAnchor: string | undefined): string[] {
-  if (codeAnchor === undefined || codeAnchor.trim().length === 0) return [];
+function parseAnchors(codeAnchor: string | null | undefined): string[] {
+  if (codeAnchor === undefined || codeAnchor === null || codeAnchor.trim().length === 0) return [];
   return codeAnchor
     .split(",")
     .map((part) => part.trim())

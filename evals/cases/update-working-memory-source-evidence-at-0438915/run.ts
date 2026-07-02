@@ -572,12 +572,12 @@ Task:
 2. Use the filtered transcript path above to recover durable decisions, constraints, risks, and follow-up tasks from the completed session.
 3. Verify code facts against the patched working tree.
 4. Reuse existing bootstrap memory with greplica graph context where helpful.
-5. Create a compact update proposal JSON at ${context.updateProposalPath}.
+5. Create a complete focused update proposal JSON at ${context.updateProposalPath}.
 6. Validate it with: ${greplica} proposal validate ${context.updateProposalPath}
 7. Fix validation errors until valid.
 8. Do not apply the proposal.
 
-The proposal should update working memory with session-specific durable context. It should not duplicate broad bootstrap memory unless the session changed or clarified it.`;
+The proposal should update working memory with every distinct session-specific durable memory that future agents would need. Do not optimize for a fixed small number of memories. It should not duplicate broad bootstrap memory unless the session changed or clarified it.`;
 }
 
 function writeSessionTranscriptMarkdown(context: RunContext): void {

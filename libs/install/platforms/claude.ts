@@ -16,9 +16,11 @@ import type { PlatformInstallContext, PlatformInstallResult, PlatformInstaller, 
 
 export const claudeInstaller: PlatformInstaller = {
   platform: "claude",
-  install(_context: PlatformInstallContext): PlatformInstallResult {
+  install(context: PlatformInstallContext): PlatformInstallResult {
     const claudeHome = join(homedir(), ".claude");
     const skills = copyBundledSkills(join(claudeHome, "skills"));
+    if (!context.hooks) return { skills };
+
     const settingsPath = join(claudeHome, "settings.json");
     const command = hookCommand("claude");
     const settings = mergeHookConfig(readJsonObject(settingsPath), "claude", command);
@@ -48,7 +50,7 @@ export const claudeInstaller: PlatformInstaller = {
   },
 };
 
-function claudeTranscriptToMarkdown(jsonl: string): string {
+export function claudeTranscriptToMarkdown(jsonl: string): string {
   const metadata: Record<string, string> = {};
   const messages: SessionTranscriptMessage[] = [];
 

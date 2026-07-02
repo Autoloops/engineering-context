@@ -42,6 +42,7 @@ type MembershipRow = {
   subject_id: string;
 };
 
+type ComponentRow = Omit<Component, "code_anchor"> & { code_anchor: string | null };
 type ClaimRow = Omit<Claim, "code_anchors"> & { code_anchors: string | null };
 type EdgeRow = Omit<Edge, "metadata"> & { metadata: string | null };
 type RepoMatch = { repo: RepoRecord; matchedBy: "remote" | "root" };
@@ -115,7 +116,7 @@ export class SqliteRepository {
   requireRepo(input: UpsertRepoInput): RepoRecord {
     const repo = this.getRepo(input);
     if (!repo) {
-      throw new Error("Greplica is not installed for this repo. Run greplica install --platform <codex|claude|opencode|cline> --embedding local from the repo you want to use.");
+      throw new Error("Greplica is not installed for this repo. Run greplica install --platform <codex|claude|copilot|opencode|cline|openhands|factory-droid> --embedding local from the repo you want to use.");
     }
     return repo;
   }
@@ -189,7 +190,7 @@ export class SqliteRepository {
     const scope = this.db
       .prepare("SELECT * FROM graph_scopes WHERE repo_id = ? AND kind = 'working' AND name = 'working'")
       .get(repoId) as GraphScope | undefined;
-    if (!scope) throw new Error("Working scope is missing. Run 'greplica install --platform <codex|claude|opencode|cline> --embedding local' from this repo.");
+    if (!scope) throw new Error("Working scope is missing. Run 'greplica install --platform <codex|claude|copilot|opencode|cline|openhands|factory-droid> --embedding local' from this repo.");
     return scope;
   }
 
@@ -197,7 +198,7 @@ export class SqliteRepository {
     const scope = this.db
       .prepare("SELECT * FROM graph_scopes WHERE repo_id = ? AND kind = 'main' ORDER BY created_at LIMIT 1")
       .get(repoId) as GraphScope | undefined;
-    if (!scope) throw new Error("Main scope is missing. Run 'greplica install --platform <codex|claude|opencode|cline> --embedding local' from this repo.");
+    if (!scope) throw new Error("Main scope is missing. Run 'greplica install --platform <codex|claude|copilot|opencode|cline|openhands|factory-droid> --embedding local' from this repo.");
     return scope;
   }
 
@@ -404,7 +405,11 @@ export class SqliteRepository {
   }
 
   private loadComponents(ids: string[]): Component[] {
-    return this.loadByIds<Component>("components", ids);
+    return this.loadByIds<ComponentRow>("components", ids).map((row) => ({
+      id: row.id,
+      name: row.name,
+      code_anchor: row.code_anchor ?? undefined,
+    }));
   }
 
   private loadFlows(ids: string[]): Flow[] {

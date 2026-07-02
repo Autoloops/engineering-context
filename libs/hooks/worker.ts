@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { ClaimedMemoryUpdateAttempt } from "./session-state.js";
 import { HookSessionStore } from "./session-state.js";
 import { WorkerLease } from "../utils/worker-lease.js";
-import { ensureGreplicaConfig } from "../config/greplica-config.js";
+import { ensureGreplicaConfig, type GreplicaConfig } from "../config/greplica-config.js";
 import { platformInstaller } from "../install/platforms/index.js";
 import { openDatabase } from "../storage/sqlite/db.js";
 
@@ -26,6 +26,10 @@ export function startHookWorker(): void {
   } catch {
     // Hooks must stay best-effort and fast. A later hook can try again.
   }
+}
+
+export function shouldRunAutoMemoryUpdates(config: Pick<GreplicaConfig, "session">): boolean {
+  return config.session.autoMemoryUpdates;
 }
 
 export async function runHookWorker(): Promise<void> {

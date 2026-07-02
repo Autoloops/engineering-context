@@ -34,6 +34,7 @@
       "Classify obvious yes and obvious no. If an item is vague, only indirectly implied, or too incomplete to be useful, mark it absent rather than partial.",
       "This eval primarily rewards durable reusable repo knowledge discovered while solving the session, not a changelog of files edited by the patch.",
       "Expected memories may come from code or design context explored during the historical session even when the final patch did not modify that exact subsystem.",
+      "A strong proposal should recover all distinct durable session memories represented by the expected_memories list; do not reward under-collection merely because the proposal is concise.",
       "Do not mark an expected memory present when it is only loosely implied by a broader adjacent claim; the matched claim must explicitly preserve the expected durable fact, constraint, rationale, trade-off, drift, task, or future work.",
       "Do not mark an expected memory present when the candidate only says that a file was changed, a test passed, or this PR implemented a behavior. The claim must extract the reusable rule or navigation fact for future agents.",
       "Do not award credit for simply repeating initial bootstrap memory unless the session narrowed, corrected, rejected, or clarified that memory in a way future agents should preserve.",

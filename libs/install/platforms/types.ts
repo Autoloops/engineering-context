@@ -3,6 +3,7 @@ import type { HookInput } from "../../hooks/hook-input.js";
 
 export interface PlatformInstallContext {
   repoRoot: string;
+  hooks: boolean;
 }
 
 export interface HookInstallResult {

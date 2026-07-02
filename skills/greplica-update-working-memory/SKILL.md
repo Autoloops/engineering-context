@@ -204,6 +204,8 @@ Do not stop at patch-visible facts. Also extract non-obvious session nuance: why
 
 Keep distinct durable memories distinct. "Small update" means no transcript junk or unnecessary implementation detail; it does not mean merging separate code facts, constraints, rationales, trade-offs, drift, tasks, and future work into one broad claim. If the session contains separate durable statements, create separate focused claims with the right claim kind and truth value.
 
+Do not optimize for a fixed memory count. Prefer complete coverage of every distinct durable session delta over a shorter proposal, while still dropping transient logs, generic agent process, duplicated bootstrap facts, and implementation trivia that does not change future work.
+
 Preserve explicit negative or deferred decisions as first-class memory when they affect future work. Examples include rejecting an otherwise tempting artifact type as provenance, keeping an existing workflow primitive instead of adding a new command, discussing but not building an ingestion path, keeping pinned eval fixtures stable, or leaving a compatibility shorthand in place even though it no longer satisfies a stricter new contract by itself.
 
 Preserve "not yet built" and "out of scope for this slice" decisions separately from the implemented facts. If the session says a capability will require a later command, ingestion path, adapter, migration, protocol, or workflow, create a future-work/task claim rather than hiding it inside an implementation summary.
@@ -308,7 +310,7 @@ Each source-backed session claim should have its own `evidenced_by` edge to the 
 
 ## Quality Bar
 
-- Prefer a small update over broad memory churn.
+- Prefer a complete focused update over broad memory churn. Complete means every distinct durable session delta is represented; focused means the proposal excludes transcript junk, generic process notes, and unrelated repository rescan output.
 - Reuse existing components/flows when `greplica graph context` finds them.
 - Create new components/flows only when the session introduced or clarified a durable area.
 - Use `code_verified` only for claims checked against code.

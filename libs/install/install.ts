@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { envVarSource, loadRepoEnv } from "../env/load-local-env.js";
-import { greplicaConfigPath, updateEmbeddingConfig, type EmbeddingProvider, type SessionConfig } from "../config/greplica-config.js";
+import { greplicaConfigPath, updateEmbeddingConfig, writeGreplicaConfig, type EmbeddingProvider, type SessionConfig } from "../config/greplica-config.js";
 import { graphContextConfigFromGreplicaConfig } from "../knowledge-graph/graph-context/config.js";
 import { createLocalKnowledgeGraphService } from "../knowledge-graph/service.js";
 import type { RepoRef } from "../knowledge-graph/service.js";
@@ -14,6 +14,8 @@ import {
 export interface InstallOptions {
   platform: InstallPlatform;
   embedding: InstallEmbedding;
+  hooks: boolean;
+  autoMemoryUpdates: boolean;
   repo: RepoRef;
 }
 
@@ -22,6 +24,7 @@ export interface InstallResult {
   skills: string[];
   hooks?: HookInstallResult;
   guidanceFiles?: string[];
+  hooksRequested: boolean;
   embedding: InstallEmbedding;
   session: SessionConfig;
   configFile: string;
@@ -31,11 +34,18 @@ export interface InstallResult {
 
 export async function installGreplica(options: InstallOptions): Promise<InstallResult> {
   const embedding = configureEmbedding(options.embedding, options.repo);
+  embedding.config.session.autoMemoryUpdates = options.autoMemoryUpdates;
+  writeGreplicaConfig(embedding.config);
   const service = createLocalKnowledgeGraphService(graphContextConfigFromGreplicaConfig(embedding.config));
   const init = service.initRepo(options.repo);
   const platformInstall = installPlatform(options.platform, {
     repoRoot: options.repo.repo_root ?? process.cwd(),
+    hooks: options.hooks,
   });
+  if (!supportsAutoMemoryUpdates(platformInstall.hooks) && embedding.config.session.autoMemoryUpdates) {
+    embedding.config.session.autoMemoryUpdates = false;
+    writeGreplicaConfig(embedding.config);
+  }
 
   const notes: string[] = [];
   if (options.embedding === "local") {
@@ -51,6 +61,7 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
     skills: platformInstall.skills,
     hooks: platformInstall.hooks,
     guidanceFiles: platformInstall.guidanceFiles,
+    hooksRequested: options.hooks,
     embedding: options.embedding,
     session: embedding.config.session,
     configFile: embedding.configPath,
@@ -62,9 +73,15 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
 export function platformDisplayName(platform: InstallPlatform): string {
   if (platform === "codex") return "Codex";
   if (platform === "cline") return "Cline";
+  if (platform === "copilot") return "GitHub Copilot CLI";
   if (platform === "opencode") return "OpenCode";
   if (platform === "openhands") return "OpenHands";
+  if (platform === "factory-droid") return "Factory Droid";
   return "Claude Code";
+}
+
+function supportsAutoMemoryUpdates(hooks: HookInstallResult | undefined): boolean {
+  return hooks?.events.includes("Stop") === true;
 }
 
 function configureEmbedding(provider: EmbeddingProvider, repo: RepoRef): { config: ReturnType<typeof updateEmbeddingConfig>; configPath: string } {
@@ -84,6 +101,7 @@ function configureEmbedding(provider: EmbeddingProvider, repo: RepoRef): { confi
 }
 
 function startLocalEmbeddingPrewarm(): boolean {
+  if (process.env.GREPLICA_INSTALL_SKIP_PREWARM === "1") return false;
   const script = process.argv[1];
   if (script === undefined) return false;
 

@@ -56,7 +56,7 @@ export class HookSessionStore {
     const now = iso(input.now);
     const sessionId = input.sessionId ?? fallbackSessionId(input);
     const existing = this.find(input.platform, sessionId);
-    const shouldInjectGuidance = input.eventName === "UserPromptSubmit" && existing?.guidance_injected_at == null;
+    const shouldInjectGuidance = isGuidanceEvent(input.platform, input.eventName) && existing?.guidance_injected_at == null;
     const incrementStop = input.eventName === "Stop" ? 1 : 0;
 
     if (existing === undefined) {
@@ -197,6 +197,11 @@ function fallbackSessionId(input: RecordHookInput): string {
   const identity = `${input.platform}:${input.repoId}:${input.transcriptPath ?? ""}:${input.cwd ?? ""}`;
   const hash = createHash("sha1").update(identity).digest("hex").slice(0, 16);
   return `unknown_${hash}`;
+}
+
+function isGuidanceEvent(platform: InstallPlatform, eventName: string | undefined): boolean {
+  if (platform === "copilot") return eventName === "SessionStart";
+  return eventName === "UserPromptSubmit";
 }
 
 function iso(date: Date | undefined): string {
