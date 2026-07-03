@@ -2,7 +2,7 @@ import { normalizeProposal } from "./proposal.js";
 import { validateProposal, type ProposalValidationResult } from "./validate-proposal.js";
 import type { Claim } from "./claim.js";
 import type { Edge } from "./edge.js";
-import type { Component, Flow, Source } from "./schema.js";
+import type { Component, Flow, GraphObjectType, Source } from "./schema.js";
 import { GraphContextBuilder } from "./graph-context/context-builder.js";
 import { graphContextConfig, type GraphContextConfig } from "./graph-context/config.js";
 import type { EmbeddingStatus, GraphContextResult } from "./graph-context/types.js";
@@ -176,6 +176,21 @@ export class KnowledgeGraphService {
         edges: normalizedProposal.creates.edges?.length ?? 0,
       },
     };
+  }
+
+  lookupObject(input: RepoRef, type: GraphObjectType, id: string): Component | Flow | Claim | Source | Edge | undefined {
+    this.requireRepo(input);
+    return this.repository.getObjectById(type, id);
+  }
+
+  traverseGraph(
+    input: RepoRef,
+    type: GraphObjectType,
+    id: string,
+    maxDepth: number = 1,
+  ): GraphReadResult {
+    const initialized = this.requireRepo(input);
+    return this.repository.getRelatedObjects(initialized.repo_id, type, id, maxDepth);
   }
 
 }
