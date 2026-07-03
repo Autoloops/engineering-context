@@ -9,6 +9,10 @@ import type { EmbeddingStatus, GraphContextResult } from "./graph-context/types.
 import { buildGraphViewHtml } from "./graph-view/build-graph-view.js";
 import { auditClaimCodeAnchors } from "./code-anchors/audit.js";
 import type { ClaimAnchorAuditResult } from "./code-anchors/types.js";
+import { scanDriftedClaims, type DriftScanError } from "./code-anchors/drift.js";
+import { buildAnchorInvalidation } from "./anchor-invalidation.js";
+import type { InvalidationResolverStatus } from "./invalidation.js";
+import { gitHeadSha } from "../utils/git.js";
 import { defaultDatabasePath, openDatabase } from "../storage/sqlite/db.js";
 import type { SqliteRepository } from "../storage/sqlite/repository.js";
 import { SqliteRepository as SqliteKnowledgeGraphRepository } from "../storage/sqlite/repository.js";
@@ -50,6 +54,19 @@ export interface ApplyProposalResult {
     sources: number;
     edges: number;
   };
+}
+
+export interface AnchorInvalidationRecord {
+  claim_id: string;
+  superseding_claim_id: string;
+  broken_anchor: string;
+  resolver_status: InvalidationResolverStatus;
+}
+
+export interface AnchorInvalidationResult {
+  memory_commit_id?: string;
+  invalidated: AnchorInvalidationRecord[];
+  errors: DriftScanError[];
 }
 
 export class KnowledgeGraphService {
@@ -175,6 +192,52 @@ export class KnowledgeGraphService {
         sources: normalizedProposal.creates.sources?.length ?? 0,
         edges: normalizedProposal.creates.edges?.length ?? 0,
       },
+    };
+  }
+
+  /**
+   * Re-verifies every code_verified claim's anchors and demotes the ones that
+   * have fully drifted to `truth: unknown`, non-destructively (via supersession)
+   * and atomically. Returns the demotions plus any per-claim detection errors.
+   * The report-only `auditCodeAnchors` is left untouched.
+   */
+  async invalidateDriftedAnchors(input: RepoRef): Promise<AnchorInvalidationResult> {
+    const initialized = this.requireRepo(input);
+    const graph = this.repository.readGraphView(initialized.repo_id);
+    const { drifted, errors } = await scanDriftedClaims(input.repo_root, graph.claims);
+
+    if (drifted.length === 0) {
+      return { invalidated: [], errors };
+    }
+
+    // buildAnchorInvalidation already returns a normalized proposal (edge ids
+    // minted via an in-memory graph lookup), so no further normalization here.
+    const { proposal, events } = buildAnchorInvalidation(drifted, graph);
+    const working = this.repository.requireWorkingScope(initialized.repo_id);
+    const { memory_commit_id } = this.repository.applyAnchorInvalidation({
+      repoId: initialized.repo_id,
+      scopeId: working.id,
+      proposal,
+      events,
+      commit: { title: proposal.title, git_commit_sha: gitHeadSha(input.repo_root) },
+    });
+
+    // Embed the rebuilt claims so they stay retrievable via graph context.
+    await this.contextBuilder.ensureForGraph(
+      initialized.repo_id,
+      this.repository.readGraphView(initialized.repo_id),
+      this.contextConfig,
+    );
+
+    return {
+      memory_commit_id,
+      invalidated: events.map((event) => ({
+        claim_id: event.original_claim_id,
+        superseding_claim_id: event.superseding_claim_id,
+        broken_anchor: event.broken_anchor,
+        resolver_status: event.resolver_status,
+      })),
+      errors,
     };
   }
 
