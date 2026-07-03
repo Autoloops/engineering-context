@@ -1,4 +1,5 @@
 import type { Claim } from "../claim.js";
+import { invalidationResolverStatuses } from "../invalidation.js";
 import { CodeAnchorResolver } from "./resolver.js";
 import type { ResolvedCodeAnchor, ResolvedCodeAnchorStatus } from "./types.js";
 
@@ -20,11 +21,7 @@ export interface DriftScanResult {
 }
 
 /** Resolver statuses that mean an anchor no longer points at real code. */
-const brokenStatuses: ReadonlySet<ResolvedCodeAnchorStatus> = new Set([
-  "missing_file",
-  "missing_symbol",
-  "ambiguous_symbol",
-]);
+const brokenStatuses: ReadonlySet<ResolvedCodeAnchorStatus> = new Set(invalidationResolverStatuses);
 
 /**
  * Re-resolves every `code_verified` claim's anchors against the current working

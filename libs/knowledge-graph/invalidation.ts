@@ -8,8 +8,17 @@
 /** Why a claim was invalidated. Only anchor drift exists today; kept open for future reasons. */
 export type InvalidationReason = "anchor_drift";
 
-/** The resolver statuses that count as drift (a subset of ResolvedCodeAnchorStatus). */
-export type InvalidationResolverStatus = "missing_file" | "missing_symbol" | "ambiguous_symbol";
+/**
+ * The resolver statuses that count as drift (a subset of ResolvedCodeAnchorStatus).
+ * Single source of truth for both detection (drift.ts) and the audit trail.
+ */
+export const invalidationResolverStatuses = ["missing_file", "missing_symbol", "ambiguous_symbol"] as const;
+
+export type InvalidationResolverStatus = (typeof invalidationResolverStatuses)[number];
+
+export function isInvalidationResolverStatus(status: string): status is InvalidationResolverStatus {
+  return (invalidationResolverStatuses as readonly string[]).includes(status);
+}
 
 /** A persisted invalidation event, one row per demoted claim. */
 export interface InvalidationEvent {
