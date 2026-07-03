@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { MemoryCommit } from "../../knowledge-graph/commit.js";
 import type { Edge } from "../../knowledge-graph/edge.js";
 import type { MemoryCommitProposal } from "../../knowledge-graph/proposal.js";
+import type { InvalidationEvent, InvalidationEventInput } from "../../knowledge-graph/invalidation.js";
 import type { Component, Flow, GraphObjectType, Source } from "../../knowledge-graph/schema.js";
 import type { Claim } from "../../knowledge-graph/claim.js";
 import type { GraphScope, GraphScopeKind } from "../../knowledge-graph/scope.js";
@@ -45,7 +46,16 @@ type MembershipRow = {
 type ComponentRow = Omit<Component, "code_anchor"> & { code_anchor: string | null };
 type ClaimRow = Omit<Claim, "code_anchors"> & { code_anchors: string | null };
 type EdgeRow = Omit<Edge, "metadata"> & { metadata: string | null };
+type InvalidationEventRow = Omit<InvalidationEvent, "git_commit_sha"> & { git_commit_sha: string | null };
 type RepoMatch = { repo: RepoRecord; matchedBy: "remote" | "root" };
+
+export interface ApplyAnchorInvalidationInput {
+  repoId: string;
+  scopeId: string;
+  proposal: MemoryCommitProposal;
+  events: InvalidationEventInput[];
+  commit: { title: string; summary?: string; git_commit_sha?: string };
+}
 
 export type EmbeddingObjectType = "claim" | "component" | "flow";
 
@@ -286,49 +296,111 @@ export class SqliteRepository {
 
   createProposalRecords(scopeId: string, memoryCommitId: string, proposal: MemoryCommitProposal): void {
     const write = this.db.transaction(() => {
-      for (const component of proposal.creates.components ?? []) {
-        this.db
-          .prepare("INSERT INTO components (id, name, code_anchor) VALUES (@id, @name, @code_anchor)")
-          .run({ ...component, code_anchor: component.code_anchor ?? null });
-        this.createMembership(scopeId, "component", component.id, memoryCommitId);
+      this.insertProposalRecords(scopeId, memoryCommitId, proposal);
+    });
+    write();
+  }
+
+  /**
+   * Demotes drifted claims by writing their rebuilt (superseding) claims and
+   * edges alongside the invalidation events, all under one memory commit and one
+   * transaction. Integrity relies on the claim primary key plus the transaction:
+   * a duplicate rebuilt-claim id or any constraint breach rolls back the whole
+   * batch, so nothing partial is ever committed.
+   */
+  applyAnchorInvalidation(input: ApplyAnchorInvalidationInput): { memory_commit_id: string } {
+    const insertEvent = this.db.prepare(
+      `INSERT INTO invalidation_events
+        (id, repo_id, original_claim_id, superseding_claim_id, memory_commit_id, reason, broken_anchor, resolver_status, git_commit_sha, created_at)
+       VALUES
+        (@id, @repo_id, @original_claim_id, @superseding_claim_id, @memory_commit_id, @reason, @broken_anchor, @resolver_status, @git_commit_sha, @created_at)`,
+    );
+
+    const write = this.db.transaction((): string => {
+      const commit = this.createMemoryCommit({
+        scope_id: input.scopeId,
+        title: input.commit.title,
+        summary: input.commit.summary,
+        git_commit_sha: input.commit.git_commit_sha,
+      });
+      this.insertProposalRecords(input.scopeId, commit.id, input.proposal);
+
+      const createdAt = now();
+      for (const event of input.events) {
+        insertEvent.run({
+          id: `ev_${randomUUID()}`,
+          repo_id: input.repoId,
+          original_claim_id: event.original_claim_id,
+          superseding_claim_id: event.superseding_claim_id,
+          memory_commit_id: commit.id,
+          reason: event.reason,
+          broken_anchor: event.broken_anchor,
+          resolver_status: event.resolver_status,
+          git_commit_sha: input.commit.git_commit_sha ?? null,
+          created_at: createdAt,
+        });
       }
 
-      for (const flow of proposal.creates.flows ?? []) {
-        this.db.prepare("INSERT INTO flows (id, name) VALUES (@id, @name)").run(flow);
-        this.createMembership(scopeId, "flow", flow.id, memoryCommitId);
-      }
-
-      for (const claim of proposal.creates.claims ?? []) {
-        this.db
-          .prepare(
-            `INSERT INTO claims (id, kind, text, truth, intent, code_anchors)
-             VALUES (@id, @kind, @text, @truth, @intent, @code_anchors)`,
-          )
-          .run({
-            ...claim,
-            code_anchors: claim.code_anchors === undefined ? null : JSON.stringify(claim.code_anchors),
-          });
-        this.createMembership(scopeId, "claim", claim.id, memoryCommitId);
-      }
-
-      for (const source of proposal.creates.sources ?? []) {
-        this.db
-          .prepare("INSERT INTO sources (id, kind, ref, title) VALUES (@id, @kind, @ref, @title)")
-          .run({ ...source, title: source.title ?? null });
-      }
-
-      for (const edge of proposal.creates.edges ?? []) {
-        this.db
-          .prepare(
-            `INSERT INTO edges (id, from_id, from_type, to_id, to_type, kind, metadata)
-             VALUES (@id, @from_id, @from_type, @to_id, @to_type, @kind, @metadata)`,
-          )
-          .run({ ...edge, metadata: edge.metadata === undefined ? null : JSON.stringify(edge.metadata) });
-        this.createMembership(scopeId, "edge", edge.id, memoryCommitId);
-      }
+      return commit.id;
     });
 
-    write();
+    return { memory_commit_id: write() };
+  }
+
+  listInvalidationEvents(repoId: string): InvalidationEvent[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, repo_id, original_claim_id, superseding_claim_id, memory_commit_id,
+                reason, broken_anchor, resolver_status, git_commit_sha, created_at
+         FROM invalidation_events
+         WHERE repo_id = ?
+         ORDER BY created_at DESC`,
+      )
+      .all(repoId) as InvalidationEventRow[];
+    return rows.map((row) => ({ ...row, git_commit_sha: row.git_commit_sha ?? undefined }));
+  }
+
+  private insertProposalRecords(scopeId: string, memoryCommitId: string, proposal: MemoryCommitProposal): void {
+    for (const component of proposal.creates.components ?? []) {
+      this.db
+        .prepare("INSERT INTO components (id, name, code_anchor) VALUES (@id, @name, @code_anchor)")
+        .run({ ...component, code_anchor: component.code_anchor ?? null });
+      this.createMembership(scopeId, "component", component.id, memoryCommitId);
+    }
+
+    for (const flow of proposal.creates.flows ?? []) {
+      this.db.prepare("INSERT INTO flows (id, name) VALUES (@id, @name)").run(flow);
+      this.createMembership(scopeId, "flow", flow.id, memoryCommitId);
+    }
+
+    for (const claim of proposal.creates.claims ?? []) {
+      this.db
+        .prepare(
+          `INSERT INTO claims (id, kind, text, truth, intent, code_anchors)
+           VALUES (@id, @kind, @text, @truth, @intent, @code_anchors)`,
+        )
+        .run({
+          ...claim,
+          code_anchors: claim.code_anchors === undefined ? null : JSON.stringify(claim.code_anchors),
+        });
+      this.createMembership(scopeId, "claim", claim.id, memoryCommitId);
+    }
+
+    for (const source of proposal.creates.sources ?? []) {
+      this.db
+        .prepare("INSERT INTO sources (id, kind, ref, title) VALUES (@id, @kind, @ref, @title)")
+        .run({ ...source, title: source.title ?? null });
+    }
+
+    for (const edge of proposal.creates.edges ?? []) {
+      this.db
+        .prepare(
+          `INSERT INTO edges (id, from_id, from_type, to_id, to_type, kind, metadata)
+           VALUES (@id, @from_id, @from_type, @to_id, @to_type, @kind, @metadata)`,
+        )
+        .run({ ...edge, metadata: edge.metadata === undefined ? null : JSON.stringify(edge.metadata) });
+      this.createMembership(scopeId, "edge", edge.id, memoryCommitId);
+    }
   }
 
   subjectExists(type: GraphObjectType, id: string): boolean {

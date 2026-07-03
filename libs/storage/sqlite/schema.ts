@@ -105,6 +105,19 @@ CREATE TABLE IF NOT EXISTS agent_worker_locks (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS invalidation_events (
+  id TEXT PRIMARY KEY,
+  repo_id TEXT NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+  original_claim_id TEXT NOT NULL,
+  superseding_claim_id TEXT NOT NULL,
+  memory_commit_id TEXT NOT NULL REFERENCES memory_commits(id) ON DELETE CASCADE,
+  reason TEXT NOT NULL,
+  broken_anchor TEXT NOT NULL,
+  resolver_status TEXT NOT NULL,
+  git_commit_sha TEXT,
+  created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS graph_scopes_repo_idx ON graph_scopes(repo_id);
 CREATE INDEX IF NOT EXISTS memory_commits_scope_idx ON memory_commits(scope_id);
 CREATE INDEX IF NOT EXISTS graph_memberships_scope_idx ON graph_memberships(scope_id);
@@ -113,4 +126,6 @@ CREATE INDEX IF NOT EXISTS graph_object_embeddings_repo_idx ON graph_object_embe
 CREATE INDEX IF NOT EXISTS agent_sessions_repo_idx ON agent_sessions(repo_id);
 CREATE INDEX IF NOT EXISTS agent_sessions_seen_idx ON agent_sessions(last_seen_at);
 CREATE INDEX IF NOT EXISTS agent_worker_locks_until_idx ON agent_worker_locks(locked_until_at);
+CREATE INDEX IF NOT EXISTS invalidation_events_repo_idx ON invalidation_events(repo_id);
+CREATE INDEX IF NOT EXISTS invalidation_events_claim_idx ON invalidation_events(original_claim_id);
 `;
