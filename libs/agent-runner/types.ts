@@ -1,4 +1,4 @@
-export type AgentKind = "codex" | "openhands";
+export type AgentKind = "codex" | "openhands" | "opencode";
 
 export interface AgentRunInput {
   cwd: string;
