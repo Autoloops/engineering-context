@@ -2,6 +2,7 @@
   "name": "greplica",
   "version": "0.1.12",
   "description": "Long-term, searchable AGENTS.md for coding agents.",
+  "license": "MIT",
   "private": false,
   "type": "module",
   "repository": {
