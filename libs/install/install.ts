@@ -70,6 +70,7 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
 
 export function platformDisplayName(platform: InstallPlatform): string {
   if (platform === "codex") return "Codex";
+  if (platform === "cline") return "Cline";
   if (platform === "copilot") return "GitHub Copilot CLI";
   if (platform === "opencode") return "OpenCode";
   if (platform === "openhands") return "OpenHands";

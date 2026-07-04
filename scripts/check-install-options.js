@@ -3,9 +3,10 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const root = new URL("..", import.meta.url);
-const cli = new URL("dist/apps/cli/main.js", root);
+const cli = fileURLToPath(new URL("dist/apps/cli/main.js", root));
 const { greplicaHookGuidance } = await import(new URL("dist/libs/hooks/guidance.js", root));
 const { shouldRunAutoMemoryUpdates } = await import(new URL("dist/libs/hooks/worker.js", root));
 
@@ -27,7 +28,7 @@ assert.equal(shouldRunAutoMemoryUpdates(readConfig(guidanceOnly.greplicaHome)), 
 
 const hookOutput = execFileSync(
   process.execPath,
-  [cli.pathname, "hook", "ingest", "--platform", "codex"],
+  [cli, "hook", "ingest", "--platform", "codex"],
   {
     cwd: guidanceOnly.repo,
     encoding: "utf8",
@@ -62,10 +63,19 @@ assert.match(copilotHooks.output, /Automatic memory updates: enabled\./);
 assert.ok(existsSync(join(copilotHooks.copilotHome, "hooks", "greplica.json")));
 assert.equal(readConfig(copilotHooks.greplicaHome).session.autoMemoryUpdates, true);
 
+const clineInstall = installInTempRepo("cline", ["--hooks", "enabled", "--auto-memory", "enabled"], "cline");
+assert.match(clineInstall.output, /Installed Greplica for Cline\./);
+assert.match(clineInstall.output, /Hooks: not installed for this platform\./);
+assert.match(clineInstall.output, /Automatic memory updates: disabled\./);
+assert.ok(existsSync(join(clineInstall.repo, ".clinerules", "greplica.md")));
+assert.match(readFileSync(join(clineInstall.repo, ".clinerules", "greplica.md"), "utf8"), /Greplica hook guidance/);
+assert.ok(existsSync(join(clineInstall.repo, ".clinerules", "greplica-skills", "greplica-bootstrap", "SKILL.md")));
+assert.equal(readConfig(clineInstall.greplicaHome).session.autoMemoryUpdates, false);
+
 const invalid = spawnSync(
   process.execPath,
   [
-    cli.pathname,
+    cli,
     "install",
     "--platform",
     "codex",
@@ -87,7 +97,7 @@ assert.match(invalid.stderr, /--auto-memory enabled requires --hooks enabled/);
 
 const invalidValue = spawnSync(
   process.execPath,
-  [cli.pathname, "install", "--platform", "codex", "--embedding", "local", "--hooks", "sometimes"],
+  [cli, "install", "--platform", "codex", "--embedding", "local", "--hooks", "sometimes"],
   {
     cwd: noHooks.repo,
     encoding: "utf8",
@@ -117,14 +127,14 @@ function installInTempRepo(name, flags, platform = "codex") {
   };
   const output = execFileSync(
     process.execPath,
-    [cli.pathname, "install", "--platform", platform, "--embedding", "local", ...flags],
+    [cli, "install", "--platform", platform, "--embedding", "local", ...flags],
     {
       cwd: repo,
       encoding: "utf8",
       env,
     },
   );
-  execFileSync(process.execPath, [cli.pathname, "doctor"], {
+  execFileSync(process.execPath, [cli, "doctor"], {
     cwd: repo,
     encoding: "utf8",
     env,
