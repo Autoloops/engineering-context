@@ -16,7 +16,6 @@ export interface HookInstallResult {
 export interface PlatformInstallResult {
   skills: string[];
   hooks?: HookInstallResult;
-  guidanceFiles?: string[];
 }
 
 export interface WorkingMemoryUpdateInput {

@@ -52,6 +52,7 @@
   "files": [
     "dist/apps",
     "dist/libs",
+    "libs/install/platforms/assets",
     "scripts/check-node-version.js",
     "skills",
     "README.md"

@@ -51,16 +51,16 @@ Then bootstrap shallow memory for this repo:
 
 If I chose "Yes, recent sessions", analyze prior sessions:
 - Find recent prior sessions for this same repo and platform, preferring work from the last 1-2 days.
-- Candidate locations: Codex `~/.codex/sessions/**/*.jsonl`; Claude Code `~/.claude/projects/**/*.jsonl`; GitHub Copilot CLI paths from `Stop` hook `transcript_path` values or `$COPILOT_HOME/session-state`.
+- Candidate locations: Codex `~/.codex/sessions/**/*.jsonl`; Claude Code `~/.claude/projects/**/*.jsonl`; GitHub Copilot CLI paths from `Stop` hook `transcript_path` values or `$COPILOT_HOME/session-state`; Cline task files named `api_conversation_history.json` under Cline task storage, commonly `~/.cline/data/tasks/**/api_conversation_history.json`.
 - Do not require transcript metadata `cwd` to equal the current checkout path. Users may use worktrees, renamed folders, or multiple checkouts of the same repo.
 - Treat a transcript as same-repo when its metadata `cwd` is the current path, or when that `cwd` still exists and Git reports the same `remote.origin.url` or same normalized repo identity as the current repo. If the old path no longer exists, use transcript cwd text, repo name, branch, and recent session content as weaker matching evidence.
-- For OpenCode and Cline, tell me transcript backfill is not supported yet and skip this step.
+- For OpenCode, tell me transcript backfill is not supported yet and skip this step.
 - Select 1-3 transcripts. Use one if there is a large high-signal session, two by default when multiple sessions are useful, and three only when sessions are smaller or cover distinct work.
 - Show me the selected transcripts before bundling them: title if available, date/time, path, size/turn count if available, and why each matched this repo.
 - Do not ask for confirmation. Continue with a temporary bundle path:
 
 ```bash
-greplica transcript bundle --platform <codex-or-claude-or-copilot> --file <path-1> [--file <path-2>] [--file <path-3>] --out <greplica-transcript-backfill.md>
+greplica transcript bundle --platform <codex-or-claude-or-copilot-or-cline> --file <path-1> [--file <path-2>] [--file <path-3>] --out <greplica-transcript-backfill.md>
 ```
 
 - Then use the `greplica-fast-session-bootstrap` skill on `<greplica-transcript-backfill.md>` and include its final value summary naturally in the final answer.
@@ -81,6 +81,5 @@ Final answer rules:
 - If transcript backfill was skipped, say it was skipped because I chose a fresh start.
 - If hooks were installed, end with a short note that hooks and installed skills might need a restart or trust approval.
 - If hooks were not installed, include the manual guidance snippet and do not tell me to accept hooks.
-- For Cline, mention that generated rules or plugins might need a reload or restart if they do not appear immediately.
 - Do not include installer output, selected transcript recap, proposal paths, apply counts, command lists, bundle paths, or a long usage guide unless I ask.
 `````

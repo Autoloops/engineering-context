@@ -23,7 +23,6 @@ export interface InstallResult {
   platform: InstallPlatform;
   skills: string[];
   hooks?: HookInstallResult;
-  guidanceFiles?: string[];
   hooksRequested: boolean;
   embedding: InstallEmbedding;
   session: SessionConfig;
@@ -60,7 +59,6 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
     platform: options.platform,
     skills: platformInstall.skills,
     hooks: platformInstall.hooks,
-    guidanceFiles: platformInstall.guidanceFiles,
     hooksRequested: options.hooks,
     embedding: options.embedding,
     session: embedding.config.session,

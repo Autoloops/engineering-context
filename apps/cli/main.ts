@@ -142,7 +142,7 @@ const cliCommands = [
   {
     key: "transcriptBundle",
     path: ["transcript", "bundle"],
-    usage: "transcript bundle --platform codex|claude|copilot --file <path> [--file <path>...] --out <bundle.md>",
+    usage: "transcript bundle --platform codex|claude|copilot|cline --file <path> [--file <path>...] --out <bundle.md>",
     handler: runTranscriptBundle,
     showInTopLevelHelp: true,
   },
@@ -755,7 +755,7 @@ function parseTranscriptBundleArgs(args: string[]): TranscriptBundleOptions {
 }
 
 function parseTranscriptBundlePlatform(value: string): InstallPlatform {
-  if (value === "codex" || value === "claude" || value === "copilot" || value === "opencode") return value;
+  if (value === "codex" || value === "claude" || value === "copilot" || value === "opencode" || value === "cline") return value;
   throw new Error(`Invalid --platform ${value}.\n${usage("transcriptBundle")}`);
 }
 
@@ -783,10 +783,6 @@ function parseEnabledFlag(value: string): boolean {
 
 function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>): void {
   console.log(`Installed Greplica for ${platformDisplayName(result.platform)}.`);
-  if (result.guidanceFiles !== undefined && result.guidanceFiles.length > 0) {
-    console.log(`Guidance: ${result.guidanceFiles.length} installed.`);
-    for (const file of result.guidanceFiles) console.log(`- ${file}`);
-  }
   console.log(`Skills: ${result.skills.length} installed.`);
   if (result.hooks !== undefined) {
     console.log(`Hooks: installed for ${result.hooks.events.join(", ")}.`);
@@ -812,11 +808,6 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
     console.log("");
     console.log(greplicaHookGuidance);
     console.log("");
-  }
-  if (result.platform === "cline") {
-    console.log("- Review the generated .clinerules guidance if you want to customize it.");
-    console.log("- Reload or restart Cline if the new .clinerules guidance does not appear immediately.");
-    console.log("- Ask Cline to use greplica-update-working-memory near the end of useful sessions.");
   }
   console.log("- Ask the agent to use greplica-bootstrap once for repos that do not have memory yet.");
   if (result.embedding === "local") {
