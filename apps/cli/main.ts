@@ -5,7 +5,7 @@ import { isatty } from "node:tty";
 import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { createLocalKnowledgeGraphService, KnowledgeGraphService } from "../../libs/knowledge-graph/service.js";
-import type { ClaimAnchorAuditResult, RepoRef } from "../../libs/knowledge-graph/service.js";
+import type { AnchorInvalidationResult, ClaimAnchorAuditResult, RepoRef } from "../../libs/knowledge-graph/service.js";
 import { envVarSource, loadRepoEnv, type LoadedRepoEnv } from "../../libs/env/load-local-env.js";
 import {
   ensureGreplicaConfig,
@@ -100,7 +100,7 @@ const cliCommands = [
   {
     key: "graphAuditAnchors",
     path: ["graph", "audit", "anchors"],
-    usage: "graph audit anchors",
+    usage: "graph audit anchors [--invalidate]",
     handler: runGraphAuditAnchorsCommand,
     showInTopLevelHelp: true,
   },
@@ -271,11 +271,53 @@ async function runGraphContextCommand(args: string[]): Promise<void> {
   }
 }
 
-async function runGraphAuditAnchorsCommand(_args: string[]): Promise<void> {
+async function runGraphAuditAnchorsCommand(args: string[]): Promise<void> {
+  const options = parseAuditAnchorsArgs(args);
   const { repo, service } = createCommandContext();
-  const result = await service.auditCodeAnchors(repo);
-  printAnchorAudit(result);
-  if (anchorAuditIssueCount(result) > 0) process.exitCode = 1;
+
+  // Always show the diagnostic report first; --invalidate then demotes the
+  // fully-drifted claims. Report-only runs keep the exit-1 CI signal.
+  const audit = await service.auditCodeAnchors(repo);
+  printAnchorAudit(audit);
+
+  if (!options.invalidate) {
+    if (anchorAuditIssueCount(audit) > 0) process.exitCode = 1;
+    return;
+  }
+
+  const result = await service.invalidateDriftedAnchors(repo);
+  printAnchorInvalidation(result);
+}
+
+function parseAuditAnchorsArgs(args: string[]): { invalidate: boolean } {
+  let invalidate = false;
+  for (const arg of args) {
+    if (arg === "--invalidate") {
+      invalidate = true;
+      continue;
+    }
+    throw new Error(usage("graphAuditAnchors"));
+  }
+  return { invalidate };
+}
+
+function printAnchorInvalidation(result: AnchorInvalidationResult): void {
+  console.log("");
+  if (result.invalidated.length === 0) {
+    console.log("No drifted claims to invalidate.");
+  } else {
+    console.log(`Invalidated ${result.invalidated.length} drifted claim(s):`);
+    for (const record of result.invalidated) {
+      console.log(`- ${record.claim_id} -> ${record.superseding_claim_id} (${record.broken_anchor}, ${record.resolver_status})`);
+    }
+    console.log(`Memory commit: ${result.memory_commit_id}`);
+  }
+
+  if (result.errors.length > 0) {
+    console.log("");
+    console.log(`Skipped ${result.errors.length} claim(s) due to resolver errors:`);
+    for (const error of result.errors) console.log(`- ${error.claim_id}: ${error.message}`);
+  }
 }
 
 function runGraphExportCommand(args: string[]): void {
