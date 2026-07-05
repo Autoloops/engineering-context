@@ -10,11 +10,13 @@ import { buildGraphViewHtml } from "./graph-view/build-graph-view.js";
 import { auditClaimCodeAnchors } from "./code-anchors/audit.js";
 import type { ClaimAnchorAuditResult } from "./code-anchors/types.js";
 import { scanDriftedClaims, type DriftScanError } from "./code-anchors/drift.js";
+import { CodeAnchorResolver } from "./code-anchors/resolver.js";
+import { hashAnchorSpan, statAnchorFile } from "./code-anchors/span-hash.js";
 import { buildAnchorInvalidation } from "./anchor-invalidation.js";
 import type { InvalidationResolverStatus } from "./invalidation.js";
 import { gitHeadSha } from "../utils/git.js";
 import { defaultDatabasePath, openDatabase } from "../storage/sqlite/db.js";
-import type { SqliteRepository } from "../storage/sqlite/repository.js";
+import type { AnchorFingerprintInput, SqliteRepository } from "../storage/sqlite/repository.js";
 import { SqliteRepository as SqliteKnowledgeGraphRepository } from "../storage/sqlite/repository.js";
 
 export type { GraphContextResult } from "./graph-context/types.js";
@@ -181,6 +183,8 @@ export class KnowledgeGraphService {
       this.contextConfig,
     );
 
+    await this.writeFingerprints(input, normalizedProposal.creates.claims ?? []);
+
     return {
       memory_commit_id: memoryCommit.id,
       scope_id: working.id,
@@ -193,6 +197,36 @@ export class KnowledgeGraphService {
         edges: normalizedProposal.creates.edges?.length ?? 0,
       },
     };
+  }
+
+  /**
+   * Records a content fingerprint per anchor of every `code_verified` claim, so
+   * later reads/heals can tell whether the anchored code has since changed. Best
+   * effort per anchor — an unreadable span is skipped, not fatal.
+   */
+  private async writeFingerprints(input: RepoRef, claims: Claim[]): Promise<void> {
+    const resolver = new CodeAnchorResolver();
+    const rows: AnchorFingerprintInput[] = [];
+    for (const claim of claims) {
+      const anchors = claim.code_anchors ?? [];
+      if (claim.truth !== "code_verified" || anchors.length === 0) continue;
+      const resolved = await resolver.resolveMany(input.repo_root, anchors);
+      for (const anchor of resolved) {
+        const contentHash = hashAnchorSpan(input.repo_root, anchor);
+        if (contentHash === undefined) continue;
+        const stat = statAnchorFile(input.repo_root, anchor.file);
+        rows.push({
+          claim_id: claim.id,
+          file: anchor.file,
+          symbol: anchor.symbol ?? null,
+          content_hash: contentHash,
+          file_mtime_ms: stat.mtime_ms,
+          file_size: stat.size,
+          resolver_status: anchor.status,
+        });
+      }
+    }
+    this.repository.upsertAnchorFingerprints(rows);
   }
 
   /**

@@ -61,4 +61,30 @@ repo.upsertAnchorFingerprints([
 assert.equal(repo.fingerprintsForClaims(["c1"])[0].content_hash, "h2", "upsert replaces existing row");
 assert.equal(repo.fingerprintsForClaims(["c1"]).length, 1, "no duplicate row on upsert");
 
+// --- service: fingerprints are written when a proposal is applied ---
+import { writeFileSync } from "node:fs";
+const { KnowledgeGraphService } = await import(new URL("dist/libs/knowledge-graph/service.js", root));
+const stubBuilder = { ensureForGraph: async () => ({ checked_objects: 0, created: 0, reused: 0 }) };
+
+const repoRoot = mkdtempSync(join(tmpdir(), "greplica-fp-repo-"));
+writeFileSync(join(repoRoot, "auth.ts"), "export function validateToken(t) { return t.length > 0; }\n");
+const svcRepo = new SqliteRepository(openDatabase(join(mkdtempSync(join(tmpdir(), "greplica-fp-home-")), "graph.db")));
+const svc = new KnowledgeGraphService(svcRepo, undefined, stubBuilder);
+const ref = { repo_root: repoRoot, repo_name: "fp", default_branch: "main" };
+svc.initRepo(ref);
+
+await svc.applyProposal(ref, { title: "seed", creates: { claims: [
+  { id: "claim.tv", kind: "fact", text: "t", truth: "code_verified", intent: "intended", code_anchors: [{ file: "auth.ts", symbol: "validateToken" }] },
+]}});
+const fps = svcRepo.fingerprintsForClaims(["claim.tv"]);
+assert.equal(fps.length, 1, "fingerprint written on apply for code_verified claim");
+assert.equal(fps[0].file, "auth.ts");
+assert.equal(fps[0].resolver_status, "resolved");
+assert.equal(fps[0].content_hash.length, 64, "sha256 span hash stored");
+
+await svc.applyProposal(ref, { title: "seed2", creates: { claims: [
+  { id: "claim.sv", kind: "decision", text: "d", truth: "source_verified", intent: "intended" },
+]}});
+assert.equal(svcRepo.fingerprintsForClaims(["claim.sv"]).length, 0, "source_verified claim -> no fingerprint");
+
 console.log("Freshness checks passed.");
