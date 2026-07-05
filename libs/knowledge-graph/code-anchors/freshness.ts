@@ -64,7 +64,8 @@ function isUndeterminable(check: AnchorCheck): boolean {
   return !isStructurallyBroken(check) && check.currentHash === undefined;
 }
 
-function hasContentDrift(check: AnchorCheck): boolean {
+/** A still-resolving anchor whose span hash changed since the claim was verified. */
+export function hasContentDrift(check: AnchorCheck): boolean {
   if (isStructurallyBroken(check)) return false; // handled as structural drift
   if (check.storedHash === undefined || check.currentHash === undefined) return false; // nothing to compare
   return check.currentHash !== check.storedHash;

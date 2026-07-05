@@ -1,12 +1,15 @@
 /**
  * Records why and when a `code_verified` claim was demoted to `truth: unknown`
- * because its code anchor stopped resolving (anchor drift). The claim itself is
- * never mutated — it is superseded by a rebuilt copy — so this table is the
- * queryable audit trail of what went stale.
+ * because its anchored code drifted — the anchor stopped resolving (structural)
+ * or its span content changed (content). The claim itself is never mutated — it
+ * is superseded by a rebuilt copy — so this table is the queryable audit trail
+ * of what went stale.
  */
 
-/** Why a claim was invalidated. Only anchor drift exists today; kept open for future reasons. */
-export type InvalidationReason = "anchor_drift";
+import type { ResolvedCodeAnchorStatus } from "./code-anchors/types.js";
+
+/** Why a claim was invalidated: the anchor stopped resolving, or its span content changed. */
+export type InvalidationReason = "anchor_drift" | "content_drift";
 
 /**
  * The resolver statuses that count as drift (a subset of ResolvedCodeAnchorStatus).
@@ -29,7 +32,7 @@ export interface InvalidationEvent {
   memory_commit_id: string;
   reason: InvalidationReason;
   broken_anchor: string;
-  resolver_status: InvalidationResolverStatus;
+  resolver_status: ResolvedCodeAnchorStatus;
   git_commit_sha?: string;
   created_at: string;
 }
@@ -44,5 +47,5 @@ export interface InvalidationEventInput {
   superseding_claim_id: string;
   reason: InvalidationReason;
   broken_anchor: string;
-  resolver_status: InvalidationResolverStatus;
+  resolver_status: ResolvedCodeAnchorStatus;
 }

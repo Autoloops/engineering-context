@@ -1,13 +1,15 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { ClaimedMemoryUpdateAttempt } from "./session-state.js";
 import { HookSessionStore } from "./session-state.js";
 import { WorkerLease } from "../utils/worker-lease.js";
 import { ensureGreplicaConfig, type GreplicaConfig } from "../config/greplica-config.js";
 import { platformInstaller } from "../install/platforms/index.js";
 import { openDatabase } from "../storage/sqlite/db.js";
+import { SqliteRepository } from "../storage/sqlite/repository.js";
+import { KnowledgeGraphService, type HealResult, type RepoRef } from "../knowledge-graph/service.js";
 
 const hookWorkerLockName = "hook-memory-update-worker";
 const hookWorkerHeartbeatMs = 60 * 1000;
@@ -54,10 +56,59 @@ export async function runHookWorker(): Promise<void> {
       if (!leaseValid || !lease.renew()) return;
       await maybeUpdateWorkingMemory(attempt);
     }
+
+    if (leaseValid) {
+      const service = new KnowledgeGraphService(new SqliteRepository(db));
+      await runDriftHealPass(service, activeRepoRefs(attempts), config.session.autoHealDrift, () => leaseValid && lease.renew());
+    }
   } finally {
     if (heartbeat !== undefined) clearInterval(heartbeat);
     if (acquired) lease.release();
     db.close();
+  }
+}
+
+interface DriftHealer {
+  healDriftedAnchorsFromCheckpoint(input: RepoRef): Promise<HealResult>;
+}
+
+/** One minimal RepoRef per distinct active repo root; repo_name/default_branch are unused by the heal. */
+function activeRepoRefs(attempts: ClaimedMemoryUpdateAttempt[]): RepoRef[] {
+  const refs: RepoRef[] = [];
+  for (const attempt of attempts) {
+    const cwd = attempt.session.cwd;
+    if (cwd !== null) refs.push({ repo_root: cwd, repo_name: basename(cwd), default_branch: "main" });
+  }
+  return refs;
+}
+
+/**
+ * Heal drift for each distinct repo among the active sessions. Deduped by repo
+ * root, gated by `autoHealDrift`, and best-effort — a failure on one repo never
+ * breaks the worker. Stops early if the lease is lost.
+ */
+export async function runDriftHealPass(
+  service: DriftHealer,
+  refs: RepoRef[],
+  autoHealDrift: boolean,
+  renewLease: () => boolean = () => true,
+  log: (summary: Record<string, unknown>) => void = (summary) => console.error(JSON.stringify(summary)),
+): Promise<void> {
+  if (!autoHealDrift) return;
+  const seen = new Set<string>();
+  for (const ref of refs) {
+    const key = ref.repo_root ?? ref.repo_name;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (!renewLease()) return;
+    try {
+      const result = await service.healDriftedAnchorsFromCheckpoint(ref);
+      if (result.rechecked > 0 || result.demoted.length > 0) {
+        log({ event: "freshness_heal", repo: ref.repo_name, rechecked: result.rechecked, demoted: result.demoted.length });
+      }
+    } catch {
+      // Best-effort: a heal failure must not affect the foreground or the worker.
+    }
   }
 }
 

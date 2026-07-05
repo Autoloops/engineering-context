@@ -133,6 +133,12 @@ CREATE TABLE IF NOT EXISTS anchor_fingerprints (
   PRIMARY KEY (claim_id, file, symbol)
 );
 
+CREATE TABLE IF NOT EXISTS freshness_checkpoints (
+  repo_id TEXT PRIMARY KEY,
+  last_checked_sha TEXT NOT NULL,
+  checked_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS graph_scopes_repo_idx ON graph_scopes(repo_id);
 CREATE INDEX IF NOT EXISTS memory_commits_scope_idx ON memory_commits(scope_id);
 CREATE INDEX IF NOT EXISTS graph_memberships_scope_idx ON graph_memberships(scope_id);

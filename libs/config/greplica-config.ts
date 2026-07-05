@@ -22,6 +22,7 @@ export interface SessionConfig {
   timeThresholdMinutes: number;
   currentGraceMinutes: number;
   autoMemoryUpdates: boolean;
+  autoHealDrift: boolean;
 }
 
 export interface EmbeddingConfigInput {
@@ -51,6 +52,7 @@ export const defaultSessionConfig: SessionConfig = {
   timeThresholdMinutes: 40,
   currentGraceMinutes: 5,
   autoMemoryUpdates: true,
+  autoHealDrift: true,
 };
 
 export const defaultGreplicaConfig: GreplicaConfig = {
@@ -158,6 +160,7 @@ function normalizeSessionConfig(value: unknown, path: string): SessionConfig {
       path,
     ),
     autoMemoryUpdates: parseBoolean(value.autoMemoryUpdates, defaultSessionConfig.autoMemoryUpdates, "session.autoMemoryUpdates", path),
+    autoHealDrift: parseBoolean(value.autoHealDrift, defaultSessionConfig.autoHealDrift, "session.autoHealDrift", path),
   };
 }
 
