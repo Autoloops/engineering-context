@@ -3,31 +3,33 @@ import assert from "node:assert/strict";
 const root = new URL("..", import.meta.url);
 const { classifyFreshness } = await import(new URL("dist/libs/knowledge-graph/code-anchors/freshness.js", root));
 
-const resolves = { file: "a.ts", symbol: "f", status: "resolved" };
-const broken = { file: "a.ts", symbol: "f", status: "missing_symbol" };
+const resolvesAnchor = { file: "a.ts", symbol: "f", status: "resolved" };
+const brokenAnchor = { file: "a.ts", symbol: "f", status: "missing_symbol" };
+// An AnchorCheck bundles one anchor with its current + last-known span hash.
+const check = (anchor, currentHash, storedHash) => ({ anchor, currentHash, storedHash });
 
 // No anchors -> fresh.
-assert.equal(classifyFreshness([], [], []).state, "fresh", "no anchors -> fresh");
+assert.equal(classifyFreshness([]).state, "fresh", "no anchors -> fresh");
 
 // Every anchor broken -> structural drift.
-const structural = classifyFreshness([broken], [undefined], ["h1"]);
+const structural = classifyFreshness([check(brokenAnchor, undefined, "h1")]);
 assert.equal(structural.state, "stale");
 assert.equal(structural.reason, "structural");
 assert.equal(structural.broken.length, 1, "structural verdict carries the broken anchor");
 
 // Resolves and the span hash matches -> fresh.
-assert.equal(classifyFreshness([resolves], ["h1"], ["h1"]).state, "fresh", "unchanged span -> fresh");
+assert.equal(classifyFreshness([check(resolvesAnchor, "h1", "h1")]).state, "fresh", "unchanged span -> fresh");
 
 // Resolves but the span hash changed -> content drift.
-const content = classifyFreshness([resolves], ["h2"], ["h1"]);
+const content = classifyFreshness([check(resolvesAnchor, "h2", "h1")]);
 assert.equal(content.state, "stale");
 assert.equal(content.reason, "content");
 
 // No stored fingerprint yet -> cannot compare -> fresh (never a false stale).
-assert.equal(classifyFreshness([resolves], ["h1"], [undefined]).state, "fresh", "no baseline -> fresh");
+assert.equal(classifyFreshness([check(resolvesAnchor, "h1", undefined)]).state, "fresh", "no baseline -> fresh");
 
 // One anchor broken, another resolves with a changed hash -> content (not all broken).
-const mixed = classifyFreshness([broken, resolves], [undefined, "h2"], ["h0", "h1"]);
+const mixed = classifyFreshness([check(brokenAnchor, undefined, "h0"), check(resolvesAnchor, "h2", "h1")]);
 assert.equal(mixed.reason, "content", "partial break + changed hash -> content");
 
 // --- storage layer: anchor_fingerprints table + repository ---

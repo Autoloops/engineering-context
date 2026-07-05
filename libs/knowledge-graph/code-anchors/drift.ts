@@ -46,10 +46,9 @@ export async function scanDriftedClaims(
 
     try {
       const resolved = await resolver.resolveMany(repoRoot, anchors);
-      // Structural-only detection here: with no baseline hashes, classifyFreshness
-      // only trips on "every anchor broken" (content drift needs a stored hash).
-      const noHashes = resolved.map(() => undefined);
-      const verdict = classifyFreshness(resolved, noHashes, noHashes);
+      // Structural-only detection: no stored hashes, so only "every anchor broken" trips.
+      const checks = resolved.map((anchor) => ({ anchor, currentHash: undefined, storedHash: undefined }));
+      const verdict = classifyFreshness(checks);
       if (verdict.state === "stale") drifted.push({ claim, broken: verdict.broken });
     } catch (error) {
       errors.push({ claim_id: claim.id, message: errorMessage(error) });

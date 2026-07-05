@@ -4,47 +4,55 @@ import type { ResolvedCodeAnchor, ResolvedCodeAnchorStatus } from "./types.js";
 export type FreshnessState = "fresh" | "stale";
 export type FreshnessReason = "structural" | "content";
 
-/** The freshness verdict for a claim's anchors — the single fresh/stale rule shared by both planes. */
+/** Why a claim is stale, and which anchors are structurally broken. */
 export interface FreshnessVerdict {
   state: FreshnessState;
   reason: FreshnessReason | null;
   broken: ResolvedCodeAnchor[];
 }
 
+/** One anchor together with its span hash now and the last time we verified the claim. */
+export interface AnchorCheck {
+  anchor: ResolvedCodeAnchor;
+  currentHash: string | undefined; // hash of the span right now (undefined if unreadable)
+  storedHash: string | undefined; // hash recorded when the claim was last verified
+}
+
 const brokenStatuses: ReadonlySet<ResolvedCodeAnchorStatus> = new Set(invalidationResolverStatuses);
 
 /**
- * Decide whether a claim's anchors are still fresh. Pure — no I/O.
+ * The single fresh/stale rule, shared by the foreground signal and the background heal.
  *
- * - Structural drift: the claim has anchors and *every* one is broken (Option A, from #96).
- * - Content drift: at least one anchor still resolves, but its stored span hash no longer
- *   matches the current one.
+ * A claim is stale when either kind of drift has happened:
+ *  - **structural** — every anchor stopped resolving (symbol moved / renamed / deleted);
+ *  - **content** — a still-resolving anchor's span changed since we last verified it.
  *
- * `currentHashes` and `storedHashes` are positional to `resolved`; `undefined` means
- * "no hash available" (e.g. no baseline yet), which never triggers a false stale.
+ * Otherwise it is fresh. Missing hashes (no baseline yet, or an unreadable file) never
+ * count as content drift, so freshness never produces a false "stale".
  */
-export function classifyFreshness(
-  resolved: ResolvedCodeAnchor[],
-  currentHashes: ReadonlyArray<string | undefined>,
-  storedHashes: ReadonlyArray<string | undefined>,
-): FreshnessVerdict {
-  if (resolved.length === 0) return fresh();
+export function classifyFreshness(checks: AnchorCheck[]): FreshnessVerdict {
+  if (checks.length === 0) return fresh();
 
-  const broken = resolved.filter((anchor) => brokenStatuses.has(anchor.status));
-  if (broken.length === resolved.length) {
+  const broken = checks.filter(isStructurallyBroken).map((check) => check.anchor);
+  if (broken.length === checks.length) {
     return { state: "stale", reason: "structural", broken };
   }
 
-  for (let i = 0; i < resolved.length; i += 1) {
-    if (brokenStatuses.has(resolved[i].status)) continue;
-    const stored = storedHashes[i];
-    const current = currentHashes[i];
-    if (stored !== undefined && current !== undefined && current !== stored) {
-      return { state: "stale", reason: "content", broken: [] };
-    }
+  if (checks.some(hasContentDrift)) {
+    return { state: "stale", reason: "content", broken: [] };
   }
 
   return fresh();
+}
+
+function isStructurallyBroken(check: AnchorCheck): boolean {
+  return brokenStatuses.has(check.anchor.status);
+}
+
+function hasContentDrift(check: AnchorCheck): boolean {
+  if (isStructurallyBroken(check)) return false; // handled as structural drift
+  if (check.storedHash === undefined || check.currentHash === undefined) return false; // nothing to compare
+  return check.currentHash !== check.storedHash;
 }
 
 function fresh(): FreshnessVerdict {

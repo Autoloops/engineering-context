@@ -48,6 +48,8 @@ function isRepoRelative(file: string): boolean {
 
 function spanText(fileText: string, startLine: number | undefined, endLine: number | undefined): string {
   if (startLine === undefined) return fileText;
+  // Anchor lines are 1-based and inclusive; slice() wants a 0-based [start, end) range,
+  // so start-1 and an exclusive end of endLine keeps the [startLine..endLine] rows.
   const lines = fileText.split("\n");
   const start = Math.max(0, startLine - 1);
   const end = endLine ?? startLine;
