@@ -118,6 +118,21 @@ CREATE TABLE IF NOT EXISTS invalidation_events (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS anchor_fingerprints (
+  claim_id TEXT NOT NULL,
+  file TEXT NOT NULL,
+  -- '' sentinel for file-only anchors: SQLite treats each NULL in a composite
+  -- PRIMARY KEY as distinct, which would let INSERT OR REPLACE accumulate
+  -- duplicate rows for the same (claim, file). A non-null key stays idempotent.
+  symbol TEXT NOT NULL DEFAULT '',
+  content_hash TEXT NOT NULL,
+  file_mtime_ms INTEGER NOT NULL,
+  file_size INTEGER NOT NULL,
+  resolver_status TEXT NOT NULL,
+  checked_at TEXT NOT NULL,
+  PRIMARY KEY (claim_id, file, symbol)
+);
+
 CREATE INDEX IF NOT EXISTS graph_scopes_repo_idx ON graph_scopes(repo_id);
 CREATE INDEX IF NOT EXISTS memory_commits_scope_idx ON memory_commits(scope_id);
 CREATE INDEX IF NOT EXISTS graph_memberships_scope_idx ON graph_memberships(scope_id);
@@ -128,4 +143,5 @@ CREATE INDEX IF NOT EXISTS agent_sessions_seen_idx ON agent_sessions(last_seen_a
 CREATE INDEX IF NOT EXISTS agent_worker_locks_until_idx ON agent_worker_locks(locked_until_at);
 CREATE INDEX IF NOT EXISTS invalidation_events_repo_idx ON invalidation_events(repo_id);
 CREATE INDEX IF NOT EXISTS invalidation_events_claim_idx ON invalidation_events(original_claim_id);
+CREATE INDEX IF NOT EXISTS anchor_fingerprints_file_idx ON anchor_fingerprints(file);
 `;
