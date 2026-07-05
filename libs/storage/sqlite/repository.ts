@@ -57,6 +57,20 @@ export interface ApplyAnchorInvalidationInput {
   commit: { title: string; summary?: string; git_commit_sha?: string };
 }
 
+export interface AnchorFingerprintRow {
+  claim_id: string;
+  file: string;
+  symbol: string | null;
+  content_hash: string;
+  file_mtime_ms: number;
+  file_size: number;
+  resolver_status: string;
+  checked_at: string;
+}
+
+/** A fingerprint row without the server-stamped `checked_at`. */
+export type AnchorFingerprintInput = Omit<AnchorFingerprintRow, "checked_at">;
+
 export type EmbeddingObjectType = "claim" | "component" | "flow";
 
 export interface GraphObjectEmbeddingRecord {
@@ -358,6 +372,39 @@ export class SqliteRepository {
       )
       .all(repoId) as InvalidationEventRow[];
     return rows.map((row) => ({ ...row, git_commit_sha: row.git_commit_sha ?? undefined }));
+  }
+
+  /** Cache-aside write: upsert (INSERT OR REPLACE) the freshness fingerprints, one transaction. */
+  upsertAnchorFingerprints(rows: AnchorFingerprintInput[]): void {
+    if (rows.length === 0) return;
+    const insert = this.db.prepare(
+      `INSERT OR REPLACE INTO anchor_fingerprints
+        (claim_id, file, symbol, content_hash, file_mtime_ms, file_size, resolver_status, checked_at)
+       VALUES
+        (@claim_id, @file, @symbol, @content_hash, @file_mtime_ms, @file_size, @resolver_status, @checked_at)`,
+    );
+    const write = this.db.transaction((records: AnchorFingerprintInput[]) => {
+      const checkedAt = now();
+      for (const record of records) insert.run({ ...record, checked_at: checkedAt });
+    });
+    write(rows);
+  }
+
+  /** Batch read (no N+1) of the fingerprints for the given claims. */
+  fingerprintsForClaims(claimIds: string[]): AnchorFingerprintRow[] {
+    if (claimIds.length === 0) return [];
+    return this.db
+      .prepare(`SELECT * FROM anchor_fingerprints WHERE claim_id IN (${placeholders(claimIds)})`)
+      .all(...claimIds) as AnchorFingerprintRow[];
+  }
+
+  /** Reverse index: the distinct claims anchored in any of the given files. */
+  claimIdsForFiles(files: string[]): string[] {
+    if (files.length === 0) return [];
+    const rows = this.db
+      .prepare(`SELECT DISTINCT claim_id FROM anchor_fingerprints WHERE file IN (${placeholders(files)})`)
+      .all(...files) as { claim_id: string }[];
+    return rows.map((row) => row.claim_id);
   }
 
   private insertProposalRecords(scopeId: string, memoryCommitId: string, proposal: MemoryCommitProposal): void {
