@@ -1,3 +1,4 @@
+import type { FreshnessVerdict } from "../code-anchors/freshness.js";
 import type {
   GraphContextResult,
   RankedGraphContextResult,
@@ -7,6 +8,8 @@ export function renderGraphContextMarkdown(result: GraphContextResult): string {
   const rankedComponents = result.ranked_results.filter((item) => item.type === "component");
   const rankedFlows = result.ranked_results.filter((item) => item.type === "flow");
   const rankedClaims = result.ranked_results.filter((item) => item.type === "claim");
+  const staleClaims = rankedClaims.filter((claim) => claim.freshness.state === "stale");
+  const liveClaims = rankedClaims.filter((claim) => claim.freshness.state !== "stale");
   const componentsById = new Map(result.components.map((component) => [component.object.id, component.object.name]));
   const flowsById = new Map(result.flows.map((flow) => [flow.object.id, flow.object.name]));
   const content = [
@@ -14,7 +17,8 @@ export function renderGraphContextMarkdown(result: GraphContextResult): string {
     "",
     "## Best Claims",
     "",
-    ...renderRankedClaims(rankedClaims, componentsById, flowsById),
+    ...renderRankedClaims(liveClaims, componentsById, flowsById),
+    ...renderNeedsReverification(staleClaims, componentsById, flowsById),
     "",
     "## Related Components",
     "",
@@ -51,6 +55,27 @@ function renderRankedFlows(
   });
 }
 
+/**
+ * Claims whose freshness verdict is `stale` are quarantined into their own
+ * section — a distrust signal, not a command. Omitted entirely when nothing
+ * drifted, so healthy packets stay noise-free.
+ */
+function renderNeedsReverification(
+  claims: Array<Extract<RankedGraphContextResult, { type: "claim" }>>,
+  componentsById: Map<string, string>,
+  flowsById: Map<string, string>,
+): string[] {
+  if (claims.length === 0) return [];
+  return [
+    "",
+    "## Needs re-verification",
+    "",
+    "These facts were code-verified but their anchored code has since drifted. Re-verify against the current code before relying on them.",
+    "",
+    ...renderRankedClaims(claims, componentsById, flowsById),
+  ];
+}
+
 function renderRankedClaims(
   claims: Array<Extract<RankedGraphContextResult, { type: "claim" }>>,
   componentsById: Map<string, string>,
@@ -65,10 +90,20 @@ function renderRankedClaims(
       "",
       claim.object.text,
       "",
-      `${anchors}${about}`.trim(),
+      `Truth: \`${claim.object.truth}\`.${freshnessLabel(claim.freshness)}${anchors}${about}`.trim(),
       "",
     ];
   });
+}
+
+function freshnessLabel(freshness: FreshnessVerdict): string {
+  if (freshness.state === "stale") {
+    return ` [STALE: ${freshness.reason} drift — re-verify against the current code].`;
+  }
+  if (freshness.state === "unknown") {
+    return " [UNVERIFIABLE: anchored code could not be read].";
+  }
+  return "";
 }
 
 function anchorLabel(anchor: Extract<RankedGraphContextResult, { type: "claim" }>["code_anchors"][number]): string {

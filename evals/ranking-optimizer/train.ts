@@ -328,6 +328,7 @@ function toClaimResults(ranked: RankedContextDocument[], config: GraphContextCon
         about: document.document.about,
         evidence: [],
         code_anchors: [],
+        freshness: { state: "fresh", reason: null, broken: [] },
       };
     });
 }

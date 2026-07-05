@@ -1,5 +1,6 @@
 import type { Claim } from "../claim.js";
 import type { ResolvedCodeAnchor } from "../code-anchors/types.js";
+import type { FreshnessVerdict } from "../code-anchors/freshness.js";
 import type { Component, Flow, Source } from "../schema.js";
 
 export interface EmbeddingStatus {
@@ -47,6 +48,7 @@ export interface ClaimContextResult {
   about: Array<{ type: "component" | "flow"; id: string }>;
   evidence: ClaimEvidenceResult[];
   code_anchors: ResolvedCodeAnchor[];
+  freshness: FreshnessVerdict;
 }
 
 export interface GraphObjectContextResult<TObject> {

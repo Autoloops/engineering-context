@@ -17,6 +17,7 @@ import { applyGraphRanking } from "./graph-rank.js";
 import { rankContextDocuments, roundScore, selectRankedDocuments, type RankedContextDocument, type SemanticScoreEntry } from "./rank.js";
 import type { ClaimContextResult, ClaimEvidenceResult, ComponentContextResult, EmbeddingStatus, FlowContextResult, GraphContextResult, RankedContextDebugResult } from "./types.js";
 import { rankPacketResults, roundRankedSignals, selectGraphObjects } from "./packet-rank.js";
+import { attachFreshness } from "./claim-freshness.js";
 import { CodeAnchorResolver } from "../code-anchors/resolver.js";
 import type { ResolvedCodeAnchor } from "../code-anchors/types.js";
 
@@ -56,13 +57,16 @@ export class GraphContextBuilder {
       flows: this.rankDocuments(repoId, query, queryEmbedding, flowDocuments, config),
     };
     const ranked = applyGraphRanking(baseRanked, graph, config);
-    const selectedClaims = await selectClaims(
+    const claimResults = await selectClaims(
       ranked.claims,
       evidenceByClaim,
       config,
       this.codeAnchorResolver,
       options.repoRoot,
     );
+    // Read-only freshness: label each claim fresh/stale/unknown against the working
+    // tree using one batched fingerprint read. No graph writes on the query path.
+    const selectedClaims = attachFreshness(claimResults, this.repository, options.repoRoot);
     const selectedComponents = selectGraphObjects(
       ranked.components,
       selectedClaims,
@@ -227,7 +231,7 @@ function selectClaims(
   config: GraphContextConfig,
   resolver: CodeAnchorResolver,
   repoRoot: string | undefined,
-): Promise<ClaimContextResult[]> {
+): Promise<Omit<ClaimContextResult, "freshness">[]> {
   return Promise.all(selectRankedDocuments(ranked, config, { minimumSelected: config.ranking.minimumSelectedClaims })
     .sort((left, right) => right.score - left.score || left.document.key.localeCompare(right.document.key))
     .map((document, index) => toClaimResult(document, index, evidenceByClaim, resolver, repoRoot)));
@@ -239,7 +243,7 @@ async function toClaimResult(
   evidenceByClaim: Map<string, ClaimEvidenceResult[]>,
   resolver: CodeAnchorResolver,
   repoRoot: string | undefined,
-): Promise<ClaimContextResult> {
+): Promise<Omit<ClaimContextResult, "freshness">> {
   const claim = document.document.object as Claim;
   return {
     rank: index + 1,

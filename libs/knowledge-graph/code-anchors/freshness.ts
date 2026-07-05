@@ -1,7 +1,7 @@
 import { invalidationResolverStatuses } from "../invalidation.js";
 import type { ResolvedCodeAnchor, ResolvedCodeAnchorStatus } from "./types.js";
 
-export type FreshnessState = "fresh" | "stale";
+export type FreshnessState = "fresh" | "stale" | "unknown";
 export type FreshnessReason = "structural" | "content";
 
 /** Why a claim is stale, and which anchors are structurally broken. */
@@ -27,8 +27,10 @@ const brokenStatuses: ReadonlySet<ResolvedCodeAnchorStatus> = new Set(invalidati
  *  - **structural** — every anchor stopped resolving (symbol moved / renamed / deleted);
  *  - **content** — a still-resolving anchor's span changed since we last verified it.
  *
- * Otherwise it is fresh. Missing hashes (no baseline yet, or an unreadable file) never
- * count as content drift, so freshness never produces a false "stale".
+ * When no drift is proven but a resolving anchor's span can't be hashed right now
+ * (unreadable file / resolver error), the verdict is **unknown** rather than a false
+ * "fresh" — the caller distrusts it lightly instead of vouching for it. A missing
+ * baseline alone (span readable, no stored hash) stays fresh.
  */
 export function classifyFreshness(checks: AnchorCheck[]): FreshnessVerdict {
   if (checks.length === 0) return fresh();
@@ -44,11 +46,22 @@ export function classifyFreshness(checks: AnchorCheck[]): FreshnessVerdict {
     return { state: "stale", reason: "content", broken };
   }
 
+  if (checks.some(isUndeterminable)) {
+    // Freshness can't be proven, but still surface any anchors that broke
+    // structurally in the same claim (consistent with the content branch).
+    return { state: "unknown", reason: null, broken };
+  }
+
   return fresh();
 }
 
 function isStructurallyBroken(check: AnchorCheck): boolean {
   return brokenStatuses.has(check.anchor.status);
+}
+
+/** A still-resolving anchor whose current span hash could not be computed. */
+function isUndeterminable(check: AnchorCheck): boolean {
+  return !isStructurallyBroken(check) && check.currentHash === undefined;
 }
 
 function hasContentDrift(check: AnchorCheck): boolean {

@@ -34,6 +34,29 @@ assert.equal(mixed.reason, "content", "partial break + changed hash -> content")
 assert.equal(mixed.broken.length, 1, "content verdict still surfaces the structurally-broken anchor");
 assert.equal(mixed.broken[0].status, "missing_symbol", "the broken anchor is carried through");
 
+// Resolving anchor whose span can't be hashed now (unreadable file / resolver error) -> unknown.
+const unknown = classifyFreshness([check(resolvesAnchor, undefined, "h1")]);
+assert.equal(unknown.state, "unknown", "unreadable span -> unknown");
+assert.equal(unknown.reason, null, "unknown carries no drift reason");
+assert.equal(unknown.broken.length, 0, "unknown carries no broken anchors");
+
+// Undeterminable with no baseline either -> still unknown (we couldn't read the code).
+assert.equal(classifyFreshness([check(resolvesAnchor, undefined, undefined)]).state, "unknown", "no current hash -> unknown");
+
+// Real drift always beats unknown: a changed hash on any anchor still wins as content.
+assert.equal(
+  classifyFreshness([check(resolvesAnchor, undefined, "h1"), check(resolvesAnchor, "h2", "h1")]).state,
+  "stale",
+  "content drift beats unknown",
+);
+
+// One anchor structurally broken, another undeterminable -> unknown, but the broken
+// anchor is still surfaced (Phase 3's healer needs to know which anchors broke).
+const brokenPlusUnknown = classifyFreshness([check(brokenAnchor, undefined, "h1"), check(resolvesAnchor, undefined, "h1")]);
+assert.equal(brokenPlusUnknown.state, "unknown", "partial break + undeterminable -> unknown");
+assert.equal(brokenPlusUnknown.broken.length, 1, "unknown verdict still surfaces the structurally-broken anchor");
+assert.equal(brokenPlusUnknown.broken[0].status, "missing_symbol", "the broken anchor is carried through");
+
 // --- storage layer: anchor_fingerprints table + repository ---
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -101,5 +124,40 @@ await svc.applyProposal(ref, { title: "seed2", creates: { claims: [
   { id: "claim.sv", kind: "decision", text: "d", truth: "source_verified", intent: "intended" },
 ]}});
 assert.equal(svcRepo.fingerprintsForClaims(["claim.sv"]).length, 0, "source_verified claim -> no fingerprint");
+
+// --- foreground: fingerprint index + stat-prefiltered freshness checks ---
+const { indexFingerprintsByClaim, freshnessChecks } = await import(new URL("dist/libs/knowledge-graph/anchor-fingerprints.js", root));
+const { hashAnchorSpan, statAnchorFile } = await import(new URL("dist/libs/knowledge-graph/code-anchors/span-hash.js", root));
+
+const fgRoot = mkdtempSync(join(tmpdir(), "greplica-fg-"));
+writeFileSync(join(fgRoot, "svc.ts"), "line1\nexport function handle() { return 1; }\nline3\n");
+const fgAnchor = { file: "svc.ts", symbol: "handle", status: "resolved", start_line: 2, end_line: 2 };
+
+// Readable span, no stored fingerprint yet -> fresh (no false stale, no false unknown).
+assert.equal(classifyFreshness(freshnessChecks([fgAnchor], undefined, fgRoot)).state, "fresh", "readable span, no baseline -> fresh");
+
+// Build a stored row that matches the current file (hash + real stat).
+const fgStat = statAnchorFile(fgRoot, "svc.ts");
+const fgHash = hashAnchorSpan(fgRoot, fgAnchor);
+const fgRows = [
+  { claim_id: "cf", file: "svc.ts", symbol: "handle", content_hash: fgHash, file_mtime_ms: fgStat.mtime_ms, file_size: fgStat.size, resolver_status: "resolved", checked_at: "t" },
+];
+const fgIndex = indexFingerprintsByClaim(fgRows);
+assert.equal(fgIndex.get("cf").size, 1, "fingerprints grouped by claim id");
+
+// Stat prefilter hit: file untouched -> reuse stored hash (no re-hash) -> fresh.
+const hit = freshnessChecks([fgAnchor], fgIndex.get("cf"), fgRoot);
+assert.equal(hit[0].currentHash, fgHash, "prefilter hit reuses the stored hash");
+assert.equal(classifyFreshness(hit).state, "fresh", "unchanged file -> fresh");
+
+// Body changed (size differs -> prefilter miss) -> re-hash -> content drift.
+writeFileSync(join(fgRoot, "svc.ts"), "line1\nexport function handle() { return 99999; }\nline3\n");
+const miss = freshnessChecks([fgAnchor], fgIndex.get("cf"), fgRoot);
+assert.notEqual(miss[0].currentHash, fgHash, "prefilter miss re-hashes the span");
+assert.equal(classifyFreshness(miss).reason, "content", "changed body -> content drift");
+
+// Unreadable anchor -> current hash undefined -> unknown.
+const goneChecks = freshnessChecks([{ file: "gone.ts", symbol: "x", status: "resolved", start_line: 1, end_line: 1 }], undefined, fgRoot);
+assert.equal(classifyFreshness(goneChecks).state, "unknown", "unreadable anchor -> unknown");
 
 console.log("Freshness checks passed.");
