@@ -1,7 +1,7 @@
 import type { Claim } from "../claim.js";
-import { invalidationResolverStatuses } from "../invalidation.js";
 import { CodeAnchorResolver } from "./resolver.js";
-import type { ResolvedCodeAnchor, ResolvedCodeAnchorStatus } from "./types.js";
+import { classifyFreshness } from "./freshness.js";
+import type { ResolvedCodeAnchor } from "./types.js";
 
 /** A code_verified claim whose anchors have all stopped resolving. */
 export interface DriftedClaim {
@@ -19,9 +19,6 @@ export interface DriftScanResult {
   drifted: DriftedClaim[];
   errors: DriftScanError[];
 }
-
-/** Resolver statuses that mean an anchor no longer points at real code. */
-const brokenStatuses: ReadonlySet<ResolvedCodeAnchorStatus> = new Set(invalidationResolverStatuses);
 
 /**
  * Re-resolves every `code_verified` claim's anchors against the current working
@@ -49,10 +46,11 @@ export async function scanDriftedClaims(
 
     try {
       const resolved = await resolver.resolveMany(repoRoot, anchors);
-      const broken = resolved.filter((anchor) => brokenStatuses.has(anchor.status));
-      if (broken.length === resolved.length) {
-        drifted.push({ claim, broken });
-      }
+      // Structural-only detection here: with no baseline hashes, classifyFreshness
+      // only trips on "every anchor broken" (content drift needs a stored hash).
+      const noHashes = resolved.map(() => undefined);
+      const verdict = classifyFreshness(resolved, noHashes, noHashes);
+      if (verdict.state === "stale") drifted.push({ claim, broken: verdict.broken });
     } catch (error) {
       errors.push({ claim_id: claim.id, message: errorMessage(error) });
     }
