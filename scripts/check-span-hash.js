@@ -25,6 +25,13 @@ assert.notEqual(hashAnchorSpan(repo, anchor), first, "changed span body -> diffe
 writeFileSync(join(repo, "auth.ts"), "CHANGED\nexport function validateToken(t) { return t.length > 0; }\nline 3\n");
 assert.equal(hashAnchorSpan(repo, anchor), first, "change outside span -> same hash");
 
+// Line endings are normalized: the same logical source hashes identically
+// whether checked out with LF or CRLF (no false content drift on Windows).
+writeFileSync(join(repo, "auth.ts"), "line 1\nexport function validateToken(t) { return t.length > 0; }\nline 3\n");
+const lfHash = hashAnchorSpan(repo, anchor);
+writeFileSync(join(repo, "auth.ts"), "line 1\r\nexport function validateToken(t) { return t.length > 0; }\r\nline 3\r\n");
+assert.equal(hashAnchorSpan(repo, anchor), lfHash, "CRLF vs LF -> same hash");
+
 // File-only anchor (no line range) hashes the whole file.
 const fileOnly = { file: "auth.ts", status: "file_only" };
 assert.equal(typeof hashAnchorSpan(repo, fileOnly), "string", "file-only anchor hashes whole file");

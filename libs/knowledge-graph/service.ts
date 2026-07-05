@@ -201,32 +201,39 @@ export class KnowledgeGraphService {
 
   /**
    * Records a content fingerprint per anchor of every `code_verified` claim, so
-   * later reads/heals can tell whether the anchored code has since changed. Best
-   * effort per anchor — an unreadable span is skipped, not fatal.
+   * later reads/heals can tell whether the anchored code has since changed.
+   *
+   * Best effort, and deliberately non-throwing: the proposal is already durably
+   * persisted by the time this runs, so a fingerprinting failure (an unreadable
+   * span, a resolver hiccup) must not turn a successful apply into a failed one.
    */
   private async writeFingerprints(input: RepoRef, claims: Claim[]): Promise<void> {
-    const resolver = new CodeAnchorResolver();
-    const rows: AnchorFingerprintInput[] = [];
-    for (const claim of claims) {
-      const anchors = claim.code_anchors ?? [];
-      if (claim.truth !== "code_verified" || anchors.length === 0) continue;
-      const resolved = await resolver.resolveMany(input.repo_root, anchors);
-      for (const anchor of resolved) {
-        const contentHash = hashAnchorSpan(input.repo_root, anchor);
-        if (contentHash === undefined) continue;
-        const stat = statAnchorFile(input.repo_root, anchor.file);
-        rows.push({
-          claim_id: claim.id,
-          file: anchor.file,
-          symbol: anchor.symbol ?? null,
-          content_hash: contentHash,
-          file_mtime_ms: stat.mtime_ms,
-          file_size: stat.size,
-          resolver_status: anchor.status,
-        });
+    try {
+      const resolver = new CodeAnchorResolver();
+      const rows: AnchorFingerprintInput[] = [];
+      for (const claim of claims) {
+        const anchors = claim.code_anchors ?? [];
+        if (claim.truth !== "code_verified" || anchors.length === 0) continue;
+        const resolved = await resolver.resolveMany(input.repo_root, anchors);
+        for (const anchor of resolved) {
+          const contentHash = hashAnchorSpan(input.repo_root, anchor);
+          if (contentHash === undefined) continue;
+          const stat = statAnchorFile(input.repo_root, anchor.file);
+          rows.push({
+            claim_id: claim.id,
+            file: anchor.file,
+            symbol: anchor.symbol ?? "", // "" sentinel for file-only anchors (see schema)
+            content_hash: contentHash,
+            file_mtime_ms: stat.mtime_ms,
+            file_size: stat.size,
+            resolver_status: anchor.status,
+          });
+        }
       }
+      this.repository.upsertAnchorFingerprints(rows);
+    } catch {
+      // Freshness metadata is an optimization; never fail apply over it.
     }
-    this.repository.upsertAnchorFingerprints(rows);
   }
 
   /**

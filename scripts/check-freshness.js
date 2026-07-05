@@ -31,6 +31,8 @@ assert.equal(classifyFreshness([check(resolvesAnchor, "h1", undefined)]).state, 
 // One anchor broken, another resolves with a changed hash -> content (not all broken).
 const mixed = classifyFreshness([check(brokenAnchor, undefined, "h0"), check(resolvesAnchor, "h2", "h1")]);
 assert.equal(mixed.reason, "content", "partial break + changed hash -> content");
+assert.equal(mixed.broken.length, 1, "content verdict still surfaces the structurally-broken anchor");
+assert.equal(mixed.broken[0].status, "missing_symbol", "the broken anchor is carried through");
 
 // --- storage layer: anchor_fingerprints table + repository ---
 import { mkdtempSync } from "node:fs";
@@ -62,6 +64,17 @@ repo.upsertAnchorFingerprints([
 ]);
 assert.equal(repo.fingerprintsForClaims(["c1"])[0].content_hash, "h2", "upsert replaces existing row");
 assert.equal(repo.fingerprintsForClaims(["c1"]).length, 1, "no duplicate row on upsert");
+
+// File-only anchors use the "" symbol sentinel and must upsert idempotently
+// (a nullable PK column would let SQLite treat each NULL as a distinct row).
+repo.upsertAnchorFingerprints([
+  { claim_id: "c3", file: "d.ts", symbol: "", content_hash: "h1", file_mtime_ms: 1, file_size: 2, resolver_status: "resolved" },
+]);
+repo.upsertAnchorFingerprints([
+  { claim_id: "c3", file: "d.ts", symbol: "", content_hash: "h2", file_mtime_ms: 3, file_size: 4, resolver_status: "resolved" },
+]);
+assert.equal(repo.fingerprintsForClaims(["c3"]).length, 1, "file-only anchor upserts, no duplicate");
+assert.equal(repo.fingerprintsForClaims(["c3"])[0].content_hash, "h2", "file-only anchor row replaced");
 
 // --- service: fingerprints are written when a proposal is applied ---
 import { writeFileSync } from "node:fs";

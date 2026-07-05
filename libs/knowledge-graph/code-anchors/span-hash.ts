@@ -47,10 +47,13 @@ function isRepoRelative(file: string): boolean {
 }
 
 function spanText(fileText: string, startLine: number | undefined, endLine: number | undefined): string {
-  if (startLine === undefined) return fileText;
+  // Normalize CRLF/CR to LF (matching the resolver's `split(/\r?\n/)`) so a
+  // cross-platform checkout doesn't hash a trailing \r into every line and
+  // report false content drift.
+  const lines = fileText.split(/\r?\n/);
+  if (startLine === undefined) return lines.join("\n");
   // Anchor lines are 1-based and inclusive; slice() wants a 0-based [start, end) range,
   // so start-1 and an exclusive end of endLine keeps the [startLine..endLine] rows.
-  const lines = fileText.split("\n");
   const start = Math.max(0, startLine - 1);
   const end = endLine ?? startLine;
   return lines.slice(start, end).join("\n");

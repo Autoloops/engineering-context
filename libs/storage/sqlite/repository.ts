@@ -60,7 +60,7 @@ export interface ApplyAnchorInvalidationInput {
 export interface AnchorFingerprintRow {
   claim_id: string;
   file: string;
-  symbol: string | null;
+  symbol: string; // "" for file-only anchors (see schema: non-null keeps upserts idempotent)
   content_hash: string;
   file_mtime_ms: number;
   file_size: number;

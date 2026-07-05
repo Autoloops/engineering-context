@@ -121,7 +121,10 @@ CREATE TABLE IF NOT EXISTS invalidation_events (
 CREATE TABLE IF NOT EXISTS anchor_fingerprints (
   claim_id TEXT NOT NULL,
   file TEXT NOT NULL,
-  symbol TEXT,
+  -- '' sentinel for file-only anchors: SQLite treats each NULL in a composite
+  -- PRIMARY KEY as distinct, which would let INSERT OR REPLACE accumulate
+  -- duplicate rows for the same (claim, file). A non-null key stays idempotent.
+  symbol TEXT NOT NULL DEFAULT '',
   content_hash TEXT NOT NULL,
   file_mtime_ms INTEGER NOT NULL,
   file_size INTEGER NOT NULL,

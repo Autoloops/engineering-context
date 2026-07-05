@@ -39,7 +39,9 @@ export function classifyFreshness(checks: AnchorCheck[]): FreshnessVerdict {
   }
 
   if (checks.some(hasContentDrift)) {
-    return { state: "stale", reason: "content", broken: [] };
+    // Content drift wins the reason, but still surface any anchors that broke
+    // structurally in the same claim so the caller can act on them too.
+    return { state: "stale", reason: "content", broken };
   }
 
   return fresh();
