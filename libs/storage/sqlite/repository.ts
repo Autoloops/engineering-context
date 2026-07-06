@@ -6,6 +6,7 @@ import type { MemoryCommitProposal } from "../../knowledge-graph/proposal.js";
 import type { Component, Flow, GraphObjectType, Source } from "../../knowledge-graph/schema.js";
 import type { Claim } from "../../knowledge-graph/claim.js";
 import type { GraphScope, GraphScopeKind } from "../../knowledge-graph/scope.js";
+import type { PromoteSubjectRef } from "../../knowledge-graph/graph-promote.js";
 
 export interface RepoRecord {
   id: string;
@@ -284,6 +285,44 @@ export class SqliteRepository {
       .run(memoryCommit);
 
     return memoryCommit;
+  }
+
+  /**
+   * Move every membership in this repo's working scope into its main scope under
+   * a single new main memory commit, then clear the working scope. Claims travel
+   * with their edges (including `supersedes` edges), so supersession that retires
+   * a main claim survives the move: promoting a claim without its `supersedes`
+   * edge would resurrect the stale claim once working is cleared. Object rows are
+   * keyed by (repo_id, id) and are never touched here; both scopes belong to the
+   * same repo, so promotion only re-homes this repo's memberships. `INSERT OR
+   * IGNORE` keeps a subject that is already in main on its existing membership.
+   */
+  promoteWorkingToMain(
+    repoId: string,
+    commit: { title: string; summary?: string },
+  ): { memory_commit_id: string | undefined; refs: PromoteSubjectRef[] } {
+    const working = this.requireWorkingScope(repoId);
+    const main = this.requireMainScope(repoId);
+    const rows = this.db
+      .prepare("SELECT subject_type, subject_id FROM graph_memberships WHERE scope_id = ?")
+      .all(working.id) as { subject_type: PromoteSubjectRef["type"]; subject_id: string }[];
+    const refs: PromoteSubjectRef[] = rows.map((row) => ({ type: row.subject_type, id: row.subject_id }));
+    if (refs.length === 0) return { memory_commit_id: undefined, refs };
+
+    const insertMembership = this.db.prepare(
+      `INSERT OR IGNORE INTO graph_memberships (scope_id, subject_type, subject_id, memory_commit_id)
+       VALUES (?, ?, ?, ?)`,
+    );
+    const clearWorking = this.db.prepare("DELETE FROM graph_memberships WHERE scope_id = ?");
+
+    const write = this.db.transaction(() => {
+      const memoryCommit = this.createMemoryCommit({ scope_id: main.id, title: commit.title, summary: commit.summary });
+      for (const ref of refs) insertMembership.run(main.id, ref.type, ref.id, memoryCommit.id);
+      clearWorking.run(working.id);
+      return memoryCommit.id;
+    });
+
+    return { memory_commit_id: write(), refs };
   }
 
   createProposalRecords(scopeId: string, memoryCommitId: string, proposal: MemoryCommitProposal): void {
