@@ -1,5 +1,8 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { normalizeProposal } from "./proposal.js";
 import { validateProposal, type ProposalValidationResult } from "./validate-proposal.js";
+import { planGc, type GcReport } from "./graph-gc.js";
 import type { Claim } from "./claim.js";
 import type { Edge } from "./edge.js";
 import type { Component, Flow, GraphObjectType, Source } from "./schema.js";
@@ -15,6 +18,7 @@ import { SqliteRepository as SqliteKnowledgeGraphRepository } from "../storage/s
 
 export type { GraphContextResult } from "./graph-context/types.js";
 export type { ClaimAnchorAuditResult } from "./code-anchors/types.js";
+export type { GcReport } from "./graph-gc.js";
 
 export interface RepoRef {
   repo_root?: string;
@@ -125,6 +129,39 @@ export class KnowledgeGraphService {
     return auditClaimCodeAnchors(input.repo_root, this.repository.readGraphView(initialized.repo_id).claims);
   }
 
+  async gcGraph(input: RepoRef, options: { dryRun: boolean }): Promise<GcReport> {
+    const initialized = this.requireRepo(input);
+    const graph = this.repository.readGcGraph(initialized.repo_id);
+
+    const audit = await auditClaimCodeAnchors(input.repo_root, graph.claims);
+    const staleClaims = audit.missing_files.map((issue) => ({ id: issue.claim_id, anchor: formatAnchor(issue.anchor) }));
+    const staleComponents = staleComponentAnchors(input.repo_root, graph.components);
+
+    const plan = planGc({
+      components: graph.components,
+      flows: graph.flows,
+      claims: graph.claims,
+      edges: graph.edges,
+      existingKeys: graph.existingKeys,
+      staleComponentIds: staleComponents.map((component) => component.id),
+      staleClaimIds: staleClaims.map((claim) => claim.id),
+    });
+
+    if (!options.dryRun) {
+      this.repository.applyGc(initialized.repo_id, { subjects: plan.subjects, edges: plan.edges });
+    }
+
+    return {
+      dry_run: options.dryRun,
+      stale_components: staleComponents,
+      stale_claims: staleClaims,
+      orphaned_claims: plan.orphaned_claims,
+      orphaned_flows: plan.orphaned_flows,
+      dangling_edges: plan.dangling_edges,
+      pruned: plan.pruned,
+    };
+  }
+
   async validateProposal(input: RepoRef, proposal: unknown): Promise<ProposalValidationResult> {
     const initialized = this.requireRepo(input);
     const subjectLookup = this.subjectLookup(initialized.repo_id);
@@ -203,6 +240,20 @@ function anchorAuditErrors(result: ClaimAnchorAuditResult): string[] {
 function formatAnchor(anchor: { file: string; symbol?: string } | undefined): string {
   if (anchor === undefined) return "<missing>";
   return anchor.symbol === undefined ? anchor.file : `${anchor.file}#${anchor.symbol}`;
+}
+
+function staleComponentAnchors(repoRoot: string | undefined, components: Component[]): { id: string; anchor: string }[] {
+  if (repoRoot === undefined) return [];
+  const root = resolve(repoRoot);
+  const stale: { id: string; anchor: string }[] = [];
+  for (const component of components) {
+    if (component.code_anchor === undefined || component.code_anchor.length === 0) continue;
+    const file = component.code_anchor.split("#")[0];
+    const absolute = resolve(root, file);
+    if (absolute !== root && !absolute.startsWith(`${root}/`)) continue;
+    if (!existsSync(absolute)) stale.push({ id: component.id, anchor: component.code_anchor });
+  }
+  return stale;
 }
 
 export function createLocalKnowledgeGraphService(
