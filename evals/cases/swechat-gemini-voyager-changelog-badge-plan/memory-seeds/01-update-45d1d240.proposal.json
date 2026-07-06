@@ -1,0 +1,230 @@
+{
+  "title": "Update working memory from popup visual-effect selector session",
+  "summary": "Durable context from the session that replaced the snow-only popup toggle with a visual-effect selector and iterated on sakura and rain effects.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.popup_settings",
+        "name": "Popup Settings",
+        "code_anchor": "src/pages/popup/Popup.tsx"
+      },
+      {
+        "id": "component.visual_effects",
+        "name": "Visual Effects",
+        "code_anchor": "src/pages/content/snowEffect/index.ts"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.visual_effect_selection",
+        "name": "Visual Effect Selection",
+        "touches": [
+          "component.popup_settings",
+          "component.visual_effects",
+          "component.runtime_content_entry",
+          "component.storage_boundaries"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.visual_effect_storage_contract",
+        "kind": "fact",
+        "text": "Visual effects use `gvVisualEffect` as one sync setting with current values `off`, `snow`, `sakura`, and `rain`; the popup writes that key and clears legacy `gvSnowEffect`, while effect loaders still resolve legacy `gvSnowEffect: true` to snow for backward compatibility.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.visual_effect_selection",
+          "component.storage_boundaries",
+          "component.popup_settings",
+          "component.visual_effects"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/types/common.ts",
+            "symbol": "StorageKeys"
+          },
+          {
+            "file": "src/pages/popup/Popup.tsx",
+            "symbol": "SettingsUpdate"
+          },
+          {
+            "file": "src/pages/content/snowEffect/index.ts",
+            "symbol": "resolveEffect"
+          }
+        ]
+      },
+      {
+        "id": "claim.visual_effect_content_modules_start_together",
+        "kind": "fact",
+        "text": "On `gemini.google.com`, content initialization starts the snow, sakura, and rain effect modules together; each module decides whether to render from the shared `gvVisualEffect` value instead of the content entrypoint branching by effect.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.visual_effect_selection",
+          "component.runtime_content_entry",
+          "component.visual_effects"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/index.tsx",
+            "symbol": "initializeFeatures"
+          }
+        ]
+      },
+      {
+        "id": "claim.visual_effect_canvas_lifecycle",
+        "kind": "fact",
+        "text": "The visual-effect modules render independent full-screen `pointer-events:none` canvas overlays, pause animation on hidden tabs, clean up on `beforeunload`, and use a draining state so particles finish falling before the canvas is removed when disabled or switched away.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.visual_effect_selection",
+          "component.visual_effects"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/snowEffect/index.ts",
+            "symbol": "startSnowEffect"
+          },
+          {
+            "file": "src/pages/content/sakuraEffect/index.ts",
+            "symbol": "startSakuraEffect"
+          },
+          {
+            "file": "src/pages/content/rainEffect/index.ts",
+            "symbol": "startRainEffect"
+          }
+        ]
+      },
+      {
+        "id": "claim.visual_effect_popup_selector_requirement",
+        "kind": "requirement",
+        "text": "The popup visual-effect control should be an elegant compact icon selector, not a boolean snow on/off switch; the user asked for a sliding-bar style control that switches among off, snow, and sakura, and the accepted implementation extended it to rain as a fourth option.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.visual_effect_selection",
+          "component.popup_settings"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/popup/Popup.tsx",
+            "symbol": "Popup"
+          }
+        ]
+      },
+      {
+        "id": "claim.sakura_rejected_leaf_like_shapes",
+        "kind": "decision",
+        "text": "The session rejected sakura implementations based on flattened circles/ellipses and full `scaleX = cos(...)` flipping because the user judged them perfunctory or leaf-like rather than like cherry blossoms.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.visual_effects"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/sakuraEffect/index.ts",
+            "symbol": "tracePetal"
+          }
+        ]
+      },
+      {
+        "id": "claim.sakura_final_visual_contract",
+        "kind": "requirement",
+        "text": "The accepted sakura direction is a pale somei-yoshino style: wide rounded petals with a shallow top notch and bottom stem point, slow airy drift, and gentle positive wobble instead of aggressive 3D tumbling.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.visual_effects"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/sakuraEffect/index.ts",
+            "symbol": "tracePetal"
+          },
+          {
+            "file": "src/pages/content/sakuraEffect/index.ts",
+            "symbol": "updateAndDraw"
+          }
+        ]
+      },
+      {
+        "id": "claim.rain_effect_visual_contract",
+        "kind": "fact",
+        "text": "The rain visual effect uses `gvVisualEffect: 'rain'` and renders cool blue-grey, wind-angled line streaks across three depth layers, with splash ripples for mid and near drops when they hit the viewport floor.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.visual_effects"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/rainEffect/index.ts",
+            "symbol": "updateAndDraw"
+          },
+          {
+            "file": "src/pages/content/rainEffect/index.ts",
+            "symbol": "startRainEffect"
+          }
+        ]
+      },
+      {
+        "id": "claim.visual_effect_storage_comment_stale_for_rain",
+        "kind": "risk",
+        "text": "The `StorageKeys.GV_VISUAL_EFFECT` inline comment still documents the value set as `off | snow | sakura`, even though the popup and runtime now also support `rain`; future edits should update that comment so it does not mislead maintainers.",
+        "truth": "code_verified",
+        "intent": "accidental",
+        "about": [
+          "flow.visual_effect_selection",
+          "component.storage_boundaries"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/types/common.ts",
+            "symbol": "StorageKeys"
+          },
+          {
+            "file": "src/pages/popup/Popup.tsx",
+            "symbol": "SettingsUpdate"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.45d1d240_4a4c_4891_9e2e_34b4ec2d8396",
+        "kind": "session",
+        "ref": "claude-code-session:45d1d240-4a4c-4891-9e2e-34b4ec2d8396",
+        "title": "Popup visual-effect selector session"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.visual_effect_popup_selector_requirement",
+        "to": "source.claude_code_session.45d1d240_4a4c_4891_9e2e_34b4ec2d8396",
+        "metadata": {
+          "reason": "The opening user request asked to replace the snow enable switch with a sliding-bar style selector using elegant concise icons; the final assistant summary reports the accepted popup as four choices including rain."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.sakura_rejected_leaf_like_shapes",
+        "to": "source.claude_code_session.45d1d240_4a4c_4891_9e2e_34b4ec2d8396",
+        "metadata": {
+          "reason": "The user challenged the initial sakura result as perfunctory and later said it felt more like falling leaves; the assistant summaries identify the rejected flattened-circle and full-flip shapes."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.sakura_final_visual_contract",
+        "to": "source.claude_code_session.45d1d240_4a4c_4891_9e2e_34b4ec2d8396",
+        "metadata": {
+          "reason": "After the user's leaf-like feedback, the accepted summary describes the final sakura changes as rounder, paler, slower, and gently wobbling without full flips."
+        }
+      }
+    ]
+  }
+}

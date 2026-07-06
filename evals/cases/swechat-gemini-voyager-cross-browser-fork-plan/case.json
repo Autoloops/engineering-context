@@ -1,0 +1,55 @@
+{
+  "case_id": "swechat-gemini-voyager-cross-browser-fork-plan",
+  "dataset": {
+    "name": "SALT-NLP/SWE-chat",
+    "held_out_session_id": "fed5e3e0-dd4a-4dac-a9bb-38c96996430d",
+    "held_out_created_at": "2026-03-11T00:43:31.802459Z",
+    "prior_sessions": [
+      {
+        "session_id": "27c4f0a3-a92c-42db-9d92-c81d0ed03ce4",
+        "created_at": "2026-03-06T17:26:03.309330Z",
+        "checkpoint_id": "Nagi-ovo/gemini-voyager#7bf952569a2f",
+        "title": "Folder manual ordering"
+      },
+      {
+        "session_id": "56286605-a571-4f52-92dd-069c28fe5fc5",
+        "created_at": "2026-03-06T21:49:41.427037Z",
+        "checkpoint_id": "Nagi-ovo/gemini-voyager#308c8cbfca43",
+        "title": "Changelog badge notification mode"
+      },
+      {
+        "session_id": "08d58754-fbae-4586-9dac-5302894dfcb8",
+        "created_at": "2026-03-10T21:48:01.987572Z",
+        "checkpoint_id": "Nagi-ovo/gemini-voyager#3b86f05dd10f",
+        "title": "Safari update flow"
+      },
+      {
+        "session_id": "416e7eec-d1f4-43f0-a0a0-236a60299cde",
+        "created_at": "2026-03-10T22:50:31.199424Z",
+        "checkpoint_id": "Nagi-ovo/gemini-voyager#124b0c3bde3a",
+        "title": "AI folder organization import"
+      }
+    ],
+    "checkpoint_id": "Nagi-ovo/gemini-voyager#24ae5e8c9285",
+    "base_commit_source": "Held-out public commit c73d6a223fe9ad3449215d3aea3f76c6c32f365c fixes Firefox/Safari conversation fork behavior; eval base is its parent."
+  },
+  "repo": {
+    "full_name": "Nagi-ovo/gemini-voyager",
+    "url": "https://github.com/Nagi-ovo/gemini-voyager.git",
+    "base_commit": "75fc24dbfb15834f9df139e7881ebdc6b3fea1cf"
+  },
+  "task": {
+    "prompt_path": "prompt.md",
+    "judge_path": "judge.md",
+    "expected_relevant_areas": [
+      "conversation fork feature",
+      "browser window opening",
+      "Firefox and Safari popup behavior",
+      "cross-tab data transfer",
+      "extension storage"
+    ]
+  },
+  "memory": {
+    "manifest_path": "memory-seeds/manifest.json"
+  }
+}

@@ -1,0 +1,1 @@
+Project Trends is still showing the same project twice, even when the visible project name is exactly the same. Can you investigate why the projects are not being grouped correctly and give me the right fix plan?

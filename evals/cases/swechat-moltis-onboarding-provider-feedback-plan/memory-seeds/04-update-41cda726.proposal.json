@@ -1,0 +1,103 @@
+{
+  "title": "Update working memory from issue 351 Docker sandbox docs session",
+  "summary": "Durable context from session 41cda726 about Docker socket documentation, restricted-host sandbox fallback, and the separate browser sandbox follow-up.",
+  "creates": {
+    "components": [],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.sandbox_auto_mode_no_sandbox_explicit_off",
+        "kind": "fact",
+        "text": "Sandbox backend selection keeps WASM and NoSandbox out of auto detection: create_sandbox returns NoSandbox only when SandboxMode::Off is configured, select_backend handles wasm explicitly, and auto_detect_backend prefers Apple Container on macOS, then Podman, Docker, and finally restricted-host when Docker is unavailable or no container runtime is available.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.sandbox_exec"
+        ],
+        "supersedes": [
+          "claim.sandbox_docs_contract"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/tools/src/sandbox.rs",
+            "symbol": "create_sandbox"
+          },
+          {
+            "file": "crates/tools/src/sandbox.rs",
+            "symbol": "select_backend"
+          },
+          {
+            "file": "crates/tools/src/sandbox.rs",
+            "symbol": "auto_detect_backend"
+          }
+        ]
+      },
+      {
+        "id": "claim.docker_docs_socketless_restricted_host_fallback",
+        "kind": "fact",
+        "text": "The Docker deployment docs now say the Docker socket mount is recommended for full container isolation, but without the socket Moltis automatically falls back to the restricted-host sandbox, runs commands inside the Moltis container, and lacks filesystem and network isolation.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.sandbox_exec"
+        ],
+        "code_anchors": [
+          {
+            "file": "docs/src/docker.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.docker_docs_reject_socketless_failure_or_no_sandbox",
+        "kind": "decision",
+        "text": "Issue 351 deliberately rejected documenting the socketless Docker case as either shell tools failing or Moltis running in \"no sandbox\" mode; future Docker docs should describe that automatic case as restricted-host fallback instead.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.sandbox_exec"
+        ],
+        "code_anchors": [
+          {
+            "file": "docs/src/docker.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.browser_sandbox_fallback_followup_issue_351",
+        "kind": "task",
+        "text": "Follow-up from issue 351: investigate browser sandbox behavior separately because the issue discussion called out that browser tooling does not auto-fallback the same way shell command sandboxing does; the Docker docs fix did not implement that behavior change.",
+        "truth": "unknown",
+        "intent": "intended",
+        "about": [
+          "component.tools"
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.41cda726_51e1_4a6b_8ce7_2682c2bec6fc",
+        "kind": "session",
+        "ref": "claude-code-session:41cda726-51e1-4a6b-8ce7-2682c2bec6fc",
+        "title": "SWE-chat Claude Code session 41cda726: issue 351 Docker sandbox docs fix"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.docker_docs_reject_socketless_failure_or_no_sandbox",
+        "to": "source.claude_code_session.41cda726_51e1_4a6b_8ce7_2682c2bec6fc",
+        "metadata": {
+          "reason": "The session analyzed issue 351, identified the old Docker docs claims that shell commands fail or run with no sandbox as wrong, and the user approved replacing them with restricted-host fallback language."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.browser_sandbox_fallback_followup_issue_351",
+        "to": "source.claude_code_session.41cda726_51e1_4a6b_8ce7_2682c2bec6fc",
+        "metadata": {
+          "reason": "The issue analysis recorded browser sandbox fallback inconsistency as a separate point, while the implemented and accepted change only corrected Docker documentation."
+        }
+      }
+    ]
+  }
+}

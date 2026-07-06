@@ -1,0 +1,159 @@
+{
+  "title": "Update working memory from session",
+  "summary": "Durable context learned during the favorites and recently viewed visual-positioning session.",
+  "creates": {
+    "components": [],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.unified_collection_clear_recent_view_header_requirement",
+        "kind": "decision",
+        "text": "The clear-recent action for favorites/recently-viewed collection pages belongs in the collection view header rather than in the workspace shell header with global actions.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.unified_collections",
+          "flow.unified_collections"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/unified-collection/unified-collection-page.component.html"
+          },
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/components/workspace-shell-header/workspace-shell-header.component.html"
+          }
+        ]
+      },
+      {
+        "id": "claim.unified_collection_clear_recent_button_scope",
+        "kind": "fact",
+        "text": "UnifiedCollectionPageComponent renders the delete_sweep clear button inside the collection header toggles only when mode is recent and allItems is nonempty; clearAllRecent clears the current effective scope and playlist through UnifiedRecentDataService before emptying the view model.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.unified_collections",
+          "flow.unified_collections"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/unified-collection/unified-collection-page.component.html"
+          },
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/unified-collection/unified-collection-page.component.ts",
+            "symbol": "UnifiedCollectionPageComponent"
+          }
+        ]
+      },
+      {
+        "id": "claim.unified_collection_skeleton_header_height",
+        "kind": "fact",
+        "text": "Unified collection loading states reserve the loaded header's action-row footprint by rendering toggle placeholders in the collection header; the base placeholder height is 43px and the scope placeholder is wider, preventing the segmented-toggle row from causing a post-load header jump.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.unified_collections"
+        ],
+        "supersedes": [
+          "claim.unified_collection_skeletons"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/unified-collection/unified-collection-page.component.html"
+          },
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/unified-collection/unified-collection-page.component.scss"
+          }
+        ]
+      },
+      {
+        "id": "claim.unified_live_recent_drag_disabled",
+        "kind": "fact",
+        "text": "GlobalFavoritesListComponent exposes a draggable input that disables both the CDK drop list and channel-list drag handles when false; UnifiedLiveTabComponent passes mode() === 'favorites', so recently viewed live lists are not reorderable while favorites lists remain draggable.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.unified_collections",
+          "flow.unified_collections"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/global-favorites-list/global-favorites-list.component.ts",
+            "symbol": "GlobalFavoritesListComponent"
+          },
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/global-favorites-list/global-favorites-list.component.html"
+          },
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/unified-collection/unified-live-tab.component.html"
+          }
+        ]
+      },
+      {
+        "id": "claim.unified_recent_live_newest_first",
+        "kind": "fact",
+        "text": "Recently viewed live collections keep newest playback first: UnifiedLiveTabComponent records live playback and emits the updated item, UnifiedCollectionPageComponent.onItemPlayed only handles recent mode and sorts by viewedAt descending, and UnifiedRecentDataService sorts loaded global and playlist recent items descending by viewed time.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.unified_collections",
+          "flow.unified_collections"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/unified-collection/unified-live-tab.component.ts",
+            "symbol": "UnifiedLiveTabComponent"
+          },
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/unified-collection/unified-collection-page.component.ts",
+            "symbol": "UnifiedCollectionPageComponent"
+          },
+          {
+            "file": "libs/portal/shared/util/src/lib/collection/unified-recent-data.service.ts",
+            "symbol": "UnifiedRecentDataService"
+          }
+        ]
+      },
+      {
+        "id": "claim.workspace_header_bulk_action_plumbing_drift",
+        "kind": "risk",
+        "text": "WorkspaceShellFacade still computes headerBulkAction for recent sections even though WorkspaceShellHeaderComponent no longer declares a headerBulkAction input and workspace-shell.component.html no longer binds one, leaving recent clear-action shell plumbing disconnected from the header.",
+        "truth": "code_verified",
+        "intent": "accidental",
+        "about": [
+          "flow.unified_collections"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/services/workspace-shell.facade.ts",
+            "symbol": "WorkspaceShellFacade"
+          },
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/components/workspace-shell-header/workspace-shell-header.component.ts",
+            "symbol": "WorkspaceShellHeaderComponent"
+          },
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/workspace-shell.component.html"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.545831c3_f1bb_402d_b3f0_dce48fb6bfb2",
+        "kind": "session",
+        "ref": "claude-code-session:545831c3-f1bb-402d-b3f0-dce48fb6bfb2",
+        "title": "Claude Code session 545831c3 favorites/recent visual positioning"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.unified_collection_clear_recent_view_header_requirement",
+        "to": "source.claude_code_session.545831c3_f1bb_402d_b3f0_dce48fb6bfb2",
+        "metadata": {
+          "reason": "The user explicitly said the clear button in the workspace shell header violated the mental model and should move to the view header."
+        }
+      }
+    ]
+  }
+}

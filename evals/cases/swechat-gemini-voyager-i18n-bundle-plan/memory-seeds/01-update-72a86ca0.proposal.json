@@ -1,0 +1,219 @@
+{
+  "title": "Update working memory from macOS shortcut display session",
+  "summary": "Durable context learned while adding platform-aware shortcut labels and input-collapse shortcut discoverability.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.browser_platform_utils",
+        "name": "Browser Platform Utilities",
+        "code_anchor": "src/core/utils/browser.ts"
+      },
+      {
+        "id": "component.keyboard_shortcut_service",
+        "name": "Keyboard Shortcut Service",
+        "code_anchor": "src/core/services/KeyboardShortcutService.ts"
+      },
+      {
+        "id": "component.input_collapse_content",
+        "name": "Input Collapse Content Feature",
+        "code_anchor": "src/pages/content/inputCollapse/index.ts"
+      },
+      {
+        "id": "component.send_behavior_content",
+        "name": "Send Behavior Content Feature",
+        "code_anchor": "src/pages/content/sendBehavior/index.ts"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.platform_aware_shortcut_display",
+        "name": "Platform Aware Shortcut Display",
+        "touches": [
+          "component.browser_platform_utils",
+          "component.keyboard_shortcut_service",
+          "component.popup_settings",
+          "component.i18n",
+          "component.docs_site"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.shortcut_runtime_already_accepts_cmd",
+        "kind": "fact",
+        "text": "Input collapse and Ctrl+Enter send already accept either Ctrl or Cmd at runtime by checking ctrlKey || metaKey; the macOS shortcut session changed labels and discoverability rather than the underlying key handling.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.input_collapse_content",
+          "component.send_behavior_content"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/inputCollapse/index.ts",
+            "symbol": "initInputCollapse"
+          },
+          {
+            "file": "src/pages/content/sendBehavior/index.ts",
+            "symbol": "handleKeyDown"
+          }
+        ]
+      },
+      {
+        "id": "claim.browser_utils_mac_modifier_label",
+        "kind": "fact",
+        "text": "Browser platform utilities expose isMac(), which checks navigator.platform for MAC before falling back to a macOS userAgent match, and getModifierKey(), which returns ⌘ on macOS and Ctrl on other platforms.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.browser_platform_utils",
+          "flow.platform_aware_shortcut_display"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/utils/browser.ts",
+            "symbol": "isMac"
+          },
+          {
+            "file": "src/core/utils/browser.ts",
+            "symbol": "getModifierKey"
+          }
+        ]
+      },
+      {
+        "id": "claim.keyboard_shortcut_format_platform_modifiers",
+        "kind": "fact",
+        "text": "KeyboardShortcutService.formatShortcut formats modifier keys by platform: macOS maps Meta/Alt/Ctrl/Shift to ⌘/⌥/⌃/⇧ and joins without separators, while non-macOS maps Meta to Win and joins modifiers and keys with ' + '.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.keyboard_shortcut_service",
+          "flow.platform_aware_shortcut_display"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/services/KeyboardShortcutService.ts",
+            "symbol": "KeyboardShortcutService.formatShortcut"
+          }
+        ]
+      },
+      {
+        "id": "claim.popup_shortcut_labels_use_modifier_placeholder",
+        "kind": "fact",
+        "text": "Popup settings render Ctrl+Enter send labels and the input-collapse shortcut hint by replacing the {modifier} placeholder with getModifierKey(), so macOS users see ⌘ while other platforms see Ctrl.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.popup_settings",
+          "flow.platform_aware_shortcut_display"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/popup/Popup.tsx",
+            "symbol": "Popup"
+          }
+        ]
+      },
+      {
+        "id": "claim.i18n_shortcut_modifier_placeholder_contract",
+        "kind": "fact",
+        "text": "The popup locale contract for shortcut labels uses {modifier} in ctrlEnterSend and ctrlEnterSendHint, and includes inputCollapseShortcutHint for the collapsed-input expansion shortcut.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.i18n",
+          "flow.platform_aware_shortcut_display"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/locales/en/messages.json"
+          },
+          {
+            "file": "src/locales/zh/messages.json"
+          },
+          {
+            "file": "src/locales/zh_TW/messages.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.docs_input_collapse_shortcut_hint",
+        "kind": "fact",
+        "text": "The input-collapse VitePress guide now documents Ctrl/⌘+I as a quick way to expand the collapsed input area.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.docs_site",
+          "flow.platform_aware_shortcut_display"
+        ],
+        "code_anchors": [
+          {
+            "file": "docs/en/guide/input-collapse.md"
+          },
+          {
+            "file": "docs/guide/input-collapse.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.popup_input_collapse_shortcut_hint_decision",
+        "kind": "decision",
+        "text": "The session decided that the Ctrl/⌘+I expansion shortcut should be shown in the popup settings because the popup is the feature entry point and the shortcut otherwise has poor discoverability.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.popup_settings",
+          "flow.platform_aware_shortcut_display"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/popup/Popup.tsx",
+            "symbol": "Popup"
+          }
+        ]
+      },
+      {
+        "id": "claim.docs_shortcut_hint_static_ctrl_cmd_decision",
+        "kind": "decision",
+        "text": "The session chose a static Ctrl/⌘+I notation for the VitePress input-collapse docs because markdown docs do not perform runtime platform detection.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.docs_site",
+          "flow.platform_aware_shortcut_display"
+        ],
+        "code_anchors": [
+          {
+            "file": "docs/en/guide/input-collapse.md"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.72a86ca0_ec56_45a9_9f97_c841875b5e96",
+        "kind": "session",
+        "ref": "claude-code-session:72a86ca0-ec56-45a9-9f97-c841875b5e96",
+        "title": "Claude Code session macOS shortcut and locale text updates"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.popup_input_collapse_shortcut_hint_decision",
+        "to": "source.claude_code_session.72a86ca0_ec56_45a9_9f97_c841875b5e96",
+        "metadata": {
+          "reason": "The user asked whether Ctrl+I should be indicated in the popup, accepted the assistant's discoverability rationale, and then requested matching documentation updates."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.docs_shortcut_hint_static_ctrl_cmd_decision",
+        "to": "source.claude_code_session.72a86ca0_ec56_45a9_9f97_c841875b5e96",
+        "metadata": {
+          "reason": "The assistant explained during the session that static Ctrl/⌘ notation was used in VitePress markdown because platform detection is not available there, and the user proceeded to formatting and commit."
+        }
+      }
+    ]
+  }
+}

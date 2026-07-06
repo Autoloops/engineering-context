@@ -1,0 +1,1 @@
+The locale message JSONs are getting long and repetitive. Can you investigate whether there is a cleaner way to keep the same behavior without bloating the extension bundle, then make the right implementation plan?

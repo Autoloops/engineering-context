@@ -1,0 +1,328 @@
+{
+  "title": "Update working memory from favorites navigation session",
+  "summary": "Durable context learned while unifying IPTVnator favorites and recently-viewed views, including scope behavior, route ownership, navigation decisions, and loading/layout conventions.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.unified_collections",
+        "name": "Unified favorites and recently-viewed collections",
+        "code_anchor": "libs/portal/shared/ui/src/lib/components/unified-collection/unified-collection-page.component.ts"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.unified_collections",
+        "name": "Unified favorites and recently-viewed collection flow",
+        "touches": [
+          "component.unified_collections",
+          "component.web_app_shell",
+          "component.xtream_portal",
+          "component.stalker_portal",
+          "component.electron_preload_api",
+          "component.shared_database",
+          "component.playlist_storage_service",
+          "component.m3u_state"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.unified_collection_item_model",
+        "kind": "fact",
+        "text": "`UnifiedCollectionItem` is the shared display model for favorites and recently-viewed entries from M3U, Xtream, and Stalker sources, and it carries the content type (`live`, `movie`, or `series`) plus source-specific playback/navigation fields.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "libs/portal/shared/util/src/lib/collection/unified-collection-item.interface.ts",
+            "symbol": "UnifiedCollectionItem"
+          }
+        ],
+        "about": [
+          "component.unified_collections"
+        ]
+      },
+      {
+        "id": "claim.unified_collection_page_scope_contract",
+        "kind": "fact",
+        "text": "`UnifiedCollectionPageComponent` drives both favorites and recently-viewed modes, derives playlist context by walking ancestor route params, shows the playlist/all scope toggle only when a playlist id exists, and treats query-param `scope` as the highest-priority scope override before route `defaultScope` and persisted per-view scope.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/unified-collection/unified-collection-page.component.ts",
+            "symbol": "UnifiedCollectionPageComponent"
+          }
+        ],
+        "about": [
+          "component.unified_collections"
+        ]
+      },
+      {
+        "id": "claim.unified_collection_data_scope",
+        "kind": "fact",
+        "text": "Unified collection data uses `UnifiedFavoritesDataService` and `UnifiedRecentDataService`: playlist scope dispatches to playlist-specific M3U/Xtream/Stalker loaders when a playlist id is present, while all scope aggregates across all supported source types.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "libs/portal/shared/util/src/lib/collection/unified-favorites-data.service.ts",
+            "symbol": "UnifiedFavoritesDataService"
+          },
+          {
+            "file": "libs/portal/shared/util/src/lib/collection/unified-recent-data.service.ts",
+            "symbol": "UnifiedRecentDataService"
+          }
+        ],
+        "about": [
+          "flow.unified_collections"
+        ]
+      },
+      {
+        "id": "claim.xtream_global_favorites_live_vs_all",
+        "kind": "fact",
+        "text": "Xtream still has two global favorites queries: `getGlobalFavorites` keeps the legacy live-only `content.type = 'live'` filter, while `getAllGlobalFavorites` removes that filter and is the query used by unified favorites to include live TV, movies, and series.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "apps/electron-backend/src/app/database/operations/favorites.operations.ts",
+            "symbol": "getGlobalFavorites"
+          },
+          {
+            "file": "apps/electron-backend/src/app/database/operations/favorites.operations.ts",
+            "symbol": "getAllGlobalFavorites"
+          },
+          {
+            "file": "libs/portal/shared/util/src/lib/collection/unified-favorites-data.service.ts",
+            "symbol": "UnifiedFavoritesDataService"
+          }
+        ],
+        "about": [
+          "flow.unified_collections"
+        ]
+      },
+      {
+        "id": "claim.unified_collection_routes",
+        "kind": "fact",
+        "text": "Xtream and Stalker favorites/recent routes use lightweight collection route wrapper components that pass route-bound `mode` and `portalType` inputs into `UnifiedCollectionPageComponent`; workspace-level `global-favorites` and `global-recent` routes load the same page with `defaultScope: 'all'`.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "libs/portal/xtream/feature/src/lib/xtream-collection-route.component.ts",
+            "symbol": "XtreamCollectionRouteComponent"
+          },
+          {
+            "file": "libs/portal/stalker/feature/src/lib/stalker-collection-route.component.ts",
+            "symbol": "StalkerCollectionRouteComponent"
+          },
+          {
+            "file": "apps/web/src/app/app.routes.ts",
+            "symbol": "routes"
+          }
+        ],
+        "about": [
+          "flow.unified_collections"
+        ]
+      },
+      {
+        "id": "claim.m3u_collections_remain_separate",
+        "kind": "fact",
+        "text": "M3U playlist favorites and recent routes remain on `M3uCollectionRouteComponent` instead of the unified Xtream/Stalker collection wrappers.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "apps/web/src/app/app.routes.ts",
+            "symbol": "routes"
+          }
+        ],
+        "about": [
+          "flow.unified_collections"
+        ]
+      },
+      {
+        "id": "claim.unified_collection_content_layouts",
+        "kind": "fact",
+        "text": "The unified collection page uses a header content-type segmented control and `@switch` rendering: live entries go through `UnifiedLiveTabComponent` with the reusable global-favorites channel list, EPG, playback, and drag reorder, while movie and series entries go through `UnifiedGridTabComponent` poster cards and detail navigation.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/unified-collection/unified-collection-page.component.ts",
+            "symbol": "UnifiedCollectionPageComponent"
+          },
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/unified-collection/unified-live-tab.component.ts",
+            "symbol": "UnifiedLiveTabComponent"
+          },
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/unified-collection/unified-grid-tab.component.ts",
+            "symbol": "UnifiedGridTabComponent"
+          }
+        ],
+        "about": [
+          "component.unified_collections"
+        ]
+      },
+      {
+        "id": "claim.unified_collection_skeletons",
+        "kind": "fact",
+        "text": "Unified collections no longer use a Material progress spinner for initial loading; they share the extracted skeleton SCSS primitives with `grid-list`, rendering row skeletons for live lists and poster-card skeletons for movies/series.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "libs/portal/shared/ui/src/lib/styles/_skeleton.scss"
+          },
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/unified-collection/unified-collection-page.component.ts",
+            "symbol": "UnifiedCollectionPageComponent"
+          },
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/grid-list/grid-list.component.scss"
+          }
+        ],
+        "about": [
+          "component.unified_collections"
+        ]
+      },
+      {
+        "id": "claim.workspace_route_collection_context_panel",
+        "kind": "fact",
+        "text": "`parseWorkspaceShellRoute` treats portal favorites and recent routes as local-filter/searchable collection routes with no context sidebar; the collection context panel is reserved for portal downloads, while category sidebars stay on Xtream/Stalker VOD, series, and live/ITV sections.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "libs/workspace/shell/util/src/lib/navigation/workspace-shell-route.utils.ts",
+            "symbol": "parseWorkspaceShellRoute"
+          }
+        ],
+        "about": [
+          "flow.unified_collections"
+        ]
+      },
+      {
+        "id": "claim.header_global_favorites_smart_route",
+        "kind": "fact",
+        "text": "The workspace global-favorites header action is smart-routed: when an Xtream or Stalker rail context exists it navigates to that portal's `favorites` route with `?scope=all`, otherwise it falls back to `/workspace/global-favorites`; portal favorites with `scope=all` also count as the active global-favorites header state.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/services/workspace-shell.facade.ts",
+            "symbol": "WorkspaceShellFacade"
+          },
+          {
+            "file": "libs/workspace/shell/util/src/lib/navigation/workspace-shell-route.utils.ts",
+            "symbol": "parseWorkspaceShellRoute"
+          }
+        ],
+        "about": [
+          "flow.unified_collections"
+        ]
+      },
+      {
+        "id": "claim.unified_collection_header_decision",
+        "kind": "decision",
+        "text": "The unified collection UX should use two compact segmented controls in one header row, one for content type and one for playlist/all scope; the session rejected keeping the content-type selector as centered Material tabs or as a separate left filter sidebar for these views.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/unified-collection/unified-collection-page.component.html"
+          }
+        ],
+        "about": [
+          "component.unified_collections"
+        ]
+      },
+      {
+        "id": "claim.collection_navigation_decision",
+        "kind": "decision",
+        "text": "Favorites and Recently Viewed links should remain in the portal rail as contextual navigation, while the header star stays as an all-favorites shortcut into the active portal's favorites route with all scope; the session explicitly avoided removing the rail links or adding Recently Viewed as another header shortcut.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/services/workspace-shell.facade.ts",
+            "symbol": "WorkspaceShellFacade"
+          }
+        ],
+        "about": [
+          "flow.unified_collections"
+        ]
+      },
+      {
+        "id": "claim.m3u_unified_collection_boundary",
+        "kind": "decision",
+        "text": "The unification scope intentionally leaves M3U favorites/recent navigation on its existing M3U collection/player flow because M3U has only live-TV channel collections and does not need the Xtream/Stalker movie/series content-type split.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "apps/web/src/app/app.routes.ts",
+            "symbol": "routes"
+          }
+        ],
+        "about": [
+          "flow.unified_collections"
+        ]
+      },
+      {
+        "id": "claim.global_favorites_fallback_followup",
+        "kind": "task",
+        "text": "Revisit the standalone `/workspace/global-favorites` fallback UX for cases with no active portal context; the session left open whether that workspace-level route should simply aggregate everything or add stronger portal/context selection affordances.",
+        "truth": "unknown",
+        "intent": "intended",
+        "about": [
+          "flow.unified_collections"
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.e340da8c_f607_4672_932d_2d6a9970d20e",
+        "kind": "session",
+        "ref": "claude-code-session:e340da8c-f607-4672-932d-2d6a9970d20e",
+        "title": "Favorites and recent-items navigation"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.unified_collection_header_decision",
+        "to": "source.claude_code_session.e340da8c_f607_4672_932d_2d6a9970d20e",
+        "metadata": {
+          "reason": "The user asked whether tabs should move into the header or become segmented controls, and the accepted implementation replaced tabs with a same-row content-type toggle beside the scope toggle."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.collection_navigation_decision",
+        "to": "source.claude_code_session.e340da8c_f607_4672_932d_2d6a9970d20e",
+        "metadata": {
+          "reason": "The user asked for a no-implementation plan about rail versus header favorites/recent navigation, approved the recommendation, and the session implemented the header star as a global-first shortcut while keeping rail links."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.m3u_unified_collection_boundary",
+        "to": "source.claude_code_session.e340da8c_f607_4672_932d_2d6a9970d20e",
+        "metadata": {
+          "reason": "The brainstorming constraints and accepted UX plan called out M3U playlists as live-only and kept them separate from the unified Xtream/Stalker collection treatment."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.global_favorites_fallback_followup",
+        "to": "source.claude_code_session.e340da8c_f607_4672_932d_2d6a9970d20e",
+        "metadata": {
+          "reason": "The approved navigation plan kept `/workspace/global-favorites` as a fallback when no portal context is active and explicitly noted that its standalone UX could be reconsidered."
+        }
+      }
+    ]
+  }
+}

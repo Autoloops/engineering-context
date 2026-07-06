@@ -1,0 +1,199 @@
+{
+  "title": "Update working memory from changelog badge session",
+  "summary": "Durable context from the historical session that added changelog popup-versus-badge notification mode and clarified prompt-manager version badge behavior.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.changelog_content",
+        "name": "Content changelog module",
+        "code_anchor": "src/pages/content/changelog/index.ts"
+      },
+      {
+        "id": "component.prompt_manager",
+        "name": "Prompt manager",
+        "code_anchor": "src/pages/content/prompt/index.ts"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.changelog_notification_mode",
+        "name": "Changelog notification mode",
+        "touches": [
+          "component.changelog_content",
+          "component.prompt_manager",
+          "component.storage_types"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.changelog_notify_mode_toggle_contract",
+        "kind": "fact",
+        "text": "Changelog notification mode is persisted in StorageKeys.CHANGELOG_NOTIFY_MODE as either 'popup' or 'badge'; the changelog modal checkbox writes that mode, clears CHANGELOG_DISMISSED_VERSION when switching to badge, and startChangelog suppresses the automatic modal while badge mode is selected.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.changelog_content",
+          "component.storage_types",
+          "flow.changelog_notification_mode"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/types/common.ts",
+            "symbol": "StorageKeys"
+          },
+          {
+            "file": "src/pages/content/changelog/index.ts",
+            "symbol": "createChangelogModal"
+          },
+          {
+            "file": "src/pages/content/changelog/index.ts",
+            "symbol": "startChangelog"
+          }
+        ]
+      },
+      {
+        "id": "claim.prompt_manager_changelog_badge_behavior",
+        "kind": "fact",
+        "text": "Prompt manager participates in changelog badge mode: startPromptManager still mounts the floating trigger when the prompt manager is hidden but an unread badge notification exists, adds gv-pm-trigger-new, and trigger clicks open showChangelogModalDirect instead of the prompt panel before hiding the trigger again if the user hid the prompt manager.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.prompt_manager",
+          "component.changelog_content",
+          "flow.changelog_notification_mode"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/prompt/index.ts",
+            "symbol": "startPromptManager"
+          }
+        ]
+      },
+      {
+        "id": "claim.prompt_manager_version_badge_changelog_requirement",
+        "kind": "requirement",
+        "text": "The prompt-manager version badge must never open GitHub releases; whether or not badge mode is active, clicking it should open the in-extension changelog modal, with badge-active clicks clearing the NEW state.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.prompt_manager",
+          "component.changelog_content",
+          "flow.changelog_notification_mode"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/prompt/index.ts",
+            "symbol": "startPromptManager"
+          }
+        ]
+      },
+      {
+        "id": "claim.changelog_dismissal_semantics",
+        "kind": "fact",
+        "text": "showChangelogModal writes CHANGELOG_DISMISSED_VERSION to EXTENSION_VERSION before displaying the modal, and hasUnreadChangelog treats any different dismissed version as unread, so a displayed changelog does not keep reappearing for the same extension version.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.changelog_content",
+          "component.storage_types",
+          "flow.changelog_notification_mode"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/changelog/index.ts",
+            "symbol": "showChangelogModal"
+          },
+          {
+            "file": "src/pages/content/changelog/index.ts",
+            "symbol": "hasUnreadChangelog"
+          }
+        ]
+      },
+      {
+        "id": "claim.changelog_badge_one_shot_update_flow",
+        "kind": "decision",
+        "text": "The accepted badge-mode flow is one-shot per real extension update: after an upgrade, the dismissed version remains on the previous version, badge mode shows NEW once, and opening the changelog writes the current version so subsequent reloads do not show it again until another version change.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.changelog_content",
+          "component.prompt_manager",
+          "flow.changelog_notification_mode"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/changelog/index.ts",
+            "symbol": "showChangelogModal"
+          },
+          {
+            "file": "src/pages/content/changelog/index.ts",
+            "symbol": "hasUnreadChangelog"
+          }
+        ]
+      },
+      {
+        "id": "claim.changelog_badge_manual_test_reset",
+        "kind": "fact",
+        "text": "For manual changelog-badge testing, clear the read state in the extension content-script context by setting chrome.storage.local with gvChangelogNotifyMode: 'badge' and gvChangelogDismissedVersion: ''; reload the extension build when manifest/runtime versions do not match before judging badge behavior.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.changelog_content",
+          "component.prompt_manager",
+          "flow.changelog_notification_mode"
+        ]
+      },
+      {
+        "id": "claim.changelog_132_note_documents_badge_mode",
+        "kind": "fact",
+        "text": "The 1.3.2 changelog note documents the new update notification mode in each localized section, describing the choice between a popup and a floating-button NEW badge and saying the mode can be switched directly from the changelog popup.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.changelog_content",
+          "flow.changelog_notification_mode"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/changelog/notes/1.3.2.md"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.56286605_a571_4f52_92dd_069c28fe5fc5",
+        "kind": "session",
+        "ref": "claude-code-session:56286605-a571-4f52-92dd-069c28fe5fc5",
+        "title": "Claude Code session 56286605: Changelog badge notification mode"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.prompt_manager_version_badge_changelog_requirement",
+        "to": "source.claude_code_session.56286605_a571_4f52_92dd_069c28fe5fc5",
+        "metadata": {
+          "reason": "The user explicitly corrected the behavior so clicking the version number should never navigate to GitHub and should always open the changelog modal."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.changelog_badge_one_shot_update_flow",
+        "to": "source.claude_code_session.56286605_a571_4f52_92dd_069c28fe5fc5",
+        "metadata": {
+          "reason": "The transcript accepted the explanation that real upgrades show the badge once because the previous dismissed version differs from the new extension version, then the modal write prevents repeats."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.changelog_badge_manual_test_reset",
+        "to": "source.claude_code_session.56286605_a571_4f52_92dd_069c28fe5fc5",
+        "metadata": {
+          "reason": "The transcript gives the manual storage command for forcing the NEW badge and explains that a stale loaded 1.3.1/1.3.2 build mismatch can make local testing misleading."
+        }
+      }
+    ]
+  }
+}

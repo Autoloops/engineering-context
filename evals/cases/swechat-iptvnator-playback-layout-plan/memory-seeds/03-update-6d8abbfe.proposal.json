@@ -1,0 +1,234 @@
+{
+  "title": "Update working memory from SWE-chat session 6d8abbfe",
+  "summary": "Durable context from the playlist add entry-point redesign session: the unified add dialog, compact Material density decisions, footer-action placement, updated e2e flow, and a code-verified URL footer wiring risk discovered during replay.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.add_playlist_dialog",
+        "name": "Add Playlist Dialog",
+        "code_anchor": "libs/playlist/import/feature/src/lib/add-playlist-dialog/add-playlist-dialog.component.ts"
+      },
+      {
+        "id": "component.workspace_add_playlist_entrypoints",
+        "name": "Workspace Add Playlist Entry Points",
+        "code_anchor": "libs/workspace/shell/feature/src/lib/workspace-shell/components/workspace-shell-header/workspace-shell-header.component.ts"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.unified_add_playlist_entrypoint",
+        "name": "Unified Add Playlist Entry Point",
+        "touches": [
+          "component.add_playlist_dialog",
+          "component.workspace_add_playlist_entrypoints"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.add_playlist_unified_dialog_selected",
+        "kind": "decision",
+        "text": "The add-playlist UX should use one dialog with top-level M3U, Xtream, and Stalker choices, with URL/file/text disclosed only inside M3U, instead of a flat menu of five add options.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.unified_add_playlist_entrypoint"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/playlist/import/feature/src/lib/add-playlist-dialog/add-playlist-dialog.component.html"
+          }
+        ]
+      },
+      {
+        "id": "claim.add_playlist_dialog_signal_selection",
+        "kind": "fact",
+        "text": "AddPlaylistDialogComponent owns the selected playlist category and M3U subtype with Angular signals, computes the active PlaylistType, and can initialize from optional MAT_DIALOG_DATA for callers that still preselect a type.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.add_playlist_dialog",
+          "flow.unified_add_playlist_entrypoint"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/playlist/import/feature/src/lib/add-playlist-dialog/add-playlist-dialog.component.ts",
+            "symbol": "AddPlaylistDialogComponent"
+          }
+        ]
+      },
+      {
+        "id": "claim.workspace_add_entrypoints_open_unified_dialog",
+        "kind": "fact",
+        "text": "Workspace add-playlist entry points now open the unified dialog directly: WorkspaceShellActions.openAddPlaylistDialog accepts an optional type, while the workspace header, workspace sources, and recent-playlists empty state emit void add events for the default dialog.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.workspace_add_playlist_entrypoints",
+          "flow.unified_add_playlist_entrypoint"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/workspace/shell/util/src/lib/workspace-shell-actions.ts",
+            "symbol": "WorkspaceShellActions"
+          },
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/components/workspace-shell-header/workspace-shell-header.component.ts",
+            "symbol": "WorkspaceShellHeaderComponent"
+          },
+          {
+            "file": "libs/playlist/shared/ui/src/lib/recent-playlists/empty-state/empty-state.component.ts",
+            "symbol": "EmptyStateComponent"
+          }
+        ]
+      },
+      {
+        "id": "claim.add_playlist_density_scoped_split",
+        "kind": "fact",
+        "text": "The add playlist dialog uses component-scoped Angular Material density themes with form fields at scale -1 so labels remain visible and button toggles at scale -3 for a compact segmented-control height.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.add_playlist_dialog"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/playlist/import/feature/src/lib/add-playlist-dialog/add-playlist-dialog.component.scss"
+          }
+        ]
+      },
+      {
+        "id": "claim.add_playlist_no_fixed_form_height",
+        "kind": "decision",
+        "text": "After comparing fixed 280px, no fixed height, and 380px dialog form-area variants, the session chose no fixed form-area height so the dialog fits active content even though switching types can resize it.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.add_playlist_dialog"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/playlist/import/feature/src/lib/add-playlist-dialog/add-playlist-dialog.component.scss"
+          }
+        ]
+      },
+      {
+        "id": "claim.add_playlist_footer_actions",
+        "kind": "fact",
+        "text": "The add playlist dialog now renders type-specific actions in mat-dialog-actions, using child component refs for text, Xtream, and Stalker actions, while the individual URL, text, Xtream, and Stalker import templates no longer render their own submit button rows.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.add_playlist_dialog",
+          "flow.unified_add_playlist_entrypoint"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/playlist/import/feature/src/lib/add-playlist-dialog/add-playlist-dialog.component.html"
+          },
+          {
+            "file": "libs/playlist/import/feature/src/lib/xtream-code-import/xtream-code-import.component.ts",
+            "symbol": "XtreamCodeImportComponent"
+          },
+          {
+            "file": "libs/playlist/import/feature/src/lib/stalker-portal-import/stalker-portal-import.component.ts",
+            "symbol": "StalkerPortalImportComponent"
+          }
+        ]
+      },
+      {
+        "id": "claim.add_playlist_footer_always_visible_requirement",
+        "kind": "requirement",
+        "text": "Add-playlist action buttons should live in the dialog footer so submit, clear, and connection-test actions remain visible while switching or scrolling form content.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.add_playlist_dialog"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/playlist/import/feature/src/lib/add-playlist-dialog/add-playlist-dialog.component.html"
+          }
+        ]
+      },
+      {
+        "id": "claim.add_playlist_e2e_unified_flow",
+        "kind": "fact",
+        "text": "The web e2e add-playlist helpers now click the Add playlist button to open the dialog, then choose the relevant dialog toggle: File for M3U upload, Stalker for Stalker portal import, and Xtream for Xtream import.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.unified_add_playlist_entrypoint"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/web-e2e/src/basic.e2e.ts"
+          },
+          {
+            "file": "apps/web-e2e/src/stalker.e2e.ts"
+          },
+          {
+            "file": "apps/web-e2e/src/xtream.e2e.ts"
+          }
+        ]
+      },
+      {
+        "id": "claim.add_playlist_url_footer_wiring_risk",
+        "kind": "risk",
+        "text": "The current patched URL-add footer wiring is inconsistent: the dialog template calls submitUrlPlaylist(), but AddPlaylistDialogComponent does not define that method, and UrlUploadComponent's form defines only playlistUrl while the URL template and dialog spec reference playlistName.",
+        "truth": "code_verified",
+        "intent": "accidental",
+        "about": [
+          "component.add_playlist_dialog"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/playlist/import/feature/src/lib/add-playlist-dialog/add-playlist-dialog.component.ts",
+            "symbol": "AddPlaylistDialogComponent"
+          },
+          {
+            "file": "libs/playlist/import/feature/src/lib/add-playlist-dialog/add-playlist-dialog.component.html"
+          },
+          {
+            "file": "libs/playlist/import/feature/src/lib/url-upload/url-upload.component.ts",
+            "symbol": "UrlUploadComponent"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.6d8abbfe_ae0d_4e8f_a9e6_be06fad5cd10",
+        "kind": "session",
+        "ref": "claude-code-session:6d8abbfe-ae0d-4e8f-a9e6-be06fad5cd10",
+        "title": "Playlist add entry-point redesign"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.add_playlist_unified_dialog_selected",
+        "to": "source.claude_code_session.6d8abbfe_ae0d_4e8f_a9e6_be06fad5cd10",
+        "metadata": {
+          "reason": "The user proposed the single-dialog segmented design and the session accepted it as the preferred UX over the existing flat add menu."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.add_playlist_no_fixed_form_height",
+        "to": "source.claude_code_session.6d8abbfe_ae0d_4e8f_a9e6_be06fad5cd10",
+        "metadata": {
+          "reason": "The session compared screenshots for fixed 280px, no fixed height, and 380px form-area options; when asked to choose, the agent selected no fixed height and the user accepted continuation."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.add_playlist_footer_always_visible_requirement",
+        "to": "source.claude_code_session.6d8abbfe_ae0d_4e8f_a9e6_be06fad5cd10",
+        "metadata": {
+          "reason": "The user explicitly requested moving dialog buttons into the mat-dialog footer so they are always visible."
+        }
+      }
+    ]
+  }
+}

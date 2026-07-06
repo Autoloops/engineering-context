@@ -1,0 +1,445 @@
+{
+  "title": "Bootstrap Rudel repository memory",
+  "summary": "Shallow orientation memory for the Rudel monorepo: public apps, contracts, storage boundaries, setup commands, and ingestion/analytics flows.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.repository",
+        "name": "Repository",
+        "code_anchor": "README.md"
+      },
+      {
+        "id": "component.cli",
+        "name": "Rudel CLI",
+        "code_anchor": "apps/cli/src/app.ts"
+      },
+      {
+        "id": "component.agent_adapters",
+        "name": "Agent Adapters",
+        "code_anchor": "packages/agent-adapters/src/types.ts"
+      },
+      {
+        "id": "component.api_http",
+        "name": "API Server",
+        "code_anchor": "apps/api/src/index.ts"
+      },
+      {
+        "id": "component.api_contract",
+        "name": "Shared RPC Contract",
+        "code_anchor": "packages/api-routes/src/index.ts"
+      },
+      {
+        "id": "component.auth_postgres",
+        "name": "Auth and Organization Storage",
+        "code_anchor": "packages/sql-schema/src/auth-schema.ts"
+      },
+      {
+        "id": "component.clickhouse_storage",
+        "name": "ClickHouse Session and Analytics Storage",
+        "code_anchor": "packages/ch-schema/src/db/schema/session-analytics.ts"
+      },
+      {
+        "id": "component.web_dashboard",
+        "name": "Web Dashboard",
+        "code_anchor": "apps/web/src/App.tsx"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.local_development",
+        "name": "Local Development and Verification",
+        "touches": [
+          "component.repository",
+          "component.api_http",
+          "component.web_dashboard",
+          "component.clickhouse_storage"
+        ]
+      },
+      {
+        "id": "flow.cli_login",
+        "name": "CLI Browser Login",
+        "touches": [
+          "component.cli",
+          "component.web_dashboard",
+          "component.api_http",
+          "component.auth_postgres"
+        ]
+      },
+      {
+        "id": "flow.enable_auto_upload",
+        "name": "Enable Automatic Session Uploads",
+        "touches": [
+          "component.cli",
+          "component.agent_adapters",
+          "component.api_contract"
+        ]
+      },
+      {
+        "id": "flow.session_ingest",
+        "name": "Session Transcript Ingestion",
+        "touches": [
+          "component.cli",
+          "component.api_contract",
+          "component.api_http",
+          "component.agent_adapters",
+          "component.clickhouse_storage",
+          "component.auth_postgres"
+        ]
+      },
+      {
+        "id": "flow.analytics_dashboard",
+        "name": "Organization Analytics Dashboard",
+        "touches": [
+          "component.web_dashboard",
+          "component.api_contract",
+          "component.api_http",
+          "component.clickhouse_storage",
+          "component.auth_postgres"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.repo_identity",
+        "kind": "fact",
+        "text": "Rudel is a Bun/Turborepo TypeScript monorepo for ingesting Claude Code session transcripts, storing them in ClickHouse, and presenting analytics such as token usage, session duration, activity patterns, model usage, and related dashboard views.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.repository",
+        "code_anchors": [
+          {
+            "file": "README.md"
+          },
+          {
+            "file": "CLAUDE.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.monorepo_boundaries",
+        "kind": "fact",
+        "text": "The repo is organized around apps/api for the Bun HTTP API, apps/cli for the published rudel CLI, apps/web for the Vite React dashboard, packages/api-routes for the shared oRPC/Zod contract, packages/ch-schema for ClickHouse schema and generated ingest helpers, and packages/sql-schema for Drizzle/Postgres auth tables.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.repository",
+        "code_anchors": [
+          {
+            "file": "CONTRIBUTING.md"
+          },
+          {
+            "file": "CLAUDE.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.local_setup_commands",
+        "kind": "fact",
+        "text": "Local standalone setup uses Bun 1.3+, Docker or OrbStack, `bun install`, and `bun run dev:local`; that script starts Postgres and ClickHouse containers, runs migrations, and launches the API on localhost:4010 plus the web app on localhost:4011. The full verification command is `bun run verify`.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "flow.local_development",
+        "code_anchors": [
+          {
+            "file": "CONTRIBUTING.md"
+          },
+          {
+            "file": "package.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.api_runtime_contract",
+        "kind": "fact",
+        "text": "The API server exposes `/health`, `/api/auth/*`, `/api/cli-token`, and oRPC requests under `/rpc`; it builds request context from Better Auth sessions, serves static frontend files in production, and redirects non-API development traffic to the configured frontend origin.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.api_http",
+        "code_anchors": [
+          {
+            "file": "apps/api/src/index.ts",
+            "symbol": "handleRequest"
+          },
+          {
+            "file": "apps/api/src/index.ts",
+            "symbol": "getContext"
+          }
+        ]
+      },
+      {
+        "id": "claim.auth_storage_contract",
+        "kind": "fact",
+        "text": "Authentication uses Better Auth with Drizzle/Postgres tables for users, sessions, accounts, verification, organizations, members, and invitations; new users get a default owner organization through the Better Auth user-create hook.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.auth_postgres",
+        "code_anchors": [
+          {
+            "file": "packages/sql-schema/src/auth-schema.ts",
+            "symbol": "user"
+          },
+          {
+            "file": "packages/sql-schema/src/auth-schema.ts",
+            "symbol": "organization"
+          },
+          {
+            "file": "apps/api/src/auth.ts",
+            "symbol": "createAuth"
+          }
+        ]
+      },
+      {
+        "id": "claim.api_contract_ingest",
+        "kind": "fact",
+        "text": "The shared oRPC contract defines `SourceSchema` as `claude_code` or `codex`; `IngestSessionInputSchema` accepts source, session ID, normalized project path, optional git/package/tag/organization metadata, transcript content, and optional subagent files.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.api_contract",
+        "code_anchors": [
+          {
+            "file": "packages/api-routes/src/schemas/source.ts",
+            "symbol": "SourceSchema"
+          },
+          {
+            "file": "packages/api-routes/src/index.ts",
+            "symbol": "IngestSessionInputSchema"
+          },
+          {
+            "file": "packages/api-routes/src/index.ts",
+            "symbol": "contract"
+          }
+        ]
+      },
+      {
+        "id": "claim.agent_adapter_boundary",
+        "kind": "fact",
+        "text": "Agent adapters are the shared CLI/API boundary for session discovery, hook installation/removal, upload request construction, timestamp extraction, and ClickHouse ingestion; the registry auto-registers Claude Code and OpenAI Codex adapters.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.agent_adapters",
+        "code_anchors": [
+          {
+            "file": "packages/agent-adapters/src/types.ts",
+            "symbol": "AgentAdapter"
+          },
+          {
+            "file": "packages/agent-adapters/src/adapters/claude-code/index.ts",
+            "symbol": "claudeCodeAdapter"
+          },
+          {
+            "file": "packages/agent-adapters/src/adapters/codex/index.ts",
+            "symbol": "codexAdapter"
+          }
+        ]
+      },
+      {
+        "id": "claim.cli_command_surface",
+        "kind": "fact",
+        "text": "The rudel CLI route map exposes login, logout, whoami, upload, enable, disable, set-org, hooks, and dev routes, while hiding hooks and dev from generated docs.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.cli",
+        "code_anchors": [
+          {
+            "file": "apps/cli/src/app.ts",
+            "symbol": "app"
+          }
+        ]
+      },
+      {
+        "id": "claim.cli_login_flow",
+        "kind": "fact",
+        "text": "`rudel login` opens the web app with a localhost callback and CSRF state, waits up to 120 seconds for a token, validates it through `/rpc/me`, then stores token and API base URL in `~/.rudel/credentials.json` or `RUDEL_CONFIG_DIR/credentials.json`.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "flow.cli_login",
+        "code_anchors": [
+          {
+            "file": "apps/cli/src/commands/login.ts",
+            "symbol": "runLogin"
+          },
+          {
+            "file": "apps/cli/src/lib/credentials.ts",
+            "symbol": "saveCredentials"
+          },
+          {
+            "file": "apps/web/src/App.tsx",
+            "symbol": "getCliParams"
+          }
+        ]
+      },
+      {
+        "id": "claim.enable_auto_upload_flow",
+        "kind": "fact",
+        "text": "`rudel enable` verifies authentication, lets the user choose an organization when needed, stores the project-to-organization mapping, installs hooks for available agent adapters, and can offer to upload previous sessions for the current repository.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "flow.enable_auto_upload",
+        "code_anchors": [
+          {
+            "file": "apps/cli/src/commands/enable.ts",
+            "symbol": "runEnable"
+          },
+          {
+            "file": "apps/cli/src/lib/project-config.ts",
+            "symbol": "setProjectOrgId"
+          },
+          {
+            "file": "packages/agent-adapters/src/registry.ts",
+            "symbol": "getAvailableAdapters"
+          }
+        ]
+      },
+      {
+        "id": "claim.upload_flow",
+        "kind": "fact",
+        "text": "`rudel upload` supports interactive batch uploads, a single session ID or file path, dry-run previews, optional classification, organization overrides, retrying failed uploads, and configurable concurrency; uploads call the backend `ingestSession` oRPC route with retry behavior for transient failures.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "flow.session_ingest",
+        "code_anchors": [
+          {
+            "file": "apps/cli/src/commands/upload.ts",
+            "symbol": "uploadCommand"
+          },
+          {
+            "file": "apps/cli/src/commands/upload.ts",
+            "symbol": "runUpload"
+          },
+          {
+            "file": "apps/cli/src/lib/uploader.ts",
+            "symbol": "uploadSession"
+          }
+        ]
+      },
+      {
+        "id": "claim.ingest_authorization_and_dispatch",
+        "kind": "fact",
+        "text": "The API `ingestSession` handler requires authentication, resolves the target organization from input, active session organization, or user ID, verifies explicit organization membership, dispatches to the adapter for the input source, and writes through the ClickHouse executor.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "flow.session_ingest",
+        "code_anchors": [
+          {
+            "file": "apps/api/src/router.ts",
+            "symbol": "ingestSessionHandler"
+          },
+          {
+            "file": "packages/agent-adapters/src/registry.ts",
+            "symbol": "getAdapter"
+          },
+          {
+            "file": "apps/api/src/clickhouse.ts",
+            "symbol": "getClickhouse"
+          }
+        ]
+      },
+      {
+        "id": "claim.clickhouse_storage_model",
+        "kind": "fact",
+        "text": "ClickHouse storage has raw `rudel.claude_sessions` and `rudel.codex_sessions` tables plus materialized views that populate `rudel.session_analytics` with source, token, timing, git, model, feature, error, archetype, and success-score metrics.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.clickhouse_storage",
+        "code_anchors": [
+          {
+            "file": "packages/ch-schema/src/db/schema/claude-sessions.ts",
+            "symbol": "rudel_claude_sessions"
+          },
+          {
+            "file": "packages/ch-schema/src/db/schema/codex-sessions.ts",
+            "symbol": "codex_session_analytics_mv"
+          },
+          {
+            "file": "packages/ch-schema/src/db/schema/session-analytics.ts",
+            "symbol": "rudel_session_analytics"
+          }
+        ]
+      },
+      {
+        "id": "claim.analytics_query_boundary",
+        "kind": "fact",
+        "text": "Dashboard analytics routes are organization-scoped oRPC handlers that call service modules querying `rudel.session_analytics`; the sessions service supports date, user, project, repository, pagination, sort, summary, comparison, dimension analysis, and detail queries.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "flow.analytics_dashboard",
+        "code_anchors": [
+          {
+            "file": "apps/api/src/middleware.ts",
+            "symbol": "orgMiddleware"
+          },
+          {
+            "file": "apps/api/src/handlers/analytics/sessions.ts",
+            "symbol": "sessionsRouter"
+          },
+          {
+            "file": "apps/api/src/services/session-analytics.service.ts",
+            "symbol": "getSessionAnalytics"
+          }
+        ]
+      },
+      {
+        "id": "claim.web_dashboard_boundary",
+        "kind": "fact",
+        "text": "The web app uses Better Auth session state, redirects unauthenticated users to login/signup, completes CLI token handoff through `/api/cli-token`, and exposes dashboard routes for overview, developers, projects, sessions, ROI, errors, learnings, profile, invitations, and organization management.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.web_dashboard",
+        "code_anchors": [
+          {
+            "file": "apps/web/src/App.tsx",
+            "symbol": "App"
+          },
+          {
+            "file": "apps/web/src/lib/orpc.ts",
+            "symbol": "client"
+          }
+        ]
+      },
+      {
+        "id": "claim.ch_schema_import_gotcha",
+        "kind": "requirement",
+        "text": "Runtime code should import `@rudel/ch-schema/generated` instead of the full `@rudel/ch-schema` entrypoint when it only needs generated types or ingest helpers, because the full entrypoint pulls in chkit and ClickHouse schema dependencies.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.clickhouse_storage",
+        "code_anchors": [
+          {
+            "file": "CLAUDE.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.chkit_workflow_and_gotchas",
+        "kind": "risk",
+        "text": "ClickHouse schema work is done from `packages/ch-schema` with `bun --bun chkit` scripts; migrations must connect with `CLICKHOUSE_DB=default`, and generated migration SQL may need manual reordering so tables are created before materialized views.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.clickhouse_storage",
+        "code_anchors": [
+          {
+            "file": "CLAUDE.md"
+          },
+          {
+            "file": "packages/ch-schema/package.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.self_hosting_contract",
+        "kind": "fact",
+        "text": "Self-hosting requires Postgres for Better Auth, ClickHouse for transcript and analytics storage, a Bun/Node-capable app server, ClickHouse migrations from packages/ch-schema, Drizzle migrations from packages/sql-schema, and environment variables for Postgres, Better Auth, ClickHouse, app URL, and allowed origin.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.repository",
+        "code_anchors": [
+          {
+            "file": "docs/self-hosting.md"
+          },
+          {
+            "file": ".env.example"
+          }
+        ]
+      }
+    ]
+  }
+}

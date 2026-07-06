@@ -1,0 +1,1 @@
+Radio playback seems to fall through IPTVnator's normal video/EPG workspace assumptions, and the same shell also has to support M3U, Xtream, Stalker, VOD, and series without fragmenting the UX. Can you investigate the playback mode detection, workspace layout, provider-specific navigation, and prior UI conventions enough to plan the right layout split?

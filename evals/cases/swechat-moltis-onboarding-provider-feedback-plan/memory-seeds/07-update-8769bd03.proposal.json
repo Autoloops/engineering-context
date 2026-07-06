@@ -1,0 +1,192 @@
+{
+  "title": "Update working memory from GitHub Copilot Responses API session",
+  "summary": "Durable provider context learned while adding GitHub Copilot Responses API support and addressing review feedback.",
+  "creates": {
+    "components": [],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.openai_compat_shared_responses_helpers",
+        "kind": "fact",
+        "text": "openai_compat now owns shared Responses API helpers: system messages are extracted into top-level instructions, non-system messages are converted into Responses input, Responses SSE events are converted into StreamEvent deltas/tool events/errors/done, and non-streaming Responses output items parse into CompletionResponse.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.providers"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/providers/src/openai_compat.rs",
+            "symbol": "split_responses_instructions_and_input"
+          },
+          {
+            "file": "crates/providers/src/openai_compat.rs",
+            "symbol": "process_responses_sse_line"
+          },
+          {
+            "file": "crates/providers/src/openai_compat.rs",
+            "symbol": "parse_responses_completion"
+          }
+        ]
+      },
+      {
+        "id": "claim.github_copilot_responses_api_support",
+        "kind": "fact",
+        "text": "The GitHub Copilot provider supports the Responses API for models matching gpt-5.4*, gpt-5.2-pro, and codex-*; its non-streaming path posts to /responses with Responses input, optional instructions, and flat Responses tool definitions, while its streaming path posts stream=true to /responses and parses SSE through the shared Responses stream state.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.providers"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/providers/src/github_copilot.rs",
+            "symbol": "needs_responses_api"
+          },
+          {
+            "file": "crates/providers/src/github_copilot.rs",
+            "symbol": "GitHubCopilotProvider"
+          },
+          {
+            "file": "crates/providers/src/github_copilot.rs",
+            "symbol": "stream_responses_api"
+          }
+        ]
+      },
+      {
+        "id": "claim.github_copilot_responses_api_error_fallback",
+        "kind": "fact",
+        "text": "For Copilot models not preclassified as Responses-only, both non-streaming and streaming chat-completions paths fall back to /responses when a 400 response body case-insensitively matches unsupported_api_for_model or says the model is not accessible via /chat/completions.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.providers"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/providers/src/github_copilot.rs",
+            "symbol": "is_responses_api_required_error"
+          },
+          {
+            "file": "crates/providers/src/github_copilot.rs",
+            "symbol": "GitHubCopilotProvider"
+          },
+          {
+            "file": "crates/providers/src/github_copilot.rs",
+            "symbol": "stream_chat_completions"
+          }
+        ]
+      },
+      {
+        "id": "claim.openai_provider_reuses_responses_index_and_split_helpers",
+        "kind": "fact",
+        "text": "OpenAiProvider no longer has private Responses instruction/input splitting or output-index resolution helpers; its Responses path imports split_responses_instructions_and_input and responses_output_index from openai_compat while keeping its existing WebSocket stream handling local.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.providers"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/providers/src/openai.rs",
+            "symbol": "OpenAiProvider"
+          },
+          {
+            "file": "crates/providers/src/openai_compat.rs",
+            "symbol": "split_responses_instructions_and_input"
+          },
+          {
+            "file": "crates/providers/src/openai_compat.rs",
+            "symbol": "responses_output_index"
+          }
+        ]
+      },
+      {
+        "id": "claim.github_copilot_responses_http_sse_decision",
+        "kind": "decision",
+        "text": "The session chose a Copilot-specific HTTP+SSE Responses path instead of reusing the OpenAI provider's WebSocket Responses implementation, because the OpenAI path was gated to api.openai.com and Copilot only needed the simpler HTTP+SSE flow.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.providers"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/providers/src/github_copilot.rs",
+            "symbol": "stream_responses_api"
+          }
+        ]
+      },
+      {
+        "id": "claim.github_copilot_case_insensitive_fallback_requirement",
+        "kind": "requirement",
+        "text": "Copilot Responses fallback error matching should remain case-insensitive; this was the actionable review feedback fixed after PR review.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.providers"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/providers/src/github_copilot.rs",
+            "symbol": "is_responses_api_required_error"
+          }
+        ]
+      },
+      {
+        "id": "claim.github_copilot_responses_providerraw_not_added",
+        "kind": "decision",
+        "text": "The PR review suggestion to add ProviderRaw events to Responses SSE parsing was intentionally not implemented; process_responses_sse_line remains aligned with the existing OpenAI Responses WebSocket path rather than adding raw-provider events only for Copilot.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.providers"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/providers/src/openai_compat.rs",
+            "symbol": "process_responses_sse_line"
+          },
+          {
+            "file": "crates/providers/src/openai.rs",
+            "symbol": "OpenAiProvider"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.8769bd03_3e97_426a_a0b2_21ac11110443",
+        "kind": "session",
+        "ref": "claude-code-session:8769bd03-3e97-426a-a0b2-21ac11110443",
+        "title": "GitHub Copilot provider Responses API"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.github_copilot_responses_http_sse_decision",
+        "to": "source.claude_code_session.8769bd03_3e97_426a_a0b2_21ac11110443",
+        "metadata": {
+          "reason": "The session plan explicitly stated that the existing OpenAI Responses support was WebSocket-based and api.openai.com-gated, and directed Copilot to use its own simpler HTTP+SSE Responses path."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.github_copilot_case_insensitive_fallback_requirement",
+        "to": "source.claude_code_session.8769bd03_3e97_426a_a0b2_21ac11110443",
+        "metadata": {
+          "reason": "After PR review, the session identified case-insensitive Copilot Responses fallback matching as the actionable bot comment and fixed it."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.github_copilot_responses_providerraw_not_added",
+        "to": "source.claude_code_session.8769bd03_3e97_426a_a0b2_21ac11110443",
+        "metadata": {
+          "reason": "The session explicitly skipped the review suggestion to add ProviderRaw events because the existing OpenAI Responses WebSocket path had the same omission."
+        }
+      }
+    ]
+  }
+}

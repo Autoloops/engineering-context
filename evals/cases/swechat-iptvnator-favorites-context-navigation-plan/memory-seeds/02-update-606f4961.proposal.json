@@ -1,0 +1,211 @@
+{
+  "title": "Update working memory from session 606f4961",
+  "summary": "Durable context from the portal/global-favorites crash investigation and multi-audio playback support session.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.channel-list-container",
+        "name": "Channel list container UI component",
+        "code_anchor": "libs/ui/components/src/lib/channel-list-container/channel-list-container.component.ts"
+      },
+      {
+        "id": "component.videojs-player",
+        "name": "Video.js playback component",
+        "code_anchor": "libs/ui/playback/src/lib/vjs-player/vjs-player.component.ts"
+      },
+      {
+        "id": "component.artplayer-player",
+        "name": "ArtPlayer playback component",
+        "code_anchor": "libs/ui/playback/src/lib/art-player/art-player.component.ts"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.playback-audio-track-selection",
+        "name": "Expose alternate audio tracks in embedded playback engines",
+        "touches": [
+          "component.videojs-player",
+          "component.artplayer-player"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.global_favorites_null_channel_list_previous_crash",
+        "kind": "fact",
+        "text": "Before the session fix, navigating into global favorites could pass `null` as `ChannelListContainerComponent.channelList` before data resolved, and the old displayed-channel computation then tried to filter that null value.",
+        "truth": "source_verified",
+        "intent": "accidental",
+        "about": [
+          "component.channel-list-container"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/ui/components/src/lib/channel-list-container/channel-list-container.component.ts",
+            "symbol": "ChannelListContainerComponent"
+          }
+        ]
+      },
+      {
+        "id": "claim.channel_list_input_coalesces_null",
+        "kind": "fact",
+        "text": "`ChannelListContainerComponent.channelList` now coalesces `null` or `undefined` to an empty array before updating `_channelList`, `channelListSignal`, `channelList$`, and EPG fetching, so downstream channel-list consumers receive an array during transient global-favorites loads.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.channel-list-container"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/ui/components/src/lib/channel-list-container/channel-list-container.component.ts",
+            "symbol": "ChannelListContainerComponent"
+          }
+        ]
+      },
+      {
+        "id": "claim.videojs_audio_button_exposed_tracks_only",
+        "kind": "fact",
+        "text": "`VjsPlayerComponent` observes Video.js `audioTracks()` on metadata and track-list events, logs available tracks, and only attempts to show or add the control-bar `audioTrackButton` when Video.js exposes more than one audio track.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.videojs-player",
+          "flow.playback-audio-track-selection"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/ui/playback/src/lib/vjs-player/vjs-player.component.ts",
+            "symbol": "VjsPlayerComponent.setupAudioTrackMenu"
+          },
+          {
+            "file": "libs/ui/playback/src/lib/vjs-player/vjs-player.component.ts",
+            "symbol": "VjsPlayerComponent.logAudioTracks"
+          }
+        ]
+      },
+      {
+        "id": "claim.videojs_hls_audio_diagnostics_use_public_tech",
+        "kind": "fact",
+        "text": "`VjsPlayerComponent.logAudioTracks` inspects VHS/HLS AUDIO media groups through `player.tech({ IWillNotUseThisInPlugins: true })` and optional playlist metadata, avoiding direct private `tech_` access while diagnosing missing audio renditions.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.videojs-player"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/ui/playback/src/lib/vjs-player/vjs-player.component.ts",
+            "symbol": "VjsPlayerComponent.logAudioTracks"
+          }
+        ]
+      },
+      {
+        "id": "claim.artplayer_hls_audio_settings_selector",
+        "kind": "fact",
+        "text": "`ArtPlayerComponent` listens for `Hls.Events.AUDIO_TRACKS_UPDATED` on m3u8 playback, adds an ArtPlayer settings selector only when HLS.js reports multiple audio tracks, and switches tracks by assigning `hls.audioTrack` from the selected label.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.artplayer-player",
+          "flow.playback-audio-track-selection"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/ui/playback/src/lib/art-player/art-player.component.ts",
+            "symbol": "ArtPlayerComponent.setupHlsAudioTracks"
+          }
+        ]
+      },
+      {
+        "id": "claim.audio_track_selector_scope_exposed_multiple_tracks",
+        "kind": "requirement",
+        "text": "The audio-track selector should stay hidden for streams where the playback engine exposes zero or one audio track; the UI support added in this session targets streams with multiple engine-visible tracks.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.playback-audio-track-selection"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/ui/playback/src/lib/vjs-player/vjs-player.component.ts",
+            "symbol": "VjsPlayerComponent.setupAudioTrackMenu"
+          },
+          {
+            "file": "libs/ui/playback/src/lib/art-player/art-player.component.ts",
+            "symbol": "ArtPlayerComponent.setupHlsAudioTracks"
+          }
+        ]
+      },
+      {
+        "id": "claim.videojs_vlc_mpv_audio_visibility_gap",
+        "kind": "risk",
+        "text": "A live TV stream may show two audio tracks in VLC or MPV while Video.js/VHS reports only one default track; in that state the current Video.js audio menu will not appear because it depends on `audioTracks().length > 1`.",
+        "truth": "source_verified",
+        "intent": "unknown",
+        "about": [
+          "component.videojs-player",
+          "flow.playback-audio-track-selection"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/ui/playback/src/lib/vjs-player/vjs-player.component.ts",
+            "symbol": "VjsPlayerComponent.setupAudioTrackMenu"
+          }
+        ]
+      },
+      {
+        "id": "claim.investigate_videojs_muxed_audio_tracks",
+        "kind": "task",
+        "text": "Investigate Video.js live-TV streams where VLC/MPV can switch multiple audio tracks but `audioTracks()` exposes only one default track, including whether the extra audio is muxed in the transport stream, absent from HLS `EXT-X-MEDIA`, or requires a different Video.js/VHS integration path.",
+        "truth": "unknown",
+        "intent": "intended",
+        "about": [
+          "component.videojs-player",
+          "flow.playback-audio-track-selection"
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.606f4961_fa58_49f9_b523_a5f0795a4e17",
+        "kind": "session",
+        "ref": "claude-code-session:606f4961-fa58-49f9-b523-a5f0795a4e17",
+        "title": "Claude Code session 606f4961 portal and audio playback investigation"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.global_favorites_null_channel_list_previous_crash",
+        "to": "source.claude_code_session.606f4961_fa58_49f9_b523_a5f0795a4e17",
+        "metadata": {
+          "reason": "The assistant diagnosis in the transcript explains that global-favorites navigation passed null into the channel-list input before data resolved, causing the displayed-channel computation to filter null."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.audio_track_selector_scope_exposed_multiple_tracks",
+        "to": "source.claude_code_session.606f4961_fa58_49f9_b523_a5f0795a4e17",
+        "metadata": {
+          "reason": "The implementation summary stated that the audio menu should appear only when the stream contains multiple audio tracks and remain invisible for single-track streams."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.videojs_vlc_mpv_audio_visibility_gap",
+        "to": "source.claude_code_session.606f4961_fa58_49f9_b523_a5f0795a4e17",
+        "metadata": {
+          "reason": "The user supplied logs showing Video.js reported one default audio track while the same stream exposed two switchable audio tracks in VLC or MPV."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.investigate_videojs_muxed_audio_tracks",
+        "to": "source.claude_code_session.606f4961_fa58_49f9_b523_a5f0795a4e17",
+        "metadata": {
+          "reason": "The final user message left unresolved why Video.js saw only one track for a stream where VLC and MPV exposed two tracks."
+        }
+      }
+    ]
+  }
+}

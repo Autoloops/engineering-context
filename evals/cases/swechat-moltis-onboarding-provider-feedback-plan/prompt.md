@@ -1,0 +1,1 @@
+Someone installed Moltis and sent a bunch of feedback about onboarding, provider/model selection, voice config, and channel setup. Can you investigate the current implementation enough to make the right improvement plan?

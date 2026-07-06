@@ -1,0 +1,1 @@
+Adding playlists feels fragmented across source types, workspace actions, dialogs, validation, and provider-specific forms. Can you investigate the import surfaces, header/action ownership, M3U/Xtream/Stalker data requirements, and existing e2e coverage enough to plan whether a unified entry point with type switching is actually the right move?

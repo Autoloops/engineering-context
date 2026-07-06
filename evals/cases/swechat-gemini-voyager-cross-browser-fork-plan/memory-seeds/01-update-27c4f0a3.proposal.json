@@ -1,0 +1,261 @@
+{
+  "title": "Update working memory from folder manual ordering session",
+  "summary": "Durable folder-ordering context learned from historical session 27c4f0a3-a92c-42db-9d92-c81d0ed03ce4.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.folder-manager",
+        "name": "Folder Manager",
+        "code_anchor": "src/pages/content/folder/manager.ts"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.folder-manual-ordering",
+        "name": "Folder Manual Ordering",
+        "touches": [
+          "component.folder-manager"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.folder-manual-ordering-sortindex-types",
+        "kind": "fact",
+        "text": "Folder manual order is represented with optional sortIndex fields on Folder and ConversationReference in both the content folder types and the shared core folder types.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder-manager",
+          "flow.folder-manual-ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/types.ts"
+          },
+          {
+            "file": "src/core/types/folder.ts"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder-manual-ordering-sort-contract",
+        "kind": "fact",
+        "text": "Folder sorting keeps pinned folders first, then orders within the same pinned state by sortIndex before falling back to localized name comparison; conversation sorting keeps starred conversations first, then orders within the same starred state by sortIndex before falling back to lastOpenedAt or addedAt time sorting.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder-manager",
+          "flow.folder-manual-ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.sortFolders"
+          },
+          {
+            "file": "src/pages/content/folder/conversationSort.ts",
+            "symbol": "sortConversationsByPriority"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder-manual-ordering-migration",
+        "kind": "fact",
+        "text": "FolderManager.ensureDataIntegrity calls ensureSortIndices so loaded legacy data receives missing sortIndex values: folders preserve their existing name-based sibling order and conversations preserve their existing lastOpenedAt/addedAt time order as the initial manual order.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder-manager",
+          "flow.folder-manual-ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.ensureDataIntegrity"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.ensureSortIndices"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder-manual-ordering-new-items-append",
+        "kind": "fact",
+        "text": "New folders and newly added folder conversations receive sortIndex values one greater than the current maximum sibling sortIndex, so newly created or dragged-in items append to the existing manual order.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder-manager",
+          "flow.folder-manual-ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.createFolder"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.addConversationToFolder"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.addConversationsToFolder"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder-manual-ordering-conversation-drop-zone",
+        "kind": "fact",
+        "text": "Conversation reordering is handled directly on each conversation element with top-half versus bottom-half drag detection and above/below indicator classes; dropping uses the element's sorted index or sorted index plus one as the insertion point.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder-manager",
+          "flow.folder-manual-ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.setupConversationReorderZone"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder-manual-ordering-folder-gap-zone",
+        "kind": "fact",
+        "text": "Folder reordering uses gv-reorder-gap drop zones between sibling folders; the CSS gives those gaps vertical padding and an active blue indicator while dragover is active.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder-manager",
+          "flow.folder-manual-ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.createReorderGap"
+          },
+          {
+            "file": "public/contentStyle.css"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder-manual-ordering-same-folder-clamp",
+        "kind": "fact",
+        "text": "When conversations are reordered within the same folder, reorderOrMoveConversations adjusts the insertion index for dragged items that were before the target and clamps the final index after removal before reassigning sortIndex values.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder-manager",
+          "flow.folder-manual-ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.reorderOrMoveConversations"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder-manual-ordering-last-opened-decision",
+        "kind": "decision",
+        "text": "The manual-ordering behavior intentionally stops last-opened clicks from reshuffling migrated conversations after sortIndex has been assigned; lastOpenedAt remains useful for initial migration and fallback only, because click-to-front ordering would undermine user drag ordering.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder-manager",
+          "flow.folder-manual-ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/conversationSort.ts",
+            "symbol": "sortConversationsByPriority"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.ensureSortIndices"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.markConversationAsRecentlyOpened"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder-manual-ordering-reject-lazy-sortindex",
+        "kind": "decision",
+        "text": "The session considered but did not choose a lazy mode where ensureSortIndices would be removed and conversations would keep sorting by lastOpenedAt until a user explicitly dragged them; the accepted behavior is fully manual ordering after migration.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder-manager",
+          "flow.folder-manual-ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.ensureSortIndices"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder-manual-ordering-drop-scope",
+        "kind": "requirement",
+        "text": "Preserve the distinction between drag targets in the folder UI: dragging onto a folder keeps the existing move-into-folder behavior, while dragging into folder gaps or onto a conversation's top/bottom half performs reordering.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder-manager",
+          "flow.folder-manual-ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.createReorderGap"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.setupConversationReorderZone"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.27c4f0a3_a92c_42db_9d92_c81d0ed03ce4",
+        "kind": "session",
+        "ref": "claude-code-session:27c4f0a3-a92c-42db-9d92-c81d0ed03ce4",
+        "title": "Folder manual ordering session 27c4f0a3"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.folder-manual-ordering-last-opened-decision",
+        "to": "source.claude_code_session.27c4f0a3_a92c_42db_9d92_c81d0ed03ce4",
+        "metadata": {
+          "reason": "Transcript lines 126-145 record the user asking whether last-access reordering was cancelled, the assistant explaining that it was intentionally replaced by manual ordering after sortIndex migration, and the user accepting that behavior."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.folder-manual-ordering-reject-lazy-sortindex",
+        "to": "source.claude_code_session.27c4f0a3_a92c_42db_9d92_c81d0ed03ce4",
+        "metadata": {
+          "reason": "Transcript lines 136-145 present the lazy sortIndex alternative and the user responds by accepting the current fully manual migration behavior instead."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.folder-manual-ordering-drop-scope",
+        "to": "source.claude_code_session.27c4f0a3_a92c_42db_9d92_c81d0ed03ce4",
+        "metadata": {
+          "reason": "Transcript lines 90-92 and 121-124 explicitly distinguish dragging onto folders for moves from dragging into gaps or conversation top/bottom regions for reordering."
+        }
+      }
+    ]
+  }
+}
