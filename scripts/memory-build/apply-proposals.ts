@@ -141,6 +141,10 @@ async function applyManifest(input: {
   skipped_reason?: string;
 }>> {
   const manifest = readJson<ProposalManifest>(join(input.taskDir, "proposals", "manifest.json"));
+  const initialized = input.service.requireRepo(input.repoRef);
+  const subjectLookup = {
+    subjectType: (id: string) => input.repository.subjectType(initialized.repo_id, id),
+  };
   const applied = [];
   for (const file of manifest.apply_order) {
     const proposalPath = join(input.taskDir, "proposals", file);
@@ -156,7 +160,7 @@ async function applyManifest(input: {
       });
       continue;
     }
-    const normalized = normalizeProposal(sanitized.proposal, input.repository);
+    const normalized = normalizeProposal(sanitized.proposal, subjectLookup);
     const result = await input.service.applyProposal(input.repoRef, normalized);
     applied.push({
       source: input.label,
