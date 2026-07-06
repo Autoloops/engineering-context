@@ -16,7 +16,7 @@ function git(cwd, ...args) {
 // ---------------------------------------------------------------------------
 // changedFilesSince: git diff (committed) ∪ git status --porcelain (uncommitted)
 // ---------------------------------------------------------------------------
-const { changedFilesSince } = await import(new URL("dist/libs/knowledge-graph/changed-files.js", root));
+const { changedFilesSince } = await import(new URL("dist/libs/utils/git.js", root));
 
 const gitRepo = mkdtempSync(join(tmpdir(), "greplica-cf-"));
 git(gitRepo, "init", "-q");
