@@ -71,19 +71,20 @@ const idx = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND na
 assert.equal(idx?.name, "anchor_fingerprints_file_idx", "file index exists");
 
 const repo = new SqliteRepository(db);
-assert.deepEqual(repo.claimIdsForFiles([]), [], "empty input -> empty");
+assert.deepEqual(repo.claimIdsForFiles("r1", []), [], "empty input -> empty");
 assert.deepEqual(repo.fingerprintsForClaims([]), [], "empty input -> empty");
 
 repo.upsertAnchorFingerprints([
-  { claim_id: "c1", file: "a.ts", symbol: "f", content_hash: "h1", file_mtime_ms: 10, file_size: 20, resolver_status: "resolved" },
-  { claim_id: "c2", file: "b.ts", symbol: "g", content_hash: "h9", file_mtime_ms: 5, file_size: 6, resolver_status: "resolved" },
+  { repo_id: "r1", claim_id: "c1", file: "a.ts", symbol: "f", content_hash: "h1", file_mtime_ms: 10, file_size: 20, resolver_status: "resolved" },
+  { repo_id: "r1", claim_id: "c2", file: "b.ts", symbol: "g", content_hash: "h9", file_mtime_ms: 5, file_size: 6, resolver_status: "resolved" },
+  { repo_id: "r2", claim_id: "cother", file: "a.ts", symbol: "f", content_hash: "hx", file_mtime_ms: 1, file_size: 1, resolver_status: "resolved" },
 ]);
-assert.deepEqual(repo.claimIdsForFiles(["a.ts"]), ["c1"], "reverse index maps file -> claim");
+assert.deepEqual(repo.claimIdsForFiles("r1", ["a.ts"]), ["c1"], "reverse index is repo-scoped (excludes other repos' same-path claims)");
 assert.equal(repo.fingerprintsForClaims(["c1"])[0].content_hash, "h1", "read fingerprint back");
 assert.equal(repo.fingerprintsForClaims(["c1"])[0].checked_at !== undefined, true, "checked_at stamped");
 
 repo.upsertAnchorFingerprints([
-  { claim_id: "c1", file: "a.ts", symbol: "f", content_hash: "h2", file_mtime_ms: 11, file_size: 21, resolver_status: "resolved" },
+  { repo_id: "r1", claim_id: "c1", file: "a.ts", symbol: "f", content_hash: "h2", file_mtime_ms: 11, file_size: 21, resolver_status: "resolved" },
 ]);
 assert.equal(repo.fingerprintsForClaims(["c1"])[0].content_hash, "h2", "upsert replaces existing row");
 assert.equal(repo.fingerprintsForClaims(["c1"]).length, 1, "no duplicate row on upsert");
@@ -91,10 +92,10 @@ assert.equal(repo.fingerprintsForClaims(["c1"]).length, 1, "no duplicate row on 
 // File-only anchors use the "" symbol sentinel and must upsert idempotently
 // (a nullable PK column would let SQLite treat each NULL as a distinct row).
 repo.upsertAnchorFingerprints([
-  { claim_id: "c3", file: "d.ts", symbol: "", content_hash: "h1", file_mtime_ms: 1, file_size: 2, resolver_status: "resolved" },
+  { repo_id: "r1", claim_id: "c3", file: "d.ts", symbol: "", content_hash: "h1", file_mtime_ms: 1, file_size: 2, resolver_status: "resolved" },
 ]);
 repo.upsertAnchorFingerprints([
-  { claim_id: "c3", file: "d.ts", symbol: "", content_hash: "h2", file_mtime_ms: 3, file_size: 4, resolver_status: "resolved" },
+  { repo_id: "r1", claim_id: "c3", file: "d.ts", symbol: "", content_hash: "h2", file_mtime_ms: 3, file_size: 4, resolver_status: "resolved" },
 ]);
 assert.equal(repo.fingerprintsForClaims(["c3"]).length, 1, "file-only anchor upserts, no duplicate");
 assert.equal(repo.fingerprintsForClaims(["c3"])[0].content_hash, "h2", "file-only anchor row replaced");
@@ -140,7 +141,7 @@ assert.equal(classifyFreshness(freshnessChecks([fgAnchor], undefined, fgRoot)).s
 const fgStat = statAnchorFile(fgRoot, "svc.ts");
 const fgHash = hashAnchorSpan(fgRoot, fgAnchor);
 const fgRows = [
-  { claim_id: "cf", file: "svc.ts", symbol: "handle", content_hash: fgHash, file_mtime_ms: fgStat.mtime_ms, file_size: fgStat.size, resolver_status: "resolved", checked_at: "t" },
+  { repo_id: "r1", claim_id: "cf", file: "svc.ts", symbol: "handle", content_hash: fgHash, file_mtime_ms: fgStat.mtime_ms, file_size: fgStat.size, resolver_status: "resolved", checked_at: "t" },
 ];
 const fgIndex = indexFingerprintsByClaim(fgRows);
 assert.equal(fgIndex.get("cf").size, 1, "fingerprints grouped by claim id");

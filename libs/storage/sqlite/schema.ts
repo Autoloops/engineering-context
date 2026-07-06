@@ -119,6 +119,10 @@ CREATE TABLE IF NOT EXISTS invalidation_events (
 );
 
 CREATE TABLE IF NOT EXISTS anchor_fingerprints (
+  -- Scopes the reverse file->claims lookup to one repo (the DB is shared across
+  -- repos). ponytail: no FK to repos — matches the delete-free supersession model
+  -- (same as freshness_checkpoints); add ON DELETE CASCADE if repos ever get deleted.
+  repo_id TEXT NOT NULL,
   claim_id TEXT NOT NULL,
   file TEXT NOT NULL,
   -- '' sentinel for file-only anchors: SQLite treats each NULL in a composite
@@ -149,5 +153,5 @@ CREATE INDEX IF NOT EXISTS agent_sessions_seen_idx ON agent_sessions(last_seen_a
 CREATE INDEX IF NOT EXISTS agent_worker_locks_until_idx ON agent_worker_locks(locked_until_at);
 CREATE INDEX IF NOT EXISTS invalidation_events_repo_idx ON invalidation_events(repo_id);
 CREATE INDEX IF NOT EXISTS invalidation_events_claim_idx ON invalidation_events(original_claim_id);
-CREATE INDEX IF NOT EXISTS anchor_fingerprints_file_idx ON anchor_fingerprints(file);
+CREATE INDEX IF NOT EXISTS anchor_fingerprints_file_idx ON anchor_fingerprints(repo_id, file);
 `;

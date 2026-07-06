@@ -29,7 +29,7 @@ assert.equal(out[0].freshness.state, "fresh", "no baseline, readable -> fresh");
 // Seed a fingerprint matching the current file -> fresh.
 const stat = statAnchorFile(repoRoot, "svc.ts");
 repo.upsertAnchorFingerprints([
-  { claim_id: "c1", file: "svc.ts", symbol: "handle", content_hash: hashAnchorSpan(repoRoot, anchor), file_mtime_ms: stat.mtime_ms, file_size: stat.size, resolver_status: "resolved" },
+  { repo_id: "r1", claim_id: "c1", file: "svc.ts", symbol: "handle", content_hash: hashAnchorSpan(repoRoot, anchor), file_mtime_ms: stat.mtime_ms, file_size: stat.size, resolver_status: "resolved" },
 ]);
 out = attachFreshness([claimResult("c1", [anchor])], repo, repoRoot);
 assert.equal(out[0].freshness.state, "fresh", "baseline matches current -> fresh");

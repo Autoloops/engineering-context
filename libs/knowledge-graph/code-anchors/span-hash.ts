@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { readFileSync, realpathSync, statSync } from "node:fs";
+import { isAbsolute, join, sep } from "node:path";
 import type { ResolvedCodeAnchor } from "./types.js";
 
 export interface FileStat {
@@ -24,9 +24,10 @@ export function hashAnchorSpan(repoRoot: string | undefined, anchor: ResolvedCod
 
 /** Cheap `stat` used as the freshness prefilter; zeros when the file is unavailable. */
 export function statAnchorFile(repoRoot: string | undefined, file: string): FileStat {
-  if (repoRoot === undefined || !isRepoRelative(file)) return { mtime_ms: 0, size: 0 };
+  const abs = resolveWithinRepo(repoRoot, file);
+  if (abs === undefined) return { mtime_ms: 0, size: 0 };
   try {
-    const stat = statSync(join(repoRoot, file));
+    const stat = statSync(abs);
     return { mtime_ms: stat.mtimeMs, size: stat.size };
   } catch {
     return { mtime_ms: 0, size: 0 };
@@ -34,16 +35,29 @@ export function statAnchorFile(repoRoot: string | undefined, file: string): File
 }
 
 function readRepoFile(repoRoot: string | undefined, file: string): string | undefined {
-  if (repoRoot === undefined || !isRepoRelative(file)) return undefined;
+  const abs = resolveWithinRepo(repoRoot, file);
+  if (abs === undefined) return undefined;
   try {
-    return readFileSync(join(repoRoot, file), "utf8");
+    return readFileSync(abs, "utf8");
   } catch {
     return undefined;
   }
 }
 
-function isRepoRelative(file: string): boolean {
-  return !isAbsolute(file) && !file.split(/[\\/]/).includes("..");
+/**
+ * The canonical absolute path for a repo-relative `file`, or `undefined` if it
+ * escapes the repo — via a literal `..`/absolute path OR a symlink that resolves
+ * outside `repoRoot` (realpath containment, stronger than a pure-path check).
+ */
+function resolveWithinRepo(repoRoot: string | undefined, file: string): string | undefined {
+  if (repoRoot === undefined || isAbsolute(file) || file.split(/[\\/]/).includes("..")) return undefined;
+  try {
+    const root = realpathSync(repoRoot);
+    const abs = realpathSync(join(root, file));
+    return abs === root || abs.startsWith(root + sep) ? abs : undefined;
+  } catch {
+    return undefined; // missing file or broken symlink
+  }
 }
 
 function spanText(fileText: string, startLine: number | undefined, endLine: number | undefined): string {

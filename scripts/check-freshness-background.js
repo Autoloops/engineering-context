@@ -61,7 +61,7 @@ assert.equal(cpRepo.getFreshnessCheckpoint("repo1"), "sha-def", "checkpoint upda
 assert.equal(cpRepo.getFreshnessCheckpoint("repo2"), undefined, "checkpoints are per-repo");
 
 cpRepo.upsertAnchorFingerprints([
-  { claim_id: "cx", file: "x.ts", symbol: "s", content_hash: "h", file_mtime_ms: 1, file_size: 2, resolver_status: "resolved" },
+  { repo_id: "r1", claim_id: "cx", file: "x.ts", symbol: "s", content_hash: "h", file_mtime_ms: 1, file_size: 2, resolver_status: "resolved" },
 ]);
 assert.equal(cpRepo.fingerprintsForClaims(["cx"]).length, 1, "fingerprint written");
 cpRepo.deleteAnchorFingerprints(["cx"]);

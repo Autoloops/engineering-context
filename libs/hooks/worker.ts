@@ -113,8 +113,9 @@ export async function runDriftHealPass(
       if (result.rechecked > 0 || result.demoted.length > 0) {
         log({ event: "freshness_heal", repo: ref.repo_name, rechecked: result.rechecked, demoted: result.demoted.length });
       }
-    } catch {
-      // Best-effort: a heal failure must not affect the foreground or the worker.
+    } catch (error) {
+      // Best-effort: one repo's failure must not abort the pass. Log, keep going.
+      log({ event: "freshness_heal_error", repo: ref.repo_name, error: errorMessage(error) });
     }
   }
 }

@@ -192,7 +192,7 @@ export class KnowledgeGraphService {
       this.contextConfig,
     );
 
-    await this.writeFingerprints(input, normalizedProposal.creates.claims ?? []);
+    await this.writeFingerprints(initialized.repo_id, input, normalizedProposal.creates.claims ?? []);
 
     return {
       memory_commit_id: memoryCommit.id,
@@ -216,7 +216,7 @@ export class KnowledgeGraphService {
    * persisted by the time this runs, so a fingerprinting failure (an unreadable
    * span, a resolver hiccup) must not turn a successful apply into a failed one.
    */
-  private async writeFingerprints(input: RepoRef, claims: Claim[]): Promise<void> {
+  private async writeFingerprints(repoId: string, input: RepoRef, claims: Claim[]): Promise<void> {
     try {
       const resolver = new CodeAnchorResolver();
       const rows: AnchorFingerprintInput[] = [];
@@ -229,6 +229,7 @@ export class KnowledgeGraphService {
           if (contentHash === undefined) continue;
           const stat = statAnchorFile(input.repo_root, anchor.file);
           rows.push({
+            repo_id: repoId,
             claim_id: claim.id,
             file: anchor.file,
             symbol: anchor.symbol ?? "", // "" sentinel for file-only anchors (see schema)
@@ -305,28 +306,13 @@ export class KnowledgeGraphService {
     const headSha = gitHeadSha(input.repo_root);
     const graph = this.repository.readGraphView(initialized.repo_id);
 
-    const candidates = this.healCandidates(graph.claims, input.repo_root, sinceSha);
+    const candidates = this.healCandidates(initialized.repo_id, graph.claims, input.repo_root, sinceSha);
     if (candidates.length === 0) {
       this.saveCheckpoint(initialized.repo_id, headSha);
       return { demoted: [], rechecked: 0, headSha };
     }
 
-    const resolver = new CodeAnchorResolver();
-    const storedByClaim = indexFingerprintsByClaim(this.repository.fingerprintsForClaims(candidates.map((claim) => claim.id)));
-    const demotions: ClaimDemotion[] = [];
-    let rechecked = 0;
-    for (const claim of candidates) {
-      try {
-        const resolved = await resolver.resolveMany(input.repo_root, claim.code_anchors ?? []);
-        rechecked += 1;
-        const checks = freshnessChecks(resolved, storedByClaim.get(claim.id), input.repo_root);
-        const demotion = toDemotion(claim, classifyFreshness(checks), checks);
-        if (demotion !== undefined) demotions.push(demotion);
-      } catch {
-        // A resolver failure on one claim is skipped, never fatal to the pass.
-      }
-    }
-
+    const { demotions, rechecked } = await this.classifyCandidates(candidates, input.repo_root);
     if (demotions.length === 0) {
       this.saveCheckpoint(initialized.repo_id, headSha);
       return { demoted: [], rechecked, headSha };
@@ -365,14 +351,37 @@ export class KnowledgeGraphService {
   }
 
   /** The code_verified claims to re-check: the full set on a sweep, else only those in changed files. */
-  private healCandidates(claims: Claim[], repoRoot: string | undefined, sinceSha: string | undefined): Claim[] {
+  private healCandidates(repoId: string, claims: Claim[], repoRoot: string | undefined, sinceSha: string | undefined): Claim[] {
     const codeVerified = claims.filter((claim) => claim.truth === "code_verified" && (claim.code_anchors?.length ?? 0) > 0);
     if (sinceSha === undefined) return codeVerified; // first run / no checkpoint -> full sweep
     const changed = changedFilesSince(repoRoot, sinceSha);
     if (changed === undefined) return codeVerified; // git probe failed -> full sweep, don't silently skip
     if (changed.length === 0) return [];
-    const affected = new Set(this.repository.claimIdsForFiles(changed)); // reverse index
+    const affected = new Set(this.repository.claimIdsForFiles(repoId, changed)); // reverse index (repo-scoped)
     return codeVerified.filter((claim) => affected.has(claim.id));
+  }
+
+  /** Re-resolve + classify each candidate; collect the ones that genuinely drifted. */
+  private async classifyCandidates(
+    candidates: Claim[],
+    repoRoot: string | undefined,
+  ): Promise<{ demotions: ClaimDemotion[]; rechecked: number }> {
+    const resolver = new CodeAnchorResolver();
+    const storedByClaim = indexFingerprintsByClaim(this.repository.fingerprintsForClaims(candidates.map((claim) => claim.id)));
+    const demotions: ClaimDemotion[] = [];
+    let rechecked = 0;
+    for (const claim of candidates) {
+      try {
+        const resolved = await resolver.resolveMany(repoRoot, claim.code_anchors ?? []);
+        rechecked += 1;
+        const checks = freshnessChecks(resolved, storedByClaim.get(claim.id), repoRoot);
+        const demotion = toDemotion(claim, classifyFreshness(checks), checks);
+        if (demotion !== undefined) demotions.push(demotion);
+      } catch {
+        // A resolver failure on one claim is skipped, never fatal to the pass.
+      }
+    }
+    return { demotions, rechecked };
   }
 
   private saveCheckpoint(repoId: string, headSha: string | undefined): void {

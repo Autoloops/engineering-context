@@ -58,6 +58,7 @@ export interface ApplyAnchorInvalidationInput {
 }
 
 export interface AnchorFingerprintRow {
+  repo_id: string;
   claim_id: string;
   file: string;
   symbol: string; // "" for file-only anchors (see schema: non-null keeps upserts idempotent)
@@ -384,9 +385,9 @@ export class SqliteRepository {
     if (rows.length === 0) return;
     const insert = this.db.prepare(
       `INSERT OR REPLACE INTO anchor_fingerprints
-        (claim_id, file, symbol, content_hash, file_mtime_ms, file_size, resolver_status, checked_at)
+        (repo_id, claim_id, file, symbol, content_hash, file_mtime_ms, file_size, resolver_status, checked_at)
        VALUES
-        (@claim_id, @file, @symbol, @content_hash, @file_mtime_ms, @file_size, @resolver_status, @checked_at)`,
+        (@repo_id, @claim_id, @file, @symbol, @content_hash, @file_mtime_ms, @file_size, @resolver_status, @checked_at)`,
     );
     const write = this.db.transaction((records: AnchorFingerprintInput[]) => {
       const checkedAt = now();
@@ -403,12 +404,12 @@ export class SqliteRepository {
       .all(...claimIds) as AnchorFingerprintRow[];
   }
 
-  /** Reverse index: the distinct claims anchored in any of the given files. */
-  claimIdsForFiles(files: string[]): string[] {
+  /** Reverse index: the distinct claims in this repo anchored in any of the given files. */
+  claimIdsForFiles(repoId: string, files: string[]): string[] {
     if (files.length === 0) return [];
     const rows = this.db
-      .prepare(`SELECT DISTINCT claim_id FROM anchor_fingerprints WHERE file IN (${placeholders(files)})`)
-      .all(...files) as { claim_id: string }[];
+      .prepare(`SELECT DISTINCT claim_id FROM anchor_fingerprints WHERE repo_id = ? AND file IN (${placeholders(files)})`)
+      .all(repoId, ...files) as { claim_id: string }[];
     return rows.map((row) => row.claim_id);
   }
 
