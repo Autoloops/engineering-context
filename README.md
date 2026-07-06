@@ -124,6 +124,7 @@ greplica doctor [--check-embeddings]
 greplica graph read
 greplica graph context "<query>" [--debug]
 greplica graph audit anchors
+greplica graph gc [--dry-run]
 greplica graph view [--out <file>] [--no-open]
 greplica graph export <dir>
 greplica transcript bundle --platform codex|claude|copilot --file <path> [--file <path>...] --out <bundle.md>
@@ -133,6 +134,7 @@ greplica proposal apply <proposal.json>
 
 - `greplica graph context "<query>"` - returns Markdown for agent use. Add `--debug` for the full retrieval payload with ranking signals.
 - `greplica graph read` - prints the current graph view: all components, flows, claims, sources, and edges in scope.
+- `greplica graph gc [--dry-run]` - prunes stale memory from this repo's graph: components/claims whose code anchor file no longer exists, orphaned claims/flows, and dangling edges. `--dry-run` reports what would be pruned without touching the database.
 - `greplica graph view` to visualise the current memory in a local HTML, opens in your default browser. Use `--out` to choose where the file is written; by default it goes to a temp path.
 - `greplica transcript bundle` - converts one or more Codex, Claude Code, or GitHub Copilot CLI JSONL transcripts into a sanitized Markdown bundle for `greplica-fast-session-bootstrap`.
 - `greplica doctor` - verifies installation and diagnoses configuration failures. Not a required preflight before every command.

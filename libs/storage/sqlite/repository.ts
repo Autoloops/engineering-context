@@ -6,6 +6,7 @@ import type { MemoryCommitProposal } from "../../knowledge-graph/proposal.js";
 import type { Component, Flow, GraphObjectType, Source } from "../../knowledge-graph/schema.js";
 import type { Claim } from "../../knowledge-graph/claim.js";
 import type { GraphScope, GraphScopeKind } from "../../knowledge-graph/scope.js";
+import type { GcSubjectRef } from "../../knowledge-graph/graph-gc.js";
 
 export interface RepoRecord {
   id: string;
@@ -255,6 +256,80 @@ export class SqliteRepository {
       sources: this.loadSources([...new Set(edges.filter((edge) => edge.to_type === "source").map((edge) => edge.to_id))]),
       edges,
     };
+  }
+
+  /**
+   * Raw view for `graph gc`: the repo's active components/flows/claims plus ALL
+   * of its edges (unfiltered, so dangling ones are visible) and the set of edge
+   * endpoints whose object row still exists.
+   */
+  readGcGraph(repoId: string): {
+    components: Component[];
+    flows: Flow[];
+    claims: Claim[];
+    edges: Edge[];
+    existingKeys: Set<string>;
+  } {
+    const scopeIds = this.currentScopeIds(repoId);
+    const memberships = this.membershipsForScopes(scopeIds);
+    const edges = this.loadEdges(selectIds(memberships, "edge"));
+    const active = activeSubjectKeys(memberships, edges);
+
+    const existingKeys = new Set<string>();
+    for (const edge of edges) {
+      for (const endpoint of [
+        { type: edge.from_type, id: edge.from_id },
+        { type: edge.to_type, id: edge.to_id },
+      ]) {
+        if (this.subjectExists(endpoint.type, endpoint.id)) existingKeys.add(subjectKey(endpoint.type, endpoint.id));
+      }
+    }
+
+    return {
+      components: this.loadComponents(selectActiveIds(memberships, active, "component")),
+      flows: this.loadFlows(selectActiveIds(memberships, active, "flow")),
+      claims: this.loadClaims(selectActiveIds(memberships, active, "claim")),
+      edges,
+      existingKeys,
+    };
+  }
+
+  /**
+   * Prune a `graph gc` plan for one repo in a single transaction. Object rows
+   * are global across repos (issue #103), so we only unlink this repo's
+   * memberships and repo-scoped embeddings, then delete the shared row when no
+   * membership anywhere still references it.
+   */
+  applyGc(repoId: string, plan: { subjects: GcSubjectRef[]; edges: string[] }): void {
+    const scopeIds = this.currentScopeIds(repoId);
+    if (scopeIds.length === 0) return;
+    const refs: GcSubjectRef[] = [...plan.subjects, ...plan.edges.map((id) => ({ type: "edge" as const, id }))];
+    if (refs.length === 0) return;
+
+    const deleteMembership = this.db.prepare(
+      `DELETE FROM graph_memberships WHERE scope_id IN (${placeholders(scopeIds)}) AND subject_type = ? AND subject_id = ?`,
+    );
+    const deleteEmbedding = this.db.prepare(
+      "DELETE FROM graph_object_embeddings WHERE repo_id = ? AND object_type = ? AND object_id = ?",
+    );
+    const membershipRemains = this.db.prepare(
+      "SELECT 1 FROM graph_memberships WHERE subject_type = ? AND subject_id = ? LIMIT 1",
+    );
+    const deleteRow: Record<GcSubjectRef["type"], Database.Statement> = {
+      component: this.db.prepare("DELETE FROM components WHERE id = ?"),
+      flow: this.db.prepare("DELETE FROM flows WHERE id = ?"),
+      claim: this.db.prepare("DELETE FROM claims WHERE id = ?"),
+      edge: this.db.prepare("DELETE FROM edges WHERE id = ?"),
+    };
+
+    const write = this.db.transaction((items: GcSubjectRef[]) => {
+      for (const ref of items) {
+        deleteMembership.run(...scopeIds, ref.type, ref.id);
+        if (ref.type !== "edge") deleteEmbedding.run(repoId, ref.type, ref.id);
+        if (membershipRemains.get(ref.type, ref.id) === undefined) deleteRow[ref.type].run(ref.id);
+      }
+    });
+    write(refs);
   }
 
   createMemoryCommit(input: CreateMemoryCommitInput): MemoryCommit {

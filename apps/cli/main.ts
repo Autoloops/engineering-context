@@ -5,7 +5,7 @@ import { isatty } from "node:tty";
 import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { createLocalKnowledgeGraphService, KnowledgeGraphService } from "../../libs/knowledge-graph/service.js";
-import type { ClaimAnchorAuditResult, RepoRef } from "../../libs/knowledge-graph/service.js";
+import type { ClaimAnchorAuditResult, GcReport, RepoRef } from "../../libs/knowledge-graph/service.js";
 import { envVarSource, loadRepoEnv, type LoadedRepoEnv } from "../../libs/env/load-local-env.js";
 import {
   ensureGreplicaConfig,
@@ -102,6 +102,13 @@ const cliCommands = [
     path: ["graph", "audit", "anchors"],
     usage: "graph audit anchors",
     handler: runGraphAuditAnchorsCommand,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "graphGc",
+    path: ["graph", "gc"],
+    usage: "graph gc [--dry-run]",
+    handler: runGraphGcCommand,
     showInTopLevelHelp: true,
   },
   {
@@ -276,6 +283,30 @@ async function runGraphAuditAnchorsCommand(_args: string[]): Promise<void> {
   const result = await service.auditCodeAnchors(repo);
   printAnchorAudit(result);
   if (anchorAuditIssueCount(result) > 0) process.exitCode = 1;
+}
+
+async function runGraphGcCommand(args: string[]): Promise<void> {
+  const dryRun = args.includes("--dry-run");
+  if (args.some((arg) => arg !== "--dry-run")) throw new Error(usage("graphGc"));
+  const { repo, service } = createCommandContext();
+  const report = await service.gcGraph(repo, { dryRun });
+  printGcReport(report);
+}
+
+function printGcReport(report: GcReport): void {
+  console.log(report.dry_run ? "Graph gc (dry run)" : "Graph gc");
+  console.log("");
+  printAuditSection("Stale components", report.stale_components, (issue) => `${issue.id} -> ${issue.anchor}`);
+  printAuditSection("Stale claims", report.stale_claims, (issue) => `${issue.id} -> ${issue.anchor}`);
+  printAuditSection("Orphaned claims", report.orphaned_claims, (id) => id);
+  printAuditSection("Orphaned flows", report.orphaned_flows, (id) => id);
+  printAuditSection("Dangling edges", report.dangling_edges, (edge) => `${edge.id} (${edge.from} -> ${edge.to})`);
+
+  const { components, flows, claims, edges } = report.pruned;
+  const total = components + flows + claims + edges;
+  const verb = report.dry_run ? "Would prune" : "Pruned";
+  console.log(`${verb}: ${components} components, ${flows} flows, ${claims} claims, ${edges} edges.`);
+  if (report.dry_run && total > 0) console.log("Run `greplica graph gc` to prune.");
 }
 
 function runGraphExportCommand(args: string[]): void {
