@@ -57,7 +57,7 @@ const cliCommands = [
   {
     key: "install",
     path: ["install"],
-    usage: "install --platform codex|claude|copilot|opencode|openhands|factory-droid --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]",
+    usage: "install --platform codex|claude|copilot|opencode|openhands|factory-droid|antigravity --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]",
     handler: runInstallCommand,
     showInTopLevelHelp: true,
   },
@@ -766,7 +766,7 @@ function requireFlagValue(args: string[], index: number, flag: string, usageText
 }
 
 function parseInstallPlatform(value: string): InstallPlatform {
-  if (value === "codex" || value === "claude" || value === "copilot" || value === "opencode" || value === "openhands" || value === "factory-droid") return value;
+  if (value === "codex" || value === "claude" || value === "copilot" || value === "opencode" || value === "openhands" || value === "factory-droid" || value === "antigravity") return value;
   throw new Error(`Invalid --platform ${value}.\n${usage("install")}`);
 }
 
