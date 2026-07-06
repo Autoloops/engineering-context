@@ -44,7 +44,9 @@ type MembershipRow = {
 
 type ComponentRow = Omit<Component, "code_anchor"> & { code_anchor: string | null };
 type ClaimRow = Omit<Claim, "code_anchors"> & { code_anchors: string | null };
-type EdgeRow = Omit<Edge, "metadata"> & { metadata: string | null };
+type FlowRow = Flow & { repo_id: string };
+type SourceRow = Omit<Source, "title"> & { repo_id: string; title: string | null };
+type EdgeRow = Omit<Edge, "metadata"> & { repo_id: string; metadata: string | null };
 type RepoMatch = { repo: RepoRecord; matchedBy: "remote" | "root" };
 
 export type EmbeddingObjectType = "claim" | "component" | "flow";
@@ -205,14 +207,14 @@ export class SqliteRepository {
   readSupersededClaims(repoId: string): Claim[] {
     const scopeIds = this.currentScopeIds(repoId);
     const memberships = this.membershipsForScopes(scopeIds);
-    const rawEdges = this.loadEdges(selectIds(memberships, "edge"));
+    const rawEdges = this.loadEdges(repoId, selectIds(memberships, "edge"));
     const supersededIds = new Set(
       rawEdges
         .filter((edge) => edge.kind === "supersedes" && edge.to_type === "claim")
         .map((edge) => edge.to_id),
     );
     const claimIds = selectIds(memberships, "claim").filter((id) => supersededIds.has(id));
-    return this.loadClaims(claimIds);
+    return this.loadClaims(repoId, claimIds);
   }
 
   readClaimProvenance(repoId: string): ClaimProvenanceRecord[] {
@@ -238,7 +240,7 @@ export class SqliteRepository {
   } {
     const scopeIds = this.currentScopeIds(repoId);
     const memberships = this.membershipsForScopes(scopeIds);
-    const rawEdges = this.loadEdges(selectIds(memberships, "edge"));
+    const rawEdges = this.loadEdges(repoId, selectIds(memberships, "edge"));
     const active = activeSubjectKeys(memberships, rawEdges);
 
     const edges = rawEdges.filter(
@@ -249,10 +251,10 @@ export class SqliteRepository {
     );
 
     return {
-      components: this.loadComponents(selectActiveIds(memberships, active, "component")),
-      flows: this.loadFlows(selectActiveIds(memberships, active, "flow")),
-      claims: this.loadClaims(selectActiveIds(memberships, active, "claim")),
-      sources: this.loadSources([...new Set(edges.filter((edge) => edge.to_type === "source").map((edge) => edge.to_id))]),
+      components: this.loadComponents(repoId, selectActiveIds(memberships, active, "component")),
+      flows: this.loadFlows(repoId, selectActiveIds(memberships, active, "flow")),
+      claims: this.loadClaims(repoId, selectActiveIds(memberships, active, "claim")),
+      sources: this.loadSources(repoId, [...new Set(edges.filter((edge) => edge.to_type === "source").map((edge) => edge.to_id))]),
       edges,
     };
   }
@@ -286,25 +288,30 @@ export class SqliteRepository {
 
   createProposalRecords(scopeId: string, memoryCommitId: string, proposal: MemoryCommitProposal): void {
     const write = this.db.transaction(() => {
+      const repoId = this.repoIdForScope(scopeId);
+
       for (const component of proposal.creates.components ?? []) {
         this.db
-          .prepare("INSERT INTO components (id, name, code_anchor) VALUES (@id, @name, @code_anchor)")
-          .run({ ...component, code_anchor: component.code_anchor ?? null });
+          .prepare("INSERT INTO components (repo_id, id, name, code_anchor) VALUES (@repo_id, @id, @name, @code_anchor)")
+          .run({ repo_id: repoId, ...component, code_anchor: component.code_anchor ?? null });
         this.createMembership(scopeId, "component", component.id, memoryCommitId);
       }
 
       for (const flow of proposal.creates.flows ?? []) {
-        this.db.prepare("INSERT INTO flows (id, name) VALUES (@id, @name)").run(flow);
+        this.db
+          .prepare("INSERT INTO flows (repo_id, id, name) VALUES (@repo_id, @id, @name)")
+          .run({ repo_id: repoId, ...flow });
         this.createMembership(scopeId, "flow", flow.id, memoryCommitId);
       }
 
       for (const claim of proposal.creates.claims ?? []) {
         this.db
           .prepare(
-            `INSERT INTO claims (id, kind, text, truth, intent, code_anchors)
-             VALUES (@id, @kind, @text, @truth, @intent, @code_anchors)`,
+            `INSERT INTO claims (repo_id, id, kind, text, truth, intent, code_anchors)
+             VALUES (@repo_id, @id, @kind, @text, @truth, @intent, @code_anchors)`,
           )
           .run({
+            repo_id: repoId,
             ...claim,
             code_anchors: claim.code_anchors === undefined ? null : JSON.stringify(claim.code_anchors),
           });
@@ -313,17 +320,17 @@ export class SqliteRepository {
 
       for (const source of proposal.creates.sources ?? []) {
         this.db
-          .prepare("INSERT INTO sources (id, kind, ref, title) VALUES (@id, @kind, @ref, @title)")
-          .run({ ...source, title: source.title ?? null });
+          .prepare("INSERT INTO sources (repo_id, id, kind, ref, title) VALUES (@repo_id, @id, @kind, @ref, @title)")
+          .run({ repo_id: repoId, ...source, title: source.title ?? null });
       }
 
       for (const edge of proposal.creates.edges ?? []) {
         this.db
           .prepare(
-            `INSERT INTO edges (id, from_id, from_type, to_id, to_type, kind, metadata)
-             VALUES (@id, @from_id, @from_type, @to_id, @to_type, @kind, @metadata)`,
+            `INSERT INTO edges (repo_id, id, from_id, from_type, to_id, to_type, kind, metadata)
+             VALUES (@repo_id, @id, @from_id, @from_type, @to_id, @to_type, @kind, @metadata)`,
           )
-          .run({ ...edge, metadata: edge.metadata === undefined ? null : JSON.stringify(edge.metadata) });
+          .run({ repo_id: repoId, ...edge, metadata: edge.metadata === undefined ? null : JSON.stringify(edge.metadata) });
         this.createMembership(scopeId, "edge", edge.id, memoryCommitId);
       }
     });
@@ -331,15 +338,15 @@ export class SqliteRepository {
     write();
   }
 
-  subjectExists(type: GraphObjectType, id: string): boolean {
+  subjectExists(repoId: string, type: GraphObjectType, id: string): boolean {
     const table = tableForType(type);
-    const row = this.db.prepare(`SELECT id FROM ${table} WHERE id = ?`).get(id);
+    const row = this.db.prepare(`SELECT id FROM ${table} WHERE repo_id = ? AND id = ?`).get(repoId, id);
     return row !== undefined;
   }
 
-  subjectType(id: string): GraphObjectType | undefined {
+  subjectType(repoId: string, id: string): GraphObjectType | undefined {
     for (const type of ["component", "flow", "claim", "edge", "source"] as const) {
-      if (this.subjectExists(type, id)) return type;
+      if (this.subjectExists(repoId, type, id)) return type;
     }
     return undefined;
   }
@@ -390,6 +397,14 @@ export class SqliteRepository {
       .run(scopeId, subjectType, subjectId, memoryCommitId);
   }
 
+  private repoIdForScope(scopeId: string): string {
+    const row = this.db.prepare("SELECT repo_id FROM graph_scopes WHERE id = ?").get(scopeId) as
+      | { repo_id: string }
+      | undefined;
+    if (!row) throw new Error(`Graph scope ${scopeId} is missing.`);
+    return row.repo_id;
+  }
+
   private currentScopeIds(repoId: string): string[] {
     const rows = this.db
       .prepare("SELECT id FROM graph_scopes WHERE repo_id = ? AND kind IN ('main', 'working') ORDER BY kind")
@@ -404,20 +419,23 @@ export class SqliteRepository {
       .all(...scopeIds) as MembershipRow[];
   }
 
-  private loadComponents(ids: string[]): Component[] {
-    return this.loadByIds<ComponentRow>("components", ids).map((row) => ({
+  private loadComponents(repoId: string, ids: string[]): Component[] {
+    return this.loadByIds<ComponentRow>(repoId, "components", ids).map((row) => ({
       id: row.id,
       name: row.name,
       code_anchor: row.code_anchor ?? undefined,
     }));
   }
 
-  private loadFlows(ids: string[]): Flow[] {
-    return this.loadByIds<Flow>("flows", ids);
+  private loadFlows(repoId: string, ids: string[]): Flow[] {
+    return this.loadByIds<FlowRow>(repoId, "flows", ids).map((row) => ({
+      id: row.id,
+      name: row.name,
+    }));
   }
 
-  private loadClaims(ids: string[]): Claim[] {
-    return this.loadByIds<ClaimRow>("claims", ids).map((row) => ({
+  private loadClaims(repoId: string, ids: string[]): Claim[] {
+    return this.loadByIds<ClaimRow>(repoId, "claims", ids).map((row) => ({
       id: row.id,
       kind: row.kind,
       text: row.text,
@@ -427,24 +445,29 @@ export class SqliteRepository {
     }));
   }
 
-  private loadSources(ids: string[]): Source[] {
-    return this.loadByIds<Source>("sources", ids);
-  }
-
-  private loadEdges(ids: string[]): Edge[] {
-    if (ids.length === 0) return [];
-    const rows = this.db
-      .prepare(`SELECT * FROM edges WHERE id IN (${placeholders(ids)})`)
-      .all(...ids) as EdgeRow[];
-    return rows.map((row) => ({
-      ...row,
-      metadata: row.metadata === null ? undefined : (JSON.parse(row.metadata) as Record<string, unknown>),
+  private loadSources(repoId: string, ids: string[]): Source[] {
+    return this.loadByIds<SourceRow>(repoId, "sources", ids).map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      ref: row.ref,
+      title: row.title ?? undefined,
     }));
   }
 
-  private loadByIds<T>(table: string, ids: string[]): T[] {
+  private loadEdges(repoId: string, ids: string[]): Edge[] {
     if (ids.length === 0) return [];
-    return this.db.prepare(`SELECT * FROM ${table} WHERE id IN (${placeholders(ids)})`).all(...ids) as T[];
+    const rows = this.db
+      .prepare(`SELECT * FROM edges WHERE repo_id = ? AND id IN (${placeholders(ids)})`)
+      .all(repoId, ...ids) as EdgeRow[];
+    return rows.map(({ repo_id: _repoId, metadata, ...row }) => ({
+      ...row,
+      metadata: metadata === null ? undefined : (JSON.parse(metadata) as Record<string, unknown>),
+    }));
+  }
+
+  private loadByIds<T>(repoId: string, table: string, ids: string[]): T[] {
+    if (ids.length === 0) return [];
+    return this.db.prepare(`SELECT * FROM ${table} WHERE repo_id = ? AND id IN (${placeholders(ids)})`).all(repoId, ...ids) as T[];
   }
 }
 

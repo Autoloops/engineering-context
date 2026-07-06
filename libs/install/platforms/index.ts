@@ -1,4 +1,5 @@
 import type { InstallPlatform } from "../paths.js";
+import { antigravityInstaller } from "./antigravity.js";
 import { claudeInstaller } from "./claude.js";
 import { clineInstaller } from "./cline.js";
 import { copilotInstaller } from "./copilot.js";
@@ -16,6 +17,7 @@ const platformInstallers: Partial<Record<InstallPlatform, PlatformInstaller>> = 
   opencode: opencodeInstaller,
   openhands: openhandsInstaller,
   "factory-droid": droidInstaller,
+  antigravity: antigravityInstaller,
 };
 
 export type { HookInstallResult };
