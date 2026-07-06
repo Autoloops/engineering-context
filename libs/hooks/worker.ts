@@ -7,12 +7,15 @@ import { HookSessionStore } from "./session-state.js";
 import { WorkerLease } from "../utils/worker-lease.js";
 import { ensureGreplicaConfig, type GreplicaConfig } from "../config/greplica-config.js";
 import { platformInstaller } from "../install/platforms/index.js";
+import type { PlatformInstaller } from "../install/platforms/types.js";
 import { openDatabase } from "../storage/sqlite/db.js";
 import { SqliteRepository } from "../storage/sqlite/repository.js";
 import { KnowledgeGraphService, type HealResult, type RepoRef } from "../knowledge-graph/service.js";
+import type { Claim } from "../knowledge-graph/claim.js";
 
 const hookWorkerLockName = "hook-memory-update-worker";
 const hookWorkerHeartbeatMs = 60 * 1000;
+const reverifyLimit = 3; // ponytail: fixed per-cycle cap; make it config only if repos need different limits.
 
 export function startHookWorker(): void {
   const script = process.argv[1];
@@ -59,7 +62,11 @@ export async function runHookWorker(): Promise<void> {
 
     if (leaseValid) {
       const service = new KnowledgeGraphService(new SqliteRepository(db));
-      await runDriftHealPass(service, activeRepoRefs(attempts), config.session.autoHealDrift, () => leaseValid && lease.renew());
+      const renew = () => leaseValid && lease.renew();
+      await runDriftHealPass(service, activeRepoRefs(attempts), config.session.autoHealDrift, renew);
+      if (config.session.autoHealDrift) {
+        await runReverifyForActiveRepos(service, attempts, reverifyLimit, renew);
+      }
     }
   } finally {
     if (heartbeat !== undefined) clearInterval(heartbeat);
@@ -123,24 +130,86 @@ async function maybeUpdateWorkingMemory(attempt: ClaimedMemoryUpdateAttempt): Pr
   const transcriptMarkdown = runner.transcriptToMarkdown(transcript);
   if (transcriptMarkdown.trim().length === 0) return;
 
-  const runDir = mkdtempSync(
-    join(tmpdir(), `greplica-hook-${safePathSegment(attempt.session.platform)}-${safePathSegment(attempt.session.session_id)}-`),
+  await runMemoryAgent(runner, cwd, (proposalPath) =>
+    updateWorkingMemoryPrompt(transcriptMarkdown, attempt, sessionRef, proposalPath),
   );
-  const proposalPath = join(runDir, "working-memory.proposal.json");
+}
 
+/** Re-verify demoted claims for each distinct active repo, best-effort. */
+async function runReverifyForActiveRepos(
+  service: KnowledgeGraphService,
+  attempts: ClaimedMemoryUpdateAttempt[],
+  limit: number,
+  renewLease: () => boolean,
+): Promise<void> {
+  const seen = new Set<string>();
+  for (const attempt of attempts) {
+    const cwd = attempt.session.cwd;
+    if (cwd === null || seen.has(cwd)) continue;
+    seen.add(cwd);
+    if (!renewLease()) return;
+    const ref: RepoRef = { repo_root: cwd, repo_name: basename(cwd), default_branch: "main" };
+    try {
+      await runReverifyPass(platformInstaller(attempt.session.platform), cwd, service.reverifyWorklist(ref, limit));
+    } catch (error) {
+      // One repo's failure (e.g. greplica not installed there) must not abort the
+      // whole pass; log it and keep draining the rest.
+      console.error(JSON.stringify({ event: "freshness_reverify_error", repo: basename(cwd), error: errorMessage(error) }));
+    }
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** Hand the re-verify worklist to the agent runner. Empty worklist -> no agent spawn. */
+export async function runReverifyPass(
+  runner: Pick<PlatformInstaller, "runWorkingMemoryUpdate">,
+  cwd: string,
+  claims: Claim[],
+): Promise<void> {
+  if (claims.length === 0) return;
+  await runMemoryAgent(runner, cwd, (proposalPath) => reverifyPrompt(claims, proposalPath));
+}
+
+/** Prompt the agent to re-verify drift-demoted claims against the current code. */
+export function reverifyPrompt(claims: Claim[], proposalPath: string): string {
+  const list = claims.map((claim) => `- ${claim.id}: ${claim.text}${anchorHint(claim)}`).join("\n");
+  return `Some code_verified memory claims were auto-demoted to truth: unknown because their anchored code drifted. Re-verify each against the CURRENT repository code.
+
+For each claim: read the anchored code now. If the fact still holds, write a corrected code_verified claim that supersedes the unknown one; if it no longer holds, leave it demoted. Do not invent facts — verify against the files.
+
+Write the proposal JSON to ${proposalPath} and apply it with greplica, per the greplica-update-working-memory skill.
+
+Claims to re-verify:
+${list}
+`;
+}
+
+function anchorHint(claim: Claim): string {
+  const anchors = claim.code_anchors ?? [];
+  if (anchors.length === 0) return "";
+  return ` (anchors: ${anchors.map((anchor) => (anchor.symbol ? `${anchor.file}#${anchor.symbol}` : anchor.file)).join(", ")})`;
+}
+
+/** Run a platform agent with a fresh temp proposal path; best-effort, always cleans up. */
+async function runMemoryAgent(
+  runner: Pick<PlatformInstaller, "runWorkingMemoryUpdate">,
+  cwd: string,
+  buildPrompt: (proposalPath: string) => string,
+): Promise<void> {
+  const runDir = mkdtempSync(join(tmpdir(), "greplica-hook-agent-"));
   try {
     await runner.runWorkingMemoryUpdate({
       cwd,
-      env: {
-        ...process.env,
-        GREPLICA_HOOK_DISABLE: "1",
-      },
-      prompt: updateWorkingMemoryPrompt(transcriptMarkdown, attempt, sessionRef, proposalPath),
+      env: { ...process.env, GREPLICA_HOOK_DISABLE: "1" },
+      prompt: buildPrompt(join(runDir, "working-memory.proposal.json")),
       transcriptPath: join(runDir, "agent-events.jsonl"),
       finalMessagePath: join(runDir, "final-message.md"),
     });
   } catch {
-    // Failed background updates should not affect foreground hook sessions.
+    // Failed background agent runs must not affect foreground hook sessions.
   } finally {
     rmSync(runDir, { recursive: true, force: true });
   }
@@ -175,8 +244,4 @@ Session:
 ${transcriptMarkdown.trim()}
 </filtered_session_transcript>
 `;
-}
-
-function safePathSegment(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "unknown";
 }

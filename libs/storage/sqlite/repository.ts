@@ -436,6 +436,20 @@ export class SqliteRepository {
       .run(repoId, sha, now());
   }
 
+  /**
+   * The re-verify worklist: current claims that were drift-demoted to `truth:
+   * unknown` and not yet rewritten. No queue table — derived from existing state,
+   * so a claim drops out for free once an agent supersedes it with a fresh one.
+   * ponytail: reuses readGraphView; swap to one SQL join only if the graph grows.
+   */
+  claimsNeedingReverify(repoId: string, limit: number): Claim[] {
+    const demoted = new Set(this.listInvalidationEvents(repoId).map((event) => event.superseding_claim_id));
+    if (demoted.size === 0) return [];
+    return this.readGraphView(repoId)
+      .claims.filter((claim) => claim.truth === "unknown" && demoted.has(claim.id))
+      .slice(0, limit);
+  }
+
   private insertProposalRecords(scopeId: string, memoryCommitId: string, proposal: MemoryCommitProposal): void {
     for (const component of proposal.creates.components ?? []) {
       this.db

@@ -359,6 +359,11 @@ export class KnowledgeGraphService {
     return this.healDriftedAnchors(input, this.repository.getFreshnessCheckpoint(initialized.repo_id));
   }
 
+  /** The re-verify worklist for this repo: drift-demoted claims still `truth: unknown`. */
+  reverifyWorklist(input: RepoRef, limit: number): Claim[] {
+    return this.repository.claimsNeedingReverify(this.requireRepo(input).repo_id, limit);
+  }
+
   /** The code_verified claims to re-check: the full set on a sweep, else only those in changed files. */
   private healCandidates(claims: Claim[], repoRoot: string | undefined, sinceSha: string | undefined): Claim[] {
     const codeVerified = claims.filter((claim) => claim.truth === "code_verified" && (claim.code_anchors?.length ?? 0) > 0);
