@@ -2,10 +2,10 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export type InstallPlatform = "codex" | "claude" | "opencode" | "openhands" | "factory-droid" | "copilot" | "antigravity";
+export type InstallPlatform = "codex" | "claude" | "opencode" | "openhands" | "factory-droid" | "copilot" | "antigravity" | "cursor";
 export type InstallEmbedding = "local" | "openai";
 
-export const installPlatforms = ["codex", "claude", "copilot", "opencode", "openhands", "factory-droid", "antigravity"] as const satisfies readonly InstallPlatform[];
+export const installPlatforms = ["codex", "claude", "copilot", "cursor", "opencode", "openhands", "factory-droid", "antigravity"] as const satisfies readonly InstallPlatform[];
 export const installPlatformUsage = installPlatforms.join("|");
 export const installCommandSuggestion = `greplica install --platform <${installPlatformUsage}> --embedding local`;
 

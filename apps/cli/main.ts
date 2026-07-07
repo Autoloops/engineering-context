@@ -150,7 +150,7 @@ const cliCommands = [
   {
     key: "hookIngest",
     path: ["hook", "ingest"],
-    usage: "hook ingest --platform codex|claude|copilot|opencode|openhands|factory-droid",
+    usage: "hook ingest --platform codex|claude|copilot|cursor|opencode|openhands|factory-droid",
     handler: runHookIngest,
   },
   {
@@ -520,7 +520,7 @@ function parseHookIngestPlatform(args: string[]): InstallPlatform {
 }
 
 function parseHookPlatform(value: string | undefined): InstallPlatform {
-  if (value === "codex" || value === "claude" || value === "copilot" || value === "opencode" || value === "openhands" || value === "factory-droid") return value;
+  if (value === "codex" || value === "claude" || value === "copilot" || value === "cursor" || value === "opencode" || value === "openhands" || value === "factory-droid") return value;
   throw new Error(usage("hookIngest"));
 }
 
@@ -791,6 +791,9 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
     console.log("Hooks: not installed for this platform.");
   } else {
     console.log("Hooks: not installed.");
+  }
+  if (result.rules !== undefined) {
+    console.log(`Project rules: ${result.rules.configFiles.join(", ")}`);
   }
   console.log(`Automatic memory updates: ${result.session.autoMemoryUpdates ? "enabled" : "disabled"}.`);
   console.log(`Embedding: ${result.embedding}.`);
