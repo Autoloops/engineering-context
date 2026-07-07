@@ -287,7 +287,7 @@ function runGraphExportCommand(args: string[]): void {
   console.log(`Files: ${files.length}`);
 }
 
-function runGraphViewCommand(args: string[]): void {
+async function runGraphViewCommand(args: string[]): Promise<void> {
   const options = parseGraphViewArgs(args);
   const { repo, service } = createCommandContext();
   const graph = service.readGraph(repo);
@@ -299,7 +299,7 @@ function runGraphViewCommand(args: string[]): void {
 
   const outputPath = options.outputPath ?? defaultGraphViewOutputPath(repo.repo_name);
   mkdirSync(dirname(outputPath), { recursive: true });
-  const html = service.buildGraphView(repo);
+  const html = await service.buildGraphView(repo);
   writeFileSync(outputPath, html, "utf8");
   console.log(`Wrote graph view to ${outputPath}`);
 
@@ -350,6 +350,7 @@ function printAnchorAudit(result: ClaimAnchorAuditResult): void {
   printAuditSection("Missing symbols", result.missing_symbols, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
   printAuditSection("Ambiguous symbols", result.ambiguous_symbols, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
   printAuditSection("Unsupported languages", result.unsupported_languages, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
+  printAuditSection("Stale content", result.stale_content, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
 }
 
 function anchorAuditIssueCount(result: ClaimAnchorAuditResult): number {
@@ -357,7 +358,8 @@ function anchorAuditIssueCount(result: ClaimAnchorAuditResult): number {
     result.missing_files.length +
     result.missing_symbols.length +
     result.ambiguous_symbols.length +
-    result.unsupported_languages.length;
+    result.unsupported_languages.length +
+    result.stale_content.length;
 }
 
 function printAuditSection<T>(title: string, items: T[], render: (item: T) => string): void {

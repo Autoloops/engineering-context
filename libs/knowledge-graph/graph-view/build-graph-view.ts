@@ -28,7 +28,7 @@ export interface GraphViewClaimRow {
   kind: string;
   session: string;
   source: "code" | "session";
-  freshness: "active" | "superseded";
+  freshness: "active" | "stale_content" | "superseded";
   componentIds: string[];
   flowIds: string[];
   createdAt: string | null;
@@ -49,6 +49,7 @@ export interface GraphViewData {
     components: number;
     flows: number;
     claims: number;
+    stale_content: number;
     superseded: number;
   };
   components: GraphViewComponentRow[];
@@ -63,6 +64,7 @@ export interface GraphViewData {
 
 export interface BuildGraphViewOptions {
   repoName?: string;
+  staleClaimIds?: ReadonlySet<string>;
 }
 
 const CLAIM_KIND_ORDER = ["fact", "decision", "requirement", "task", "risk", "question"];
@@ -80,7 +82,9 @@ export function buildGraphViewData(
   graph: GraphReadResult,
   provenance: ClaimProvenanceRecord[],
   supersededClaims: Claim[],
+  options: BuildGraphViewOptions = {},
 ): GraphViewData {
+  const staleClaimIds = options.staleClaimIds ?? new Set<string>();
   const provenanceByClaimId = new Map(provenance.map((row) => [row.claim_id, row]));
   const sourceById = new Map(graph.sources.map((source) => [source.id, source]));
   const topLevelComponents = selectTopLevelComponents(graph.components, graph.edges);
@@ -108,7 +112,7 @@ export function buildGraphViewData(
     };
   });
 
-  const toClaimRow = (claim: Claim, freshness: "active" | "superseded"): GraphViewClaimRow => {
+  const toClaimRow = (claim: Claim, freshness: GraphViewClaimRow["freshness"]): GraphViewClaimRow => {
     const record = provenanceByClaimId.get(claim.id);
     const session = sessionLabelForClaim(claim.id, graph.edges, sourceById);
     return {
@@ -131,7 +135,9 @@ export function buildGraphViewData(
     return rightTime - leftTime;
   };
 
-  const claims = graph.claims.map((claim) => toClaimRow(claim, "active")).sort(byCreatedDesc);
+  const claims = graph.claims
+    .map((claim) => toClaimRow(claim, staleClaimIds.has(claim.id) ? "stale_content" : "active"))
+    .sort(byCreatedDesc);
   const superseded = supersededClaims.map((claim) => toClaimRow(claim, "superseded")).sort(byCreatedDesc);
 
   return {
@@ -140,6 +146,7 @@ export function buildGraphViewData(
       components: components.length,
       flows: flows.length,
       claims: claims.length,
+      stale_content: claims.filter((claim) => claim.freshness === "stale_content").length,
       superseded: superseded.length,
     },
     components,
@@ -156,7 +163,7 @@ export function buildGraphViewHtml(
   supersededClaims: Claim[],
   options: BuildGraphViewOptions = {},
 ): string {
-  const data = buildGraphViewData(graph, provenance, supersededClaims);
+  const data = buildGraphViewData(graph, provenance, supersededClaims, options);
   const title = options.repoName ? `Greplica graph view — ${options.repoName}` : "Greplica graph view";
   return renderHtml(data, title);
 }
@@ -412,7 +419,8 @@ function renderHtml(data: GraphViewData, title: string): string {
     })
     .join("\n");
 
-  const defaultClaimsMeta = `${data.claims.length} active claims · session from evidenced_by source, otherwise from code`;
+  const activeClaimCount = data.counts.claims - data.counts.stale_content;
+  const defaultClaimsMeta = `${data.claims.length} current claims · ${activeClaimCount} active${data.counts.stale_content > 0 ? ` · ${data.counts.stale_content} stale content` : ""} · session from evidenced_by source, otherwise from code`;
   const graphDataJson = jsonForScriptTag(data);
 
   return `<!DOCTYPE html>
@@ -834,7 +842,7 @@ ${timelineEvents}
       </section>
       <section id="view-claims-overview" class="view" data-view="claims-overview">
         <h2>Claims - Overview</h2>
-        <p class="meta">Summary of ${data.counts.claims} active claims · click to see claims</p>
+        <p class="meta">Summary of ${data.counts.claims} current claims · click to see claims</p>
         <div class="overview-grid">
           <div class="overview-card">
             <h3>By Type</h3>
@@ -879,7 +887,7 @@ ${timelineEvents}
     const CLAIM_KIND_ORDER = ${JSON.stringify(CLAIM_KIND_ORDER)};
     const CLAIM_KIND_COLORS = ${JSON.stringify(CLAIM_KIND_COLORS)};
     const SOURCE_COLORS = { code: "#4e79a7", session: "#f28e2b" };
-    const FRESHNESS_COLORS = { active: "#59a14f", superseded: "#bab0ac" };
+    const FRESHNESS_COLORS = { active: "#59a14f", stale_content: "#e15759", superseded: "#bab0ac" };
 
     const allClaims = graphData.claims.concat(graphData.supersededClaims);
     const claimTextById = new Map(allClaims.map((claim) => [claim.id, claim.text]));
@@ -1069,7 +1077,8 @@ ${timelineEvents}
       ]);
 
       renderOverviewChart("chart-freshness", "legend-freshness", [
-        { label: "active", count: graphData.counts.claims, color: FRESHNESS_COLORS.active, href: "#claims?freshness=active" },
+        { label: "active", count: graphData.counts.claims - graphData.counts.stale_content, color: FRESHNESS_COLORS.active, href: "#claims?freshness=active" },
+        { label: "stale content", count: graphData.counts.stale_content, color: FRESHNESS_COLORS.stale_content, href: "#claims?freshness=stale_content" },
         { label: "superseded", count: graphData.counts.superseded, color: FRESHNESS_COLORS.superseded, href: "#claims?freshness=superseded" },
       ]);
     }
@@ -1114,7 +1123,9 @@ ${timelineEvents}
         case "source":
           return filter.value === "session" ? "from session" : "from code";
         case "freshness":
-          return filter.value === "superseded" ? "superseded" : "active";
+          if (filter.value === "superseded") return "superseded";
+          if (filter.value === "stale_content") return "with stale anchor content";
+          return "active";
         case "commit": {
           const event = graphData.claimsTimeline.events.find((item) => item.memoryCommitId === filter.value);
           if (event && event.createdAt) return "from commit on " + formatDateTimeClient(event.createdAt);
@@ -1127,9 +1138,9 @@ ${timelineEvents}
 
     function rowMatchesFilter(row, filter) {
       const freshness = row.dataset.freshness;
-      if (!filter) return freshness === "active";
+      if (!filter) return freshness !== "superseded";
       if (filter.type === "freshness") return freshness === filter.value;
-      if (freshness !== "active") return false;
+      if (freshness === "superseded") return false;
       if (filter.type === "kind") return row.dataset.kind === filter.value;
       if (filter.type === "source") return row.dataset.source === filter.value;
       if (filter.type === "commit") return row.dataset.memoryCommitId === filter.value;

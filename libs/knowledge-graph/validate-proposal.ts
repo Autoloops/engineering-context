@@ -204,6 +204,12 @@ function validateClaimCodeAnchors(claim: Record<string, unknown>, errors: string
     if (typeof anchor.symbol === "string" && anchor.symbol.trim().length === 0) {
       errors.push(`Claim ${claimId} code_anchors[${index}].symbol must not be empty when present.`);
     }
+    if (anchor.content_hash !== undefined && typeof anchor.content_hash !== "string") {
+      errors.push(`Claim ${claimId} code_anchors[${index}].content_hash must be a string when present.`);
+    }
+    if (typeof anchor.content_hash === "string" && anchor.content_hash.trim().length === 0) {
+      errors.push(`Claim ${claimId} code_anchors[${index}].content_hash must not be empty when present.`);
+    }
 
     const key = `${anchor.file}#${typeof anchor.symbol === "string" ? anchor.symbol : ""}`;
     if (seen.has(key)) {

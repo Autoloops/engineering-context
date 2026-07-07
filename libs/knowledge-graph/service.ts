@@ -8,6 +8,7 @@ import { graphContextConfig, type GraphContextConfig } from "./graph-context/con
 import type { EmbeddingStatus, GraphContextResult } from "./graph-context/types.js";
 import { buildGraphViewHtml } from "./graph-view/build-graph-view.js";
 import { auditClaimCodeAnchors } from "./code-anchors/audit.js";
+import { CodeAnchorResolver } from "./code-anchors/resolver.js";
 import type { ClaimAnchorAuditResult } from "./code-anchors/types.js";
 import { defaultDatabasePath, openDatabase } from "../storage/sqlite/db.js";
 import type { SqliteRepository } from "../storage/sqlite/repository.js";
@@ -103,12 +104,16 @@ export class KnowledgeGraphService {
     return this.repository.readGraphView(initialized.repo_id);
   }
 
-  buildGraphView(input: RepoRef): string {
+  async buildGraphView(input: RepoRef): Promise<string> {
     const initialized = this.requireRepo(input);
     const graph = this.repository.readGraphView(initialized.repo_id);
     const provenance = this.repository.readClaimProvenance(initialized.repo_id);
     const supersededClaims = this.repository.readSupersededClaims(initialized.repo_id);
-    return buildGraphViewHtml(graph, provenance, supersededClaims, { repoName: input.repo_name });
+    const audit = await auditClaimCodeAnchors(input.repo_root, graph.claims);
+    return buildGraphViewHtml(graph, provenance, supersededClaims, {
+      repoName: input.repo_name,
+      staleClaimIds: new Set(audit.stale_content.map((issue) => issue.claim_id)),
+    });
   }
 
   async contextGraph(input: RepoRef, query: string): Promise<GraphContextResult> {
@@ -150,15 +155,16 @@ export class KnowledgeGraphService {
     if (!validation.valid) {
       throw new Error(`Proposal is invalid:\n${validation.errors.map((error) => `- ${error}`).join("\n")}`);
     }
+    const fingerprintedProposal = await fingerprintProposalCodeAnchors(input.repo_root, normalizedProposal);
 
     const working = this.repository.requireWorkingScope(initialized.repo_id);
     const memoryCommit = this.repository.createMemoryCommit({
       scope_id: working.id,
-      title: normalizedProposal.title,
-      summary: normalizedProposal.summary,
+      title: fingerprintedProposal.title,
+      summary: fingerprintedProposal.summary,
     });
 
-    this.repository.createProposalRecords(working.id, memoryCommit.id, normalizedProposal);
+    this.repository.createProposalRecords(working.id, memoryCommit.id, fingerprintedProposal);
     const embeddingStatus = await this.contextBuilder.ensureForGraph(
       initialized.repo_id,
       this.repository.readGraphView(initialized.repo_id),
@@ -170,11 +176,11 @@ export class KnowledgeGraphService {
       scope_id: working.id,
       embedding_status: embeddingStatus,
       created: {
-        components: normalizedProposal.creates.components?.length ?? 0,
-        flows: normalizedProposal.creates.flows?.length ?? 0,
-        claims: normalizedProposal.creates.claims?.length ?? 0,
-        sources: normalizedProposal.creates.sources?.length ?? 0,
-        edges: normalizedProposal.creates.edges?.length ?? 0,
+        components: fingerprintedProposal.creates.components?.length ?? 0,
+        flows: fingerprintedProposal.creates.flows?.length ?? 0,
+        claims: fingerprintedProposal.creates.claims?.length ?? 0,
+        sources: fingerprintedProposal.creates.sources?.length ?? 0,
+        edges: fingerprintedProposal.creates.edges?.length ?? 0,
       },
     };
   }
@@ -197,7 +203,42 @@ function anchorAuditErrors(result: ClaimAnchorAuditResult): string[] {
     ...result.missing_symbols.map((issue) => `${issue.claim_id} -> ${formatAnchor(issue.anchor)} symbol was not found`),
     ...result.ambiguous_symbols.map((issue) => `${issue.claim_id} -> ${formatAnchor(issue.anchor)} symbol is ambiguous`),
     ...result.unsupported_languages.map((issue) => `${issue.claim_id} -> ${formatAnchor(issue.anchor)} language is unsupported for symbol anchors`),
+    ...result.stale_content.map((issue) => `${issue.claim_id} -> ${formatAnchor(issue.anchor)} content changed since the claim was recorded`),
   ];
+}
+
+async function fingerprintProposalCodeAnchors(
+  repoRoot: string | undefined,
+  proposal: ReturnType<typeof normalizeProposal>,
+): Promise<ReturnType<typeof normalizeProposal>> {
+  if (repoRoot === undefined) return proposal;
+
+  const resolver = new CodeAnchorResolver();
+  const claims: Claim[] = [];
+  for (const claim of proposal.creates.claims ?? []) {
+    if (claim.code_anchors === undefined || claim.code_anchors.length === 0) {
+      claims.push(claim);
+      continue;
+    }
+
+    const resolved = await resolver.resolveMany(repoRoot, claim.code_anchors);
+    claims.push({
+      ...claim,
+      code_anchors: resolved.map((anchor) => ({
+        file: anchor.file,
+        symbol: anchor.symbol,
+        content_hash: anchor.current_content_hash ?? anchor.content_hash,
+      })),
+    });
+  }
+
+  return {
+    ...proposal,
+    creates: {
+      ...proposal.creates,
+      claims,
+    },
+  };
 }
 
 function formatAnchor(anchor: { file: string; symbol?: string } | undefined): string {

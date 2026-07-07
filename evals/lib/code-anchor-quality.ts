@@ -215,6 +215,8 @@ function anchorStatusMessage(anchor: ResolvedCodeAnchor): string {
       return "Anchor symbol matches multiple declarations; use the fully qualified symbol path.";
     case "unsupported_language":
       return "Anchor language cannot currently be parsed; use a file-only anchor only for non-code artifacts.";
+    case "stale_content":
+      return "Anchor content has changed since the claim was recorded.";
     case "resolved":
     case "file_only":
       return "Anchor resolved.";

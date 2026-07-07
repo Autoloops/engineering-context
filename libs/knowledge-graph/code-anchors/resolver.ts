@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { extname, join, normalize, relative } from "node:path";
 import Parser from "web-tree-sitter";
@@ -10,6 +11,7 @@ interface SymbolCandidate {
   symbol: string;
   start_line: number;
   end_line: number;
+  content_hash: string;
 }
 
 const require = createRequire(import.meta.url);
@@ -113,18 +115,21 @@ export class CodeAnchorResolver {
     }
 
     if (anchor.symbol === undefined) {
-      return { ...anchor, status: "file_only" };
+      const currentContentHash = contentHash(readFileSync(filePath, "utf8"));
+      return resolvedAnchor({ ...anchor, current_content_hash: currentContentHash, status: "file_only" });
     }
 
     const symbols = await this.symbolsForFile(filePath);
     if (symbols === undefined) {
       const fallback = fallbackSymbolForFile(filePath, anchor.symbol);
       if (fallback !== undefined) {
-        return {
+        return resolvedAnchor({
           ...anchor,
           start_line: fallback.start_line,
+          end_line: fallback.end_line,
+          current_content_hash: fallback.content_hash,
           status: "resolved",
-        };
+        });
       }
       return { ...anchor, status: "unsupported_language" };
     }
@@ -133,11 +138,13 @@ export class CodeAnchorResolver {
     if (matches.length === 0) {
       const fallback = fallbackSymbolForFile(filePath, anchor.symbol);
       if (fallback !== undefined) {
-        return {
+        return resolvedAnchor({
           ...anchor,
           start_line: fallback.start_line,
+          end_line: fallback.end_line,
+          current_content_hash: fallback.content_hash,
           status: "resolved",
-        };
+        });
       }
       return { ...anchor, status: "missing_symbol" };
     }
@@ -146,12 +153,13 @@ export class CodeAnchorResolver {
     }
 
     const match = matches[0];
-    return {
+    return resolvedAnchor({
       ...anchor,
       start_line: match.start_line,
       end_line: match.end_line,
+      current_content_hash: match.content_hash,
       status: "resolved",
-    };
+    });
   }
 
   async resolveMany(repoRoot: string | undefined, anchors: ClaimCodeAnchor[] | undefined): Promise<ResolvedCodeAnchor[]> {
@@ -209,14 +217,17 @@ export class CodeAnchorResolver {
 function fallbackSymbolForFile(filePath: string, symbol: string): SymbolCandidate | undefined {
   if (!cFamilyExtensions.has(extname(filePath).toLowerCase())) return undefined;
 
-  const line = findCFamilySymbolLine(readFileSync(filePath, "utf8"), symbol);
+  const source = readFileSync(filePath, "utf8");
+  const line = findCFamilySymbolLine(source, symbol);
   if (line === undefined) return undefined;
+  const sourceLine = source.split(/\r?\n/)[line - 1] ?? "";
 
   return {
     name: symbol,
     symbol,
     start_line: line,
     end_line: line,
+    content_hash: contentHash(sourceLine),
   };
 }
 
@@ -343,6 +354,7 @@ function walk(node: Parser.SyntaxNode, containers: string[], symbols: SymbolCand
       symbol,
       start_line: node.startPosition.row + 1,
       end_line: Math.max(node.startPosition.row + 1, node.endPosition.row + 1),
+      content_hash: contentHash(node.text),
     });
   }
 
@@ -386,4 +398,19 @@ function firstIdentifierName(node: Parser.SyntaxNode): string | undefined {
 function isRepoRelative(repoRoot: string, filePath: string): boolean {
   const relativePath = normalize(relative(repoRoot, filePath));
   return relativePath.length === 0 || (!relativePath.startsWith("..") && !relativePath.startsWith("/"));
+}
+
+function resolvedAnchor(anchor: ResolvedCodeAnchor): ResolvedCodeAnchor {
+  if (
+    anchor.content_hash !== undefined &&
+    anchor.current_content_hash !== undefined &&
+    anchor.content_hash !== anchor.current_content_hash
+  ) {
+    return { ...anchor, status: "stale_content" };
+  }
+  return anchor;
+}
+
+function contentHash(value: string): string {
+  return `sha256:${createHash("sha256").update(value).digest("hex")}`;
 }

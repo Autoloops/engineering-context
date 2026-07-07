@@ -13,6 +13,7 @@ export async function auditClaimCodeAnchors(
     missing_symbols: [],
     ambiguous_symbols: [],
     unsupported_languages: [],
+    stale_content: [],
   };
 
   for (const claim of claims) {
@@ -36,6 +37,9 @@ export async function auditClaimCodeAnchors(
           break;
         case "unsupported_language":
           result.unsupported_languages.push({ claim_id: claim.id, anchor, status: "unsupported_language" });
+          break;
+        case "stale_content":
+          result.stale_content.push({ claim_id: claim.id, anchor, status: "stale_content" });
           break;
         case "resolved":
         case "file_only":

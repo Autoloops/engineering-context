@@ -4,6 +4,7 @@ import type { ClaimId } from "../schema.js";
 export type ResolvedCodeAnchorStatus =
   | "resolved"
   | "file_only"
+  | "stale_content"
   | "missing_file"
   | "missing_symbol"
   | "ambiguous_symbol"
@@ -12,13 +13,14 @@ export type ResolvedCodeAnchorStatus =
 export interface ResolvedCodeAnchor extends ClaimCodeAnchor {
   start_line?: number;
   end_line?: number;
+  current_content_hash?: string;
   status: ResolvedCodeAnchorStatus;
 }
 
 export interface ClaimAnchorAuditIssue {
   claim_id: ClaimId;
   anchor?: ClaimCodeAnchor;
-  status: "missing_anchors" | "missing_file" | "missing_symbol" | "ambiguous_symbol" | "unsupported_language";
+  status: "missing_anchors" | "missing_file" | "missing_symbol" | "ambiguous_symbol" | "unsupported_language" | "stale_content";
 }
 
 export interface ClaimAnchorAuditResult {
@@ -27,4 +29,5 @@ export interface ClaimAnchorAuditResult {
   missing_symbols: ClaimAnchorAuditIssue[];
   ambiguous_symbols: ClaimAnchorAuditIssue[];
   unsupported_languages: ClaimAnchorAuditIssue[];
+  stale_content: ClaimAnchorAuditIssue[];
 }

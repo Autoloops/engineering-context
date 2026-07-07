@@ -15,6 +15,7 @@ export type ClaimIntent = "intended" | "accidental" | "unknown";
 export interface ClaimCodeAnchor {
   file: string;
   symbol?: string;
+  content_hash?: string;
 }
 
 export interface Claim {
