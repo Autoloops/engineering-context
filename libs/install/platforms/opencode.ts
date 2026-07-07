@@ -5,7 +5,8 @@ import Database from "better-sqlite3";
 import { hookCommand, hookEvents, mergeHookConfig, readJsonObject, writeJson } from "../hook-config.js";
 import { copyBundledSkills } from "../skills.js";
 import { runOpenCodeAgent } from "../../agent-runner/opencode.js";
-import { hookSessionId, type HookInput } from "../../hooks/hook-input.js";
+import { hookSessionId } from "../../hooks/hook-input.js";
+import type { HookInput } from "../../hooks/types.js";
 import {
   isRecord,
   parseJsonLine,
