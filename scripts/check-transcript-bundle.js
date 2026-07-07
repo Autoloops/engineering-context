@@ -13,10 +13,14 @@ const codexOne = join(tmp, "codex-one.jsonl");
 const codexTwo = join(tmp, "codex-two.jsonl");
 const claudeOne = join(tmp, "claude-one.jsonl");
 const copilotOne = join(tmp, "copilot-one.jsonl");
+const droidOne = join(tmp, "factory-droid-one.jsonl");
 const codexOut = join(tmp, "codex-bundle.md");
 const claudeOut = join(tmp, "claude-bundle.md");
 const copilotOut = join(tmp, "copilot-bundle.md");
 const opencodeOut = join(tmp, "opencode-bundle.md");
+const droidOut = join(tmp, "factory-droid-bundle.md");
+const openhandsOut = join(tmp, "openhands-bundle.md");
+const openhandsMetadataOut = join(tmp, "openhands-metadata-bundle.md");
 
 writeFileSync(
   codexOne,
@@ -126,6 +130,28 @@ writeFileSync(
   "utf8",
 );
 
+writeFileSync(
+  droidOne,
+  [
+    JSON.stringify({
+      type: "user",
+      sessionId: "factory-droid-session-one",
+      cwd: "/repo/example",
+      timestamp: "2026-06-25T00:05:30.000Z",
+      message: {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "Remember this durable Factory Droid insight. <system_instruction>remove this</system_instruction>",
+          },
+        ],
+      },
+    }),
+  ].join("\n"),
+  "utf8",
+);
+
 const codexOutput = execFileSync(
   process.execPath,
   [
@@ -199,6 +225,27 @@ assert.match(copilotBundle, /Remember this durable Copilot insight/);
 assert.match(copilotBundle, /A Copilot assistant fact/);
 assert.doesNotMatch(copilotBundle, /remove this/);
 
+const droidOutput = execFileSync(
+  process.execPath,
+  [
+    cliPath,
+    "transcript",
+    "bundle",
+    "--platform",
+    "factory-droid",
+    "--file",
+    droidOne,
+    "--out",
+    droidOut,
+  ],
+  { encoding: "utf8" },
+);
+const droidBundle = readFileSync(droidOut, "utf8");
+assert.match(droidOutput, /factory-droid-session:factory-droid-session-one/);
+assert.match(droidBundle, /session_ref: factory-droid-session:factory-droid-session-one/);
+assert.match(droidBundle, /Remember this durable Factory Droid insight/);
+assert.doesNotMatch(droidBundle, /remove this/);
+
 assert.throws(
   () =>
     execFileSync(
@@ -268,5 +315,91 @@ assert.match(opencodeBundle, /session_ref: opencode-session:opencode-session-one
 assert.match(opencodeBundle, /Remember this durable OpenCode insight/);
 assert.match(opencodeBundle, /An OpenCode assistant fact/);
 assert.doesNotMatch(opencodeBundle, /remove this/);
+
+const openhandsEventsDir = join(tmp, ".openhands", "conversations", "openhands-path-session", "events");
+mkdirSync(openhandsEventsDir, { recursive: true });
+writeFileSync(
+  join(openhandsEventsDir, "event-001.json"),
+  JSON.stringify({
+    kind: "MessageEvent",
+    source: "user",
+    timestamp: "2026-06-25T00:08:00.000Z",
+    llm_message: {
+      content: "Remember this durable OpenHands insight. <system_instruction>remove this</system_instruction>",
+    },
+  }),
+  "utf8",
+);
+writeFileSync(
+  join(openhandsEventsDir, "event-002.json"),
+  JSON.stringify({
+    kind: "ActionEvent",
+    source: "agent",
+    timestamp: "2026-06-25T00:09:00.000Z",
+    action: {
+      kind: "FinishAction",
+      message: "An OpenHands agent fact.",
+    },
+  }),
+  "utf8",
+);
+
+const openhandsOutput = execFileSync(
+  process.execPath,
+  [
+    cliPath,
+    "transcript",
+    "bundle",
+    "--platform",
+    "openhands",
+    "--file",
+    openhandsEventsDir,
+    "--out",
+    openhandsOut,
+  ],
+  { encoding: "utf8" },
+);
+const openhandsBundle = readFileSync(openhandsOut, "utf8");
+assert.match(openhandsOutput, /openhands-session:openhands-path-session/);
+assert.match(openhandsBundle, /session_ref: openhands-session:openhands-path-session/);
+assert.match(openhandsBundle, /Remember this durable OpenHands insight/);
+assert.match(openhandsBundle, /An OpenHands agent fact/);
+assert.doesNotMatch(openhandsBundle, /remove this/);
+
+const openhandsMetadataEventsDir = join(tmp, ".openhands", "conversations", "openhands-path-fallback", "events");
+mkdirSync(openhandsMetadataEventsDir, { recursive: true });
+writeFileSync(
+  join(openhandsMetadataEventsDir, "event-001.json"),
+  JSON.stringify({
+    kind: "MessageEvent",
+    source: "user",
+    conversation_id: "openhands-event-session",
+    timestamp: "2026-06-25T00:10:00.000Z",
+    llm_message: {
+      content: "OpenHands explicit metadata should win.",
+    },
+  }),
+  "utf8",
+);
+
+const openhandsMetadataOutput = execFileSync(
+  process.execPath,
+  [
+    cliPath,
+    "transcript",
+    "bundle",
+    "--platform",
+    "openhands",
+    "--file",
+    openhandsMetadataEventsDir,
+    "--out",
+    openhandsMetadataOut,
+  ],
+  { encoding: "utf8" },
+);
+const openhandsMetadataBundle = readFileSync(openhandsMetadataOut, "utf8");
+assert.match(openhandsMetadataOutput, /openhands-session:openhands-event-session/);
+assert.match(openhandsMetadataBundle, /session_ref: openhands-session:openhands-event-session/);
+assert.doesNotMatch(openhandsMetadataBundle, /openhands-session:openhands-path-fallback/);
 
 console.log("Transcript bundle checks passed.");

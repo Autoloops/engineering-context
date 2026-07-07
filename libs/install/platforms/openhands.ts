@@ -1,12 +1,13 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { hookCommand, hookEvents, mergeHookConfig, readJsonObject, writeJson } from "../hook-config.js";
 import { copyBundledSkills } from "../skills.js";
 import { runOpenHandsAgent } from "../../agent-runner/openhands.js";
 import { hookSessionId } from "../../hooks/hook-input.js";
 import type { HookInput } from "../../hooks/types.js";
 import {
+  copyStringField,
   isRecord,
   parseJsonLine,
   renderSessionTranscriptMarkdown,
@@ -60,6 +61,9 @@ export const openhandsInstaller: PlatformInstaller = {
   loadTranscript(transcriptPath: string): string {
     return loadOpenHandsEvents(transcriptPath);
   },
+  sessionIdFromTranscriptPath(transcriptPath: string): string | undefined {
+    return openhandsSessionIdFromEventsPath(transcriptPath);
+  },
   transcriptToMarkdown(transcript: string): string {
     return openhandsTranscriptToMarkdown(transcript);
   },
@@ -94,6 +98,12 @@ function loadOpenHandsEvents(eventsDir: string): string {
   return lines.join("\n");
 }
 
+function openhandsSessionIdFromEventsPath(transcriptPath: string): string | undefined {
+  if (basename(transcriptPath) !== "events") return undefined;
+  const conversationId = basename(dirname(transcriptPath));
+  return conversationId.length > 0 && conversationId !== "." && conversationId !== ".." ? conversationId : undefined;
+}
+
 function openhandsTranscriptToMarkdown(jsonl: string): string {
   const metadata: Record<string, string> = {};
   const messages: SessionTranscriptMessage[] = [];
@@ -101,6 +111,13 @@ function openhandsTranscriptToMarkdown(jsonl: string): string {
   for (const line of jsonl.split("\n")) {
     const event = parseJsonLine(line);
     if (!isRecord(event)) continue;
+
+    copyStringField(metadata, event, "session_id", "session_id");
+    copyStringField(metadata, event, "sessionId", "session_id");
+    copyStringField(metadata, event, "conversation_id", "session_id");
+    copyStringField(metadata, event, "conversationId", "session_id");
+    copyStringField(metadata, event, "cwd", "cwd");
+    copyStringField(metadata, event, "working_dir", "cwd");
 
     const role = openhandsRole(event.source);
     if (role === undefined) continue;
