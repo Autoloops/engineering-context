@@ -13,10 +13,14 @@ const codexOne = join(tmp, "codex-one.jsonl");
 const codexTwo = join(tmp, "codex-two.jsonl");
 const claudeOne = join(tmp, "claude-one.jsonl");
 const copilotOne = join(tmp, "copilot-one.jsonl");
+const factoryDroidOne = join(tmp, "factory-droid-one.jsonl");
+const openhandsEventsDir = join(tmp, "openhands", "conversations", "openhandssessionone", "events");
 const codexOut = join(tmp, "codex-bundle.md");
 const claudeOut = join(tmp, "claude-bundle.md");
 const copilotOut = join(tmp, "copilot-bundle.md");
 const opencodeOut = join(tmp, "opencode-bundle.md");
+const factoryDroidOut = join(tmp, "factory-droid-bundle.md");
+const openhandsOut = join(tmp, "openhands-bundle.md");
 
 writeFileSync(
   codexOne,
@@ -126,6 +130,61 @@ writeFileSync(
   "utf8",
 );
 
+writeFileSync(
+  factoryDroidOne,
+  [
+    JSON.stringify({
+      type: "user",
+      sessionId: "factory-droid-session-one",
+      cwd: "/repo/example",
+      timestamp: "2026-06-25T00:05:30.000Z",
+      message: {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "Remember this durable Factory Droid insight. <developer_instruction>remove this</developer_instruction>",
+          },
+        ],
+      },
+    }),
+  ].join("\n"),
+  "utf8",
+);
+
+mkdirSync(openhandsEventsDir, { recursive: true });
+writeFileSync(
+  join(openhandsEventsDir, "event-001.json"),
+  JSON.stringify({
+    kind: "MessageEvent",
+    source: "user",
+    timestamp: "2026-06-25T00:05:45.000Z",
+    working_dir: "/repo/example",
+    llm_message: {
+      content: [
+        {
+          type: "text",
+          text: "Remember this durable OpenHands insight. <system_instruction>remove this</system_instruction>",
+        },
+      ],
+    },
+  }),
+  "utf8",
+);
+writeFileSync(
+  join(openhandsEventsDir, "event-002.json"),
+  JSON.stringify({
+    kind: "ActionEvent",
+    source: "agent",
+    timestamp: "2026-06-25T00:05:50.000Z",
+    action: {
+      kind: "FinishAction",
+      message: "An OpenHands finish fact.",
+    },
+  }),
+  "utf8",
+);
+
 const codexOutput = execFileSync(
   process.execPath,
   [
@@ -198,6 +257,50 @@ assert.match(copilotBundle, /branch: copilot-test/);
 assert.match(copilotBundle, /Remember this durable Copilot insight/);
 assert.match(copilotBundle, /A Copilot assistant fact/);
 assert.doesNotMatch(copilotBundle, /remove this/);
+
+const factoryDroidOutput = execFileSync(
+  process.execPath,
+  [
+    cliPath,
+    "transcript",
+    "bundle",
+    "--platform",
+    "factory-droid",
+    "--file",
+    factoryDroidOne,
+    "--out",
+    factoryDroidOut,
+  ],
+  { encoding: "utf8" },
+);
+const factoryDroidBundle = readFileSync(factoryDroidOut, "utf8");
+assert.match(factoryDroidOutput, /factory-droid-session:factory-droid-session-one/);
+assert.match(factoryDroidBundle, /session_ref: factory-droid-session:factory-droid-session-one/);
+assert.match(factoryDroidBundle, /Remember this durable Factory Droid insight/);
+assert.doesNotMatch(factoryDroidBundle, /remove this/);
+
+const openhandsOutput = execFileSync(
+  process.execPath,
+  [
+    cliPath,
+    "transcript",
+    "bundle",
+    "--platform",
+    "openhands",
+    "--file",
+    openhandsEventsDir,
+    "--out",
+    openhandsOut,
+  ],
+  { encoding: "utf8" },
+);
+const openhandsBundle = readFileSync(openhandsOut, "utf8");
+assert.match(openhandsOutput, /openhands-session:openhandssessionone/);
+assert.match(openhandsBundle, /session_ref: openhands-session:openhandssessionone/);
+assert.match(openhandsBundle, /cwd: \/repo\/example/);
+assert.match(openhandsBundle, /Remember this durable OpenHands insight/);
+assert.match(openhandsBundle, /An OpenHands finish fact/);
+assert.doesNotMatch(openhandsBundle, /remove this/);
 
 assert.throws(
   () =>

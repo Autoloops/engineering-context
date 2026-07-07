@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { hookCommand, hookEvents, mergeHookConfig, readJsonObject, writeJson } from "../hook-config.js";
 import { copyBundledSkills } from "../skills.js";
 import { runOpenHandsAgent } from "../../agent-runner/openhands.js";
@@ -82,6 +82,10 @@ function loadOpenHandsEvents(eventsDir: string): string {
   }
 
   const lines: string[] = [];
+  const sessionId = sessionIdFromEventsDir(eventsDir);
+  if (sessionId !== undefined) {
+    lines.push(JSON.stringify({ type: "session.header", session_id: sessionId }));
+  }
   for (const name of entries.filter((entry) => entry.startsWith("event-") && entry.endsWith(".json")).sort()) {
     let parsed: unknown;
     try {
@@ -102,6 +106,8 @@ function openhandsTranscriptToMarkdown(jsonl: string): string {
     const event = parseJsonLine(line);
     if (!isRecord(event)) continue;
 
+    copyOpenHandsMetadata(metadata, event);
+
     const role = openhandsRole(event.source);
     if (role === undefined) continue;
 
@@ -119,6 +125,20 @@ function openhandsTranscriptToMarkdown(jsonl: string): string {
   }
 
   return renderSessionTranscriptMarkdown({ metadata, messages });
+}
+
+function sessionIdFromEventsDir(eventsDir: string): string | undefined {
+  if (basename(eventsDir) !== "events") return undefined;
+  const conversationId = basename(dirname(eventsDir));
+  return conversationId.length > 0 ? conversationId : undefined;
+}
+
+function copyOpenHandsMetadata(target: Record<string, string>, event: Record<string, unknown>): void {
+  const sessionId = stringValue(event.session_id) ?? stringValue(event.sessionId) ?? stringValue(event.conversation_id) ?? stringValue(event.conversationId);
+  if (target.session_id === undefined && sessionId !== undefined) target.session_id = sessionId;
+
+  const cwd = stringValue(event.cwd) ?? stringValue(event.working_dir);
+  if (target.cwd === undefined && cwd !== undefined) target.cwd = cwd;
 }
 
 function openhandsRole(source: unknown): SessionTranscriptMessage["role"] | undefined {
@@ -150,4 +170,8 @@ function extractTextContent(value: unknown): string {
     }
   }
   return parts.join("\n\n").trim();
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
