@@ -139,3 +139,7 @@ greplica proposal apply <proposal.json>
 - `greplica install` prepares repo state, local storage, and agent integration; normal repo commands require install first.
 
 For **OpenHands**, install is repo-local: skills are written to `.agents/skills/` and the `UserPromptSubmit`/`Stop` hooks to `.openhands/hooks.json` (Claude/Codex/Copilot install to the agent's home config instead). GitHub Copilot CLI installs personal skills under `~/.copilot/skills` (or `$COPILOT_HOME/skills`) and user hooks under `~/.copilot/hooks/greplica.json`. The hooks inject `graph context` guidance and trigger background working-memory updates; OpenHands must trust the repo hooks for the background save to run.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

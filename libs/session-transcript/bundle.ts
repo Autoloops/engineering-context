@@ -47,7 +47,8 @@ export function buildTranscriptBundle(input: TranscriptBundleInput): TranscriptB
 
   input.files.forEach((file, index) => {
     if (!existsSync(file)) throw new Error(`Transcript file does not exist: ${file}`);
-    const filteredMarkdown = installer.transcriptToMarkdown(readFileSync(file, "utf8"));
+    const rawTranscript = installer.loadTranscript ? installer.loadTranscript(file) : readFileSync(file, "utf8");
+    const filteredMarkdown = installer.transcriptToMarkdown(rawTranscript);
     const metadata = parseFilteredTranscriptMetadata(filteredMarkdown);
     const sessionId = metadata.session_id;
     const sessionRef = sessionId === undefined ? undefined : installer.sessionSourceRef(sessionId);

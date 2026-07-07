@@ -126,9 +126,10 @@ export class KnowledgeGraphService {
   }
 
   async validateProposal(input: RepoRef, proposal: unknown): Promise<ProposalValidationResult> {
-    this.requireRepo(input);
-    const normalizedProposal = normalizeProposal(proposal, this.repository);
-    const validation = validateProposal(normalizedProposal, this.repository);
+    const initialized = this.requireRepo(input);
+    const subjectLookup = this.subjectLookup(initialized.repo_id);
+    const normalizedProposal = normalizeProposal(proposal, subjectLookup);
+    const validation = validateProposal(normalizedProposal, subjectLookup);
     if (!validation.valid) return validation;
 
     const anchorErrors = anchorAuditErrors(
@@ -143,13 +144,13 @@ export class KnowledgeGraphService {
   }
 
   async applyProposal(input: RepoRef, proposal: unknown): Promise<ApplyProposalResult> {
-    const normalizedProposal = normalizeProposal(proposal, this.repository);
+    const initialized = this.requireRepo(input);
+    const normalizedProposal = normalizeProposal(proposal, this.subjectLookup(initialized.repo_id));
     const validation = await this.validateProposal(input, normalizedProposal);
     if (!validation.valid) {
       throw new Error(`Proposal is invalid:\n${validation.errors.map((error) => `- ${error}`).join("\n")}`);
     }
 
-    const initialized = this.requireRepo(input);
     const working = this.repository.requireWorkingScope(initialized.repo_id);
     const memoryCommit = this.repository.createMemoryCommit({
       scope_id: working.id,
@@ -193,6 +194,15 @@ export class KnowledgeGraphService {
     return this.repository.getRelatedObjects(initialized.repo_id, type, id, maxDepth);
   }
 
+  private subjectLookup(repoId: string): {
+    subjectExists: (type: GraphObjectType, id: string) => boolean;
+    subjectType: (id: string) => GraphObjectType | undefined;
+  } {
+    return {
+      subjectExists: (type, id) => this.repository.subjectExists(repoId, type, id),
+      subjectType: (id) => this.repository.subjectType(repoId, id),
+    };
+  }
 }
 
 function anchorAuditErrors(result: ClaimAnchorAuditResult): string[] {

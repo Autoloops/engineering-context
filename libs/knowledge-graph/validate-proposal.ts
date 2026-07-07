@@ -107,6 +107,13 @@ export function validateProposal(
 
     validateSubjectBase("edge", edge.id, ids, existingSubjects, errors);
 
+    if (edge.from_type === undefined || edge.to_type === undefined) {
+      errors.push(
+        `Edge ${stringId(edge.id)} is missing subject references: compact edges use { kind, from, to } (did you mean 'from'/'to' instead of 'from_id'/'to_id'?).`,
+      );
+      continue;
+    }
+
     const fromType = String(edge.from_type) as GraphObjectType;
     const toType = String(edge.to_type) as GraphObjectType;
     const kind = String(edge.kind) as EdgeKind;

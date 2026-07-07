@@ -348,6 +348,15 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// JSON.stringify does not escape "/", so a payload containing the literal
+// substring "</script>" would close the embedding <script> tag early and let
+// the remaining text be parsed as HTML. Escaping "<" keeps the JSON valid
+// (JSON.parse and reading the tag's textContent are unaffected) while making
+// it impossible for the payload to terminate the tag.
+function jsonForScriptTag(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
 function kindColor(kind: string): string {
   return CLAIM_KIND_COLORS[kind] ?? "#cdd2da";
 }
@@ -404,7 +413,7 @@ function renderHtml(data: GraphViewData, title: string): string {
     .join("\n");
 
   const defaultClaimsMeta = `${data.claims.length} active claims · session from evidenced_by source, otherwise from code`;
-  const graphDataJson = JSON.stringify(data);
+  const graphDataJson = jsonForScriptTag(data);
 
   return `<!DOCTYPE html>
 <html lang="en">

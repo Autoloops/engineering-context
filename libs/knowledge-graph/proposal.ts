@@ -127,6 +127,15 @@ export function normalizeProposal(input: unknown, lookup?: ProposalSubjectLookup
       continue;
     }
 
+    if (typeof edge.from !== "string" || typeof edge.to !== "string" || typeof edge.kind !== "string") {
+      // Malformed edge (e.g. from_id/to_id without types, or missing kind): pass it
+      // through untouched so validateProposal can report it instead of crashing here.
+      const raw = edge as unknown as Record<string, unknown>;
+      const passthroughId = typeof raw.id === "string" ? raw.id : `edge_invalid_${edges.length}`;
+      edges.push({ ...raw, id: passthroughId } as unknown as Edge);
+      continue;
+    }
+
     const fromType = resolveSubjectType(edge.from, subjectTypes, lookup) ?? "component";
     const toType = resolveSubjectType(edge.to, subjectTypes, lookup) ?? defaultToType(edge.kind);
     edges.push(makeEdge(edge.kind, edge.from, fromType, edge.to, toType, edge.metadata));

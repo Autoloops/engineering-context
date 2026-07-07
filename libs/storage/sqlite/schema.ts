@@ -29,40 +29,50 @@ CREATE TABLE IF NOT EXISTS memory_commits (
 );
 
 CREATE TABLE IF NOT EXISTS components (
-  id TEXT PRIMARY KEY,
+  repo_id TEXT NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+  id TEXT NOT NULL,
   name TEXT NOT NULL,
-  code_anchor TEXT
+  code_anchor TEXT,
+  PRIMARY KEY(repo_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS flows (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL
+  repo_id TEXT NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+  id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  PRIMARY KEY(repo_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS claims (
-  id TEXT PRIMARY KEY,
+  repo_id TEXT NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+  id TEXT NOT NULL,
   kind TEXT NOT NULL,
   text TEXT NOT NULL,
   truth TEXT NOT NULL,
   intent TEXT NOT NULL,
-  code_anchors TEXT
+  code_anchors TEXT,
+  PRIMARY KEY(repo_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS sources (
-  id TEXT PRIMARY KEY,
+  repo_id TEXT NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+  id TEXT NOT NULL,
   kind TEXT NOT NULL,
   ref TEXT NOT NULL,
-  title TEXT
+  title TEXT,
+  PRIMARY KEY(repo_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS edges (
-  id TEXT PRIMARY KEY,
+  repo_id TEXT NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+  id TEXT NOT NULL,
   from_id TEXT NOT NULL,
   from_type TEXT NOT NULL,
   to_id TEXT NOT NULL,
   to_type TEXT NOT NULL,
   kind TEXT NOT NULL,
-  metadata TEXT
+  metadata TEXT,
+  PRIMARY KEY(repo_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS graph_memberships (

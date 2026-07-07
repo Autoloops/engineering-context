@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ClaimedMemoryUpdateAttempt } from "./session-state.js";
+import type { ClaimedMemoryUpdateAttempt } from "./types.js";
 import { HookSessionStore } from "./session-state.js";
 import { WorkerLease } from "../utils/worker-lease.js";
 import { ensureGreplicaConfig, type GreplicaConfig } from "../config/greplica-config.js";

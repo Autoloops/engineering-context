@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { hookCommand, hookEvents, mergeHookConfig, readJsonObject, writeJson } from "../hook-config.js";
 import { copyBundledSkills } from "../skills.js";
 import { runOpenHandsAgent } from "../../agent-runner/openhands.js";
-import { hookSessionId, type HookInput } from "../../hooks/hook-input.js";
+import { hookSessionId } from "../../hooks/hook-input.js";
+import type { HookInput } from "../../hooks/types.js";
 import {
   isRecord,
   parseJsonLine,
