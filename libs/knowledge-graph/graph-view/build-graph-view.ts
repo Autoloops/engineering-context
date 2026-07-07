@@ -722,6 +722,7 @@ function renderHtml(data: GraphViewData, title: string): string {
       display: block;
       width: 260px !important;
       height: 260px !important;
+      cursor: pointer;
     }
     .overview-legend {
       list-style: none;
@@ -862,12 +863,7 @@ ${timelineEvents}
     </main>
   </div>
   <script id="graph-data" type="application/json">${graphDataJson}</script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
   <script>
-    if (window.Chart && window.ChartDataLabels) {
-      Chart.register(ChartDataLabels);
-    }
     const graphData = JSON.parse(document.getElementById("graph-data").textContent);
     const links = document.querySelectorAll("nav a[data-view]");
     const views = document.querySelectorAll(".view[data-view]");
@@ -907,7 +903,7 @@ ${timelineEvents}
 
     function resizeOverviewCharts() {
       requestAnimationFrame(() => {
-        for (const chart of Object.values(overviewCharts)) chart.resize();
+        for (const chart of Object.values(overviewCharts)) drawOverviewPie(chart);
       });
     }
 
@@ -920,19 +916,8 @@ ${timelineEvents}
     function setOverviewChartHighlight(canvasId, index) {
       const chart = overviewCharts[canvasId];
       if (!chart) return;
-      if (index === null) {
-        chart.setActiveElements([]);
-        chart.tooltip.setActiveElements([], { x: 0, y: 0 });
-      } else {
-        const active = [{ datasetIndex: 0, index }];
-        chart.setActiveElements(active);
-        const arc = chart.getDatasetMeta(0).data[index];
-        const position = arc && typeof arc.x === "number" && typeof arc.y === "number"
-          ? { x: arc.x, y: arc.y }
-          : { x: chart.width / 2, y: chart.height / 2 };
-        chart.tooltip.setActiveElements(active, position);
-      }
-      chart.update("none");
+      chart.highlightIndex = index;
+      drawOverviewPie(chart);
     }
 
     function wireOverviewLegendHover(legendId, canvasId) {
@@ -973,6 +958,104 @@ ${timelineEvents}
         .join("");
     }
 
+    function getCanvasPoint(canvas, event) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: ((event.clientX - rect.left) / rect.width) * canvas.width,
+        y: ((event.clientY - rect.top) / rect.height) * canvas.height,
+      };
+    }
+
+    function findPieSliceIndex(chart, event) {
+      const point = getCanvasPoint(chart.canvas, event);
+      const dx = point.x - chart.centerX;
+      const dy = point.y - chart.centerY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance > chart.radius + 10) return null;
+
+      let angle = Math.atan2(dy, dx);
+      if (angle < -Math.PI / 2) angle += Math.PI * 2;
+      for (let index = 0; index < chart.arcs.length; index += 1) {
+        const arc = chart.arcs[index];
+        if (angle >= arc.start && angle <= arc.end) return index;
+      }
+      return null;
+    }
+
+    function drawOverviewPie(chart) {
+      const ctx = chart.ctx;
+      ctx.clearRect(0, 0, chart.canvas.width, chart.canvas.height);
+      chart.arcs = [];
+
+      if (chart.total === 0) {
+        ctx.fillStyle = "#8a93a3";
+        ctx.font = "600 14px system-ui, -apple-system, Segoe UI, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("No claims", chart.centerX, chart.centerY);
+        return;
+      }
+
+      let start = -Math.PI / 2;
+      for (let index = 0; index < chart.drawn.length; index += 1) {
+        const slice = chart.drawn[index];
+        const angle = (slice.count / chart.total) * Math.PI * 2;
+        const end = index === chart.drawn.length - 1 ? Math.PI * 1.5 : start + angle;
+        const mid = start + (end - start) / 2;
+        const radius = chart.highlightIndex === index ? chart.radius + 8 : chart.radius;
+
+        ctx.beginPath();
+        ctx.moveTo(chart.centerX, chart.centerY);
+        ctx.arc(chart.centerX, chart.centerY, radius, start, end);
+        ctx.closePath();
+        ctx.fillStyle = slice.color;
+        ctx.fill();
+
+        if (chart.drawn.length > 1) {
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        chart.arcs.push({ start, end });
+
+        const pct = Math.round((slice.count / chart.total) * 100);
+        if (pct >= 8) {
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "600 13px system-ui, -apple-system, Segoe UI, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(String(pct) + "%", chart.centerX + Math.cos(mid) * 68, chart.centerY + Math.sin(mid) * 68);
+        }
+
+        start = end;
+      }
+    }
+
+    function wireOverviewCanvas(chart) {
+      if (chart.wired) return;
+      chart.wired = true;
+      chart.canvas.addEventListener("click", (event) => {
+        const index = findPieSliceIndex(chart, event);
+        if (index !== null && chart.drawn[index]) navigateToClaims(chart.drawn[index].href);
+      });
+      chart.canvas.addEventListener("mousemove", (event) => {
+        const index = findPieSliceIndex(chart, event);
+        chart.canvas.style.cursor = index === null ? "default" : "pointer";
+        if (chart.highlightIndex !== index) {
+          chart.highlightIndex = index;
+          drawOverviewPie(chart);
+        }
+      });
+      chart.canvas.addEventListener("mouseleave", () => {
+        chart.canvas.style.cursor = "default";
+        if (chart.highlightIndex !== null) {
+          chart.highlightIndex = null;
+          drawOverviewPie(chart);
+        }
+      });
+    }
+
     function renderOverviewChart(canvasId, legendId, slices) {
       const drawn = slices.filter((slice) => slice.count > 0);
       const total = drawn.reduce((sum, slice) => sum + slice.count, 0);
@@ -980,64 +1063,33 @@ ${timelineEvents}
       renderOverviewLegend(legendId, slices);
 
       const canvas = document.getElementById(canvasId);
-      if (!canvas || typeof Chart === "undefined") return;
+      if (!canvas || typeof canvas.getContext !== "function") return;
 
       if (!overviewCharts[canvasId]) {
-        if (total === 0) return;
-
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
         canvas.width = 260;
         canvas.height = 260;
-
-        overviewCharts[canvasId] = new Chart(canvas, {
-        type: "pie",
-        data: {
-          labels: drawn.map((slice) => slice.label),
-          datasets: [{
-            data: drawn.map((slice) => slice.count),
-            backgroundColor: drawn.map((slice) => slice.color),
-            borderWidth: 0,
-            hoverOffset: 0,
-          }],
-        },
-        options: {
-          responsive: false,
-          animation: false,
-          animations: {
-            colors: false,
-            numbers: false,
-          },
-          transitions: {
-            active: { animation: { duration: 0 } },
-          },
-          onClick: (_event, elements) => {
-            if (elements.length > 0) navigateToClaims(drawn[elements[0].index].href);
-          },
-          plugins: {
-            legend: { display: false },
-            datalabels: {
-              color: "#fff",
-              font: { weight: "600", size: 13 },
-              formatter: (value, context) => {
-                const data = context.chart.data.datasets[0].data;
-                const sum = data.reduce((a, b) => a + b, 0);
-                const pct = Math.round((value / sum) * 100);
-                return pct >= 8 ? pct + "%" : "";
-              },
-            },
-            tooltip: {
-              callbacks: {
-                label: (context) => {
-                  const sum = context.dataset.data.reduce((a, b) => a + b, 0);
-                  const pct = Math.round((context.parsed / sum) * 100);
-                  return " " + context.parsed + " (" + pct + "%)";
-                },
-              },
-            },
-          },
-        },
-      });
+        overviewCharts[canvasId] = {
+          canvas,
+          ctx,
+          drawn,
+          total,
+          centerX: 130,
+          centerY: 130,
+          radius: 112,
+          arcs: [],
+          highlightIndex: null,
+          wired: false,
+        };
+        wireOverviewCanvas(overviewCharts[canvasId]);
+      } else {
+        overviewCharts[canvasId].drawn = drawn;
+        overviewCharts[canvasId].total = total;
+        overviewCharts[canvasId].highlightIndex = null;
       }
 
+      drawOverviewPie(overviewCharts[canvasId]);
       wireOverviewLegendHover(legendId, canvasId);
     }
 

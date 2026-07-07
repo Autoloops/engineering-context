@@ -41,6 +41,10 @@ try {
   const html = service.buildGraphView(repo);
   assert.match(html, /Component Without Anchor/);
   assert.match(html, /Greplica graph view/);
+  assert.doesNotMatch(html, /<script\s+src=/i);
+  assert.doesNotMatch(html, /cdn\.jsdelivr\.net/i);
+  assert.match(html, /function drawOverviewPie/);
+  assert.match(html, /chart-freshness/);
 } finally {
   db.close();
 }
