@@ -7,6 +7,7 @@ import { runOpenHandsAgent } from "../../agent-runner/openhands.js";
 import { hookSessionId } from "../../hooks/hook-input.js";
 import type { HookInput } from "../../hooks/types.js";
 import {
+  copyStringField,
   isRecord,
   parseJsonLine,
   renderSessionTranscriptMarkdown,
@@ -60,6 +61,9 @@ export const openhandsInstaller: PlatformInstaller = {
   loadTranscript(transcriptPath: string): string {
     return loadOpenHandsEvents(transcriptPath);
   },
+  sessionIdFromTranscriptPath(transcriptPath: string): string | undefined {
+    return sessionIdFromEventsDir(transcriptPath);
+  },
   transcriptToMarkdown(transcript: string): string {
     return openhandsTranscriptToMarkdown(transcript);
   },
@@ -82,10 +86,6 @@ function loadOpenHandsEvents(eventsDir: string): string {
   }
 
   const lines: string[] = [];
-  const sessionId = sessionIdFromEventsDir(eventsDir);
-  if (sessionId !== undefined) {
-    lines.push(JSON.stringify({ type: "session.header", session_id: sessionId }));
-  }
   for (const name of entries.filter((entry) => entry.startsWith("event-") && entry.endsWith(".json")).sort()) {
     let parsed: unknown;
     try {
@@ -130,15 +130,16 @@ function openhandsTranscriptToMarkdown(jsonl: string): string {
 function sessionIdFromEventsDir(eventsDir: string): string | undefined {
   if (basename(eventsDir) !== "events") return undefined;
   const conversationId = basename(dirname(eventsDir));
-  return conversationId.length > 0 ? conversationId : undefined;
+  return conversationId.length > 0 && conversationId !== "." && conversationId !== ".." ? conversationId : undefined;
 }
 
 function copyOpenHandsMetadata(target: Record<string, string>, event: Record<string, unknown>): void {
-  const sessionId = stringValue(event.session_id) ?? stringValue(event.sessionId) ?? stringValue(event.conversation_id) ?? stringValue(event.conversationId);
-  if (target.session_id === undefined && sessionId !== undefined) target.session_id = sessionId;
-
-  const cwd = stringValue(event.cwd) ?? stringValue(event.working_dir);
-  if (target.cwd === undefined && cwd !== undefined) target.cwd = cwd;
+  copyStringField(target, event, "session_id", "session_id");
+  copyStringField(target, event, "sessionId", "session_id");
+  copyStringField(target, event, "conversation_id", "session_id");
+  copyStringField(target, event, "conversationId", "session_id");
+  copyStringField(target, event, "cwd", "cwd");
+  copyStringField(target, event, "working_dir", "cwd");
 }
 
 function openhandsRole(source: unknown): SessionTranscriptMessage["role"] | undefined {
@@ -170,8 +171,4 @@ function extractTextContent(value: unknown): string {
     }
   }
   return parts.join("\n\n").trim();
-}
-
-function stringValue(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
