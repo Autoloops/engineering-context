@@ -7,6 +7,7 @@ import { GraphContextBuilder } from "./graph-context/context-builder.js";
 import { graphContextConfig, type GraphContextConfig } from "./graph-context/config.js";
 import type { EmbeddingStatus, GraphContextResult } from "./graph-context/types.js";
 import { buildGraphViewHtml } from "./graph-view/build-graph-view.js";
+import { findSimilarClaims, similarClaimWarning, type FindSimilarClaimsInput, type SimilarClaimMatch } from "./duplicate-claims.js";
 import { auditClaimCodeAnchors } from "./code-anchors/audit.js";
 import type { ClaimAnchorAuditResult } from "./code-anchors/types.js";
 import { defaultDatabasePath, openDatabase } from "../storage/sqlite/db.js";
@@ -43,6 +44,7 @@ export interface ApplyProposalResult {
   memory_commit_id: string;
   scope_id: string;
   embedding_status: EmbeddingStatus;
+  warnings: string[];
   created: {
     components: number;
     flows: number;
@@ -57,6 +59,7 @@ export class KnowledgeGraphService {
     private readonly repository: SqliteRepository,
     private readonly contextConfig: GraphContextConfig = graphContextConfig,
     private readonly contextBuilder = new GraphContextBuilder(repository),
+    private readonly similarClaimFinder: (input: FindSimilarClaimsInput) => Promise<SimilarClaimMatch[]> = findSimilarClaims,
   ) {}
 
   initRepo(input: RepoRef): InitRepoResult {
@@ -135,11 +138,16 @@ export class KnowledgeGraphService {
     const anchorErrors = anchorAuditErrors(
       await auditClaimCodeAnchors(input.repo_root, normalizedProposal.creates.claims ?? []),
     );
-    if (anchorErrors.length === 0) return validation;
+    if (anchorErrors.length > 0) {
+      return {
+        valid: false,
+        errors: anchorErrors,
+      };
+    }
 
     return {
-      valid: false,
-      errors: anchorErrors,
+      ...validation,
+      warnings: await this.proposalWarnings(initialized.repo_id, normalizedProposal),
     };
   }
 
@@ -150,6 +158,7 @@ export class KnowledgeGraphService {
     if (!validation.valid) {
       throw new Error(`Proposal is invalid:\n${validation.errors.map((error) => `- ${error}`).join("\n")}`);
     }
+    const warnings = validation.warnings ?? [];
 
     const working = this.repository.requireWorkingScope(initialized.repo_id);
     const memoryCommit = this.repository.createMemoryCommit({
@@ -169,6 +178,7 @@ export class KnowledgeGraphService {
       memory_commit_id: memoryCommit.id,
       scope_id: working.id,
       embedding_status: embeddingStatus,
+      warnings,
       created: {
         components: normalizedProposal.creates.components?.length ?? 0,
         flows: normalizedProposal.creates.flows?.length ?? 0,
@@ -177,6 +187,17 @@ export class KnowledgeGraphService {
         edges: normalizedProposal.creates.edges?.length ?? 0,
       },
     };
+  }
+
+  private async proposalWarnings(repoId: string, proposal: ReturnType<typeof normalizeProposal>): Promise<string[]> {
+    const matches = await this.similarClaimFinder({
+      repo_id: repoId,
+      graph: this.repository.readGraphView(repoId),
+      creates: proposal.creates,
+      repository: this.repository,
+      config: this.contextConfig,
+    });
+    return matches.map(similarClaimWarning);
   }
 
   private subjectLookup(repoId: string): {

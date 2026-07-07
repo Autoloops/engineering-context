@@ -18,6 +18,7 @@ export interface ExistingSubjectLookup {
 export interface ProposalValidationResult {
   valid: boolean;
   errors: string[];
+  warnings?: string[];
 }
 
 export function validateProposal(

@@ -46,6 +46,11 @@ export interface CoherenceConfig {
   maxSources: number;
 }
 
+export interface SimilarClaimsConfig {
+  threshold: number;
+  maxMatchesPerClaim: number;
+}
+
 export interface RankingConfig {
   semanticThreshold: number;
   selectionThreshold: number;
@@ -112,6 +117,7 @@ export interface GraphContextConfig {
   version: string;
   embedding: EmbeddingConfig;
   ranking: RankingConfig;
+  similarClaims: SimilarClaimsConfig;
 }
 
 export const graphContextConfig: GraphContextConfig = {
@@ -123,6 +129,10 @@ export const graphContextConfig: GraphContextConfig = {
     batchSize: 16,
   },
   ranking: rankingConfig,
+  similarClaims: {
+    threshold: 0.75,
+    maxMatchesPerClaim: 3,
+  },
 };
 
 export function graphContextConfigFromGreplicaConfig(config: GreplicaConfig): GraphContextConfig {

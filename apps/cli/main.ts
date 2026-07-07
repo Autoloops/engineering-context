@@ -315,10 +315,12 @@ async function runProposalValidateCommand(args: string[]): Promise<void> {
   const result = await service.validateProposal(repo, proposal);
   if (result.valid) {
     console.log("Proposal is valid.");
+    printProposalWarnings(result.warnings);
     return;
   }
   console.log("Proposal is invalid:");
   for (const error of result.errors) console.log(`- ${error}`);
+  printProposalWarnings(result.warnings);
   process.exitCode = 1;
 }
 
@@ -339,7 +341,14 @@ async function runProposalApplyCommand(args: string[]): Promise<void> {
   console.log(`Embeddings checked: ${result.embedding_status.checked_objects}`);
   console.log(`Embeddings created: ${result.embedding_status.created}`);
   console.log(`Embeddings reused: ${result.embedding_status.reused}`);
+  printProposalWarnings(result.warnings);
   markProposalApplyMemoryUpdated(installed.repo_id, proposal);
+}
+
+function printProposalWarnings(warnings: string[] | undefined): void {
+  if (warnings === undefined || warnings.length === 0) return;
+  console.log("Proposal warnings:");
+  for (const warning of warnings) console.log(`- ${warning}`);
 }
 
 function printAnchorAudit(result: ClaimAnchorAuditResult): void {
