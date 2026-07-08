@@ -23,7 +23,7 @@
     "smoke:openhands": "npm run build && node scripts/smoke-openhands-install.mjs",
     "smoke:copilot": "npm run build && node scripts/smoke-copilot-install.mjs",
     "smoke:opencode": "npm run build && node scripts/smoke-opencode-install.mjs",
-    "test": "npm run build && node scripts/check-transcript-bundle.js && node scripts/check-repo-context.js && node scripts/check-install-options.js && node scripts/check-graph-view.js && node scripts/check-proposal-validate.js && node scripts/check-bm25-tokenizer.js",
+    "test": "npm run build && node scripts/check-transcript-bundle.js && node scripts/check-repo-context.js && node scripts/check-install-options.js && node scripts/check-graph-view.js && node scripts/check-proposal-validate.js && node scripts/check-bm25-tokenizer.js && node scripts/check-anchor-drift.js",
     "test:transcript-bundle": "npm run build && node scripts/check-transcript-bundle.js",
     "test:repo-context": "npm run build && node scripts/check-repo-context.js",
     "eval:bootstrap-current": "npm run build && node dist/evals/cases/bootstrap-current-repo-at-8038fe8/run.js",
