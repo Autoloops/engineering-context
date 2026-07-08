@@ -255,9 +255,11 @@ export class CodeAnchorResolver {
   }
 
   private ensureParserReady(): Promise<void> {
-    this.parserReady ??= Parser.init({
-      locateFile: () => require.resolve("web-tree-sitter/tree-sitter.wasm"),
-    });
+    this.parserReady ??= Promise.resolve(
+      Parser.init({
+        locateFile: () => require.resolve("web-tree-sitter/tree-sitter.wasm"),
+      }),
+    );
     return this.parserReady;
   }
 }

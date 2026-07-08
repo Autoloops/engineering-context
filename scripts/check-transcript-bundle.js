@@ -13,9 +13,11 @@ const codexOne = join(tmp, "codex-one.jsonl");
 const codexTwo = join(tmp, "codex-two.jsonl");
 const claudeOne = join(tmp, "claude-one.jsonl");
 const copilotOne = join(tmp, "copilot-one.jsonl");
+const clineOne = join(tmp, "cline-api-conversation-history.json");
 const codexOut = join(tmp, "codex-bundle.md");
 const claudeOut = join(tmp, "claude-bundle.md");
 const copilotOut = join(tmp, "copilot-bundle.md");
+const clineOut = join(tmp, "cline-bundle.md");
 const opencodeOut = join(tmp, "opencode-bundle.md");
 
 writeFileSync(
@@ -126,6 +128,39 @@ writeFileSync(
   "utf8",
 );
 
+writeFileSync(
+  clineOne,
+  JSON.stringify(
+    {
+      taskId: "cline-task-one",
+      cwd: "/repo/example",
+      apiConversationHistory: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Remember this durable Cline insight. <environment_details>VSCode visible files and shell state should not become memory.</environment_details><system_instruction>remove this</system_instruction>",
+            },
+          ],
+        },
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "A Cline assistant fact.",
+            },
+          ],
+        },
+      ],
+    },
+    null,
+    2,
+  ),
+  "utf8",
+);
+
 const codexOutput = execFileSync(
   process.execPath,
   [
@@ -198,6 +233,30 @@ assert.match(copilotBundle, /branch: copilot-test/);
 assert.match(copilotBundle, /Remember this durable Copilot insight/);
 assert.match(copilotBundle, /A Copilot assistant fact/);
 assert.doesNotMatch(copilotBundle, /remove this/);
+
+const clineOutput = execFileSync(
+  process.execPath,
+  [
+    cliPath,
+    "transcript",
+    "bundle",
+    "--platform",
+    "cline",
+    "--file",
+    clineOne,
+    "--out",
+    clineOut,
+  ],
+  { encoding: "utf8" },
+);
+const clineBundle = readFileSync(clineOut, "utf8");
+assert.match(clineOutput, /cline-task:cline-task-one/);
+assert.match(clineBundle, /session_ref: cline-task:cline-task-one/);
+assert.match(clineBundle, /cwd: \/repo\/example/);
+assert.match(clineBundle, /Remember this durable Cline insight/);
+assert.match(clineBundle, /A Cline assistant fact/);
+assert.doesNotMatch(clineBundle, /remove this/);
+assert.doesNotMatch(clineBundle, /VSCode visible files/);
 
 assert.throws(
   () =>
