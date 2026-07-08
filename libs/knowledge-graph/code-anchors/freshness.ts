@@ -26,8 +26,16 @@ export function isStructurallyBroken(anchor: ResolvedCodeAnchor): boolean {
   return structuralStatuses.has(anchor.status);
 }
 
+/** True when both hashes are known and the current anchor code no longer matches the baseline. */
+export function anchorContentDrift(
+  storedHash: string | undefined,
+  currentHash: string | undefined,
+): boolean {
+  if (storedHash === undefined || currentHash === undefined) return false;
+  return currentHash !== storedHash;
+}
+
 function hasContentDrift(check: AnchorCheck): boolean {
   if (isStructurallyBroken(check.anchor)) return false;
-  if (check.storedHash === undefined || check.currentHash === undefined) return false;
-  return check.currentHash !== check.storedHash;
+  return anchorContentDrift(check.storedHash, check.currentHash);
 }
