@@ -2,45 +2,7 @@ import type Database from "better-sqlite3";
 import { createHash } from "node:crypto";
 import type { SessionConfig } from "../config/greplica-config.js";
 import type { InstallPlatform } from "../install/paths.js";
-
-export interface AgentSession {
-  platform: InstallPlatform;
-  session_id: string;
-  repo_id: string;
-  transcript_path: string | null;
-  cwd: string | null;
-  guidance_injected_at: string | null;
-  stops_since_memory_current: number;
-  last_seen_at: string;
-  last_memory_current_at: string | null;
-}
-
-export interface RecordHookInput {
-  platform: InstallPlatform;
-  sessionId?: string;
-  repoId: string;
-  transcriptPath?: string;
-  cwd?: string;
-  eventName?: string;
-  now?: Date;
-}
-
-export interface RecordHookResult {
-  session: AgentSession;
-  shouldInjectGuidance: boolean;
-}
-
-export interface ClaimedMemoryUpdateAttempt {
-  session: AgentSession;
-  reason: "stop_threshold" | "time_threshold";
-}
-
-export interface MarkMemoryCurrentInput {
-  repoId: string;
-  platform: InstallPlatform;
-  sessionId?: string;
-  now?: Date;
-}
+import type { AgentSession, ClaimedMemoryUpdateAttempt, MarkMemoryCurrentInput, RecordHookInput, RecordHookResult } from "./types.js";
 
 const defaultStopThreshold = 7;
 const defaultTimeThresholdMinutes = 40;

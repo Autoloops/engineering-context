@@ -6,6 +6,7 @@ export function migrate(db: Database.Database): void {
   migrateReposTable(db);
   migrateClaimsTable(db);
   migrateGraphObjectTables(db);
+  migrateClaimAnchorFingerprints(db);
 }
 
 function migrateReposTable(db: Database.Database): void {
@@ -183,5 +184,19 @@ function migrateGraphObjectTables(db: Database.Database): void {
   } finally {
     db.pragma(`legacy_alter_table = ${legacyAlterTable ? "ON" : "OFF"}`);
     db.pragma(`foreign_keys = ${foreignKeys ? "ON" : "OFF"}`);
+  }
+}
+
+// Stores, per claim, the baseline fingerprint of each code anchor so drift can
+// be detected later. Nullable: claims written before this column exist keep a
+// null baseline and are reported as "unknown" rather than drifted.
+function migrateClaimAnchorFingerprints(db: Database.Database): void {
+  const columns = db.prepare("PRAGMA table_info(claims)").all() as Array<{ name: string }>;
+  if (columns.some((column) => column.name === "anchor_fingerprints")) return;
+  try {
+    db.exec("ALTER TABLE claims ADD COLUMN anchor_fingerprints TEXT");
+  } catch (error: unknown) {
+    if (error instanceof Error && /duplicate column name/i.test(error.message)) return;
+    throw error;
   }
 }

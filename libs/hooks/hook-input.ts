@@ -1,18 +1,4 @@
-export interface HookInput {
-  session_id?: unknown;
-  sessionId?: unknown;
-  transcript_path?: unknown;
-  transcriptPath?: unknown;
-  cwd?: unknown;
-  hook_event_name?: unknown;
-  hookEventName?: unknown;
-  turn_id?: unknown;
-  prompt?: unknown;
-  // OpenHands variants of hook_event_name / cwd.
-  event_type?: unknown;
-  working_dir?: unknown;
-  message?: unknown;
-}
+import type { HookInput } from "./types.js";
 
 export function readHookInput(stdin: string): HookInput {
   const trimmed = stdin.trim();

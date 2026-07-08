@@ -231,6 +231,21 @@ export class SqliteRepository {
       .all(repoId) as ClaimProvenanceRecord[];
   }
 
+  // Baseline anchor fingerprints stored when each claim was written, keyed by
+  // claim id then by anchor key. Used by the anchor audit to detect drift.
+  readClaimAnchorFingerprints(repoId: string, ids: string[]): Map<string, Record<string, string>> {
+    const fingerprints = new Map<string, Record<string, string>>();
+    if (ids.length === 0) return fingerprints;
+    const rows = this.db
+      .prepare(`SELECT id, anchor_fingerprints FROM claims WHERE repo_id = ? AND id IN (${placeholders(ids)})`)
+      .all(repoId, ...ids) as Array<{ id: string; anchor_fingerprints: string | null }>;
+    for (const row of rows) {
+      if (row.anchor_fingerprints === null) continue;
+      fingerprints.set(row.id, JSON.parse(row.anchor_fingerprints) as Record<string, string>);
+    }
+    return fingerprints;
+  }
+
   readGraphView(repoId: string): {
     components: Component[];
     flows: Flow[];
@@ -286,7 +301,12 @@ export class SqliteRepository {
     return memoryCommit;
   }
 
-  createProposalRecords(scopeId: string, memoryCommitId: string, proposal: MemoryCommitProposal): void {
+  createProposalRecords(
+    scopeId: string,
+    memoryCommitId: string,
+    proposal: MemoryCommitProposal,
+    anchorFingerprints?: Map<string, Record<string, string>>,
+  ): void {
     const write = this.db.transaction(() => {
       const repoId = this.repoIdForScope(scopeId);
 
@@ -305,15 +325,18 @@ export class SqliteRepository {
       }
 
       for (const claim of proposal.creates.claims ?? []) {
+        const fingerprints = anchorFingerprints?.get(claim.id);
         this.db
           .prepare(
-            `INSERT INTO claims (repo_id, id, kind, text, truth, intent, code_anchors)
-             VALUES (@repo_id, @id, @kind, @text, @truth, @intent, @code_anchors)`,
+            `INSERT INTO claims (repo_id, id, kind, text, truth, intent, code_anchors, anchor_fingerprints)
+             VALUES (@repo_id, @id, @kind, @text, @truth, @intent, @code_anchors, @anchor_fingerprints)`,
           )
           .run({
             repo_id: repoId,
             ...claim,
             code_anchors: claim.code_anchors === undefined ? null : JSON.stringify(claim.code_anchors),
+            anchor_fingerprints:
+              fingerprints === undefined || Object.keys(fingerprints).length === 0 ? null : JSON.stringify(fingerprints),
           });
         this.createMembership(scopeId, "claim", claim.id, memoryCommitId);
       }
