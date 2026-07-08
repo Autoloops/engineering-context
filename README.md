@@ -6,7 +6,7 @@
 
 <p>
   <a href="https://www.npmjs.com/package/greplica"><img alt="npm package" src="https://img.shields.io/npm/v/greplica?color=111111"></a>
-  <img alt="Agents" src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20Copilot%20%7C%20OpenCode%20%7C%20Cline%20%7C%20OpenHands%20%7C%20Factory%20Droid-2563eb">
+  <img alt="Agents" src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20Cline-2563eb">
   <img alt="Storage" src="https://img.shields.io/badge/storage-local%20SQLite-475569">
   <img alt="Embeddings" src="https://img.shields.io/badge/embeddings-local%20%7C%20OpenAI-16a34a">
   <a href="https://discord.gg/q2R6AYXh9"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2"></a>
@@ -115,118 +115,6 @@ Current showcase rows:
 
 ---
 
-## Quick Start (manual)
-
-### 1. Install the CLI
-
-Greplica requires Node.js 22-26.
-
-```bash
-npm install -g greplica
-```
-
-### 2. Install for your coding agent
-
-Run exactly one of these from inside the repository you want Greplica to remember:
-
-```bash
-# Claude Code
-greplica install --platform claude --embedding local
-
-# Codex
-greplica install --platform codex --embedding local
-
-# GitHub Copilot CLI
-greplica install --platform copilot --embedding local
-
-# OpenCode
-greplica install --platform opencode --embedding local
-
-# Cline
-greplica install --platform cline --embedding local
-
-# OpenHands
-greplica install --platform openhands --embedding local
-
-# Factory Droid
-greplica install --platform factory-droid --embedding local
-```
-
-This installs Greplica agent guidance, configures local embeddings (no API key needed), and initializes the memory database. Cline installs repo-local guidance under `.clinerules/`, shared skills under `.cline/skills/`, and a prompt-guidance plugin under `.cline/plugins/`.
-
-### 3. Restart or trust hooks if needed
-
-After install, restart your coding agent if the new skills or hooks do not appear immediately. If your agent asks you to trust or accept the installed hooks, accept them for this repo.
-
-Hooks record session activity and inject graph-context guidance. Hooks with session-stop events can also attempt background working-memory updates. If hooks are unavailable or not accepted, manually ask the agent to use `greplica-update-working-memory` near the end of useful sessions. For Cline, reload or restart Cline if the generated `.clinerules` guidance or `.cline/plugins/` hook does not appear immediately; Cline's plugin provides guidance only, so working-memory updates stay manual.
-
-### 4. Bootstrap memory for this repository (once)
-
-Ask your agent:
-
-```
-Use greplica-bootstrap for this repo.
-```
-
-The agent reads your repository shallowly - README, config files, key entrypoints, type definitions - and writes a structured memory proposal. After validation and apply, the graph is ready.
-
-### 5. Optionally backfill from prior sessions
-
-Ask your agent to find 1-3 recent prior sessions for this repo and show you the selected transcript paths before it reads them deeply. Prefer same-repo sessions from the last 1-2 days. If one large, high-signal session is enough, use one; otherwise use two by default and three only when the sessions are smaller or cover distinct work. If you already asked it to use prior sessions, it should continue from the shown list without asking a second confirmation.
-
-Candidate locations:
-
-- Codex: `~/.codex/sessions/**/*.jsonl`.
-- Claude Code: search both `~/.claude/projects/<sanitized-current-cwd>/*.jsonl` and `~/.claude/projects/**/*.jsonl`.
-- Same-repo matching should handle worktrees and renamed folders. Prefer exact metadata `cwd` matches, but also accept transcripts whose metadata `cwd` still exists and has the same Git `remote.origin.url` or normalized repo identity as the current repo. If the old path no longer exists, use cwd text, repo name, branch, and recent session content as weaker matching evidence.
-- OpenCode: transcript backfill is not supported yet.
-- Cline: `api_conversation_history.json` files under Cline task storage, commonly `~/.cline/data/tasks/**/api_conversation_history.json`.
-- GitHub Copilot CLI: paths from `Stop` hook `transcript_path` values or `$COPILOT_HOME/session-state`.
-
-Bundle them:
-
-```bash
-greplica transcript bundle --platform codex|claude|copilot|cline --file <path> [--file <path>...] --out .greplica-transcript-backfill.md
-```
-
-Then ask:
-
-```
-Use greplica-fast-session-bootstrap on .greplica-transcript-backfill.md.
-```
-
-The skill reads the bundle, extracts durable flow/component context plus high-signal decisions/gotchas/rejected approaches/follow-up work, validates and applies the proposal, then shows one important flow/component it can now reconstruct without broad grepping. If there is a strong repo-specific user correction or risk, it shows that too.
-
----
-
-## What Gets Stored
-
-Greplica is for context that is too detailed for an always-read prompt but too important to rediscover from scratch:
-
-- **Architecture and service boundaries** - which module owns what, where boundaries are enforced
-- **Implementation decisions** - why the code is shaped the way it is
-- **Workflow behavior** - how commands and flows work across multiple components
-- **Repo-specific gotchas** - edge cases and non-obvious behaviors that caused bugs
-- **Constraints and rejected alternatives** - what not to do, and why
-- **Follow-up tasks** - work that was deferred, not forgotten
-
-The goal is not to replace source code or documentation. It is to give agents a durable map of what matters and where to look next.
-
----
-
-## Embedding Options
-
-
-| Mode            | Command flag         | Requires         | Notes                                                                                                                                                  |
-| --------------- | -------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Local (default) | `--embedding local`  | Nothing          | Runs `all-mpnet-base-v2` in-process via HuggingFace Transformers. First query downloads the model (~~420MB) and caches it under `~~/.greplica/models`. |
-| OpenAI          | `--embedding openai` | `OPENAI_API_KEY` | Uses `text-embedding-3-small`. Better retrieval quality, requires network access per query.                                                            |
-
-
-Switch at any time by rerunning `greplica install` with the new flag.
-
----
-
 ## Commands
 
 ```bash
@@ -238,7 +126,7 @@ greplica graph context "<query>" [--debug]
 greplica graph audit anchors
 greplica graph view [--out <file>] [--no-open]
 greplica graph export <dir>
-greplica transcript bundle --platform codex|claude|copilot|cline --file <path> [--file <path>...] --out <bundle.md>
+greplica transcript bundle --platform codex|claude|copilot --file <path> [--file <path>...] --out <bundle.md>
 greplica proposal validate <proposal.json>
 greplica proposal apply <proposal.json>
 ```
@@ -246,7 +134,7 @@ greplica proposal apply <proposal.json>
 - `greplica graph context "<query>"` - returns Markdown for agent use. Add `--debug` for the full retrieval payload with ranking signals.
 - `greplica graph read` - prints the current graph view: all components, flows, claims, sources, and edges in scope.
 - `greplica graph view` to visualise the current memory in a local HTML, opens in your default browser. Use `--out` to choose where the file is written; by default it goes to a temp path.
-- `greplica transcript bundle` - converts one or more Codex, Claude Code, GitHub Copilot CLI, or Cline transcripts into a sanitized Markdown bundle for `greplica-fast-session-bootstrap`.
+- `greplica transcript bundle` - converts one or more Codex, Claude Code, or GitHub Copilot CLI JSONL transcripts into a sanitized Markdown bundle for `greplica-fast-session-bootstrap`.
 - `greplica doctor` - verifies installation and diagnoses configuration failures. Not a required preflight before every command.
 - `greplica install` prepares repo state, local storage, and agent integration; normal repo commands require install first.
 

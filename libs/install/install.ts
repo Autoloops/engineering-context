@@ -41,7 +41,7 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
     repoRoot: options.repo.repo_root ?? process.cwd(),
     hooks: options.hooks,
   });
-  if (!supportsAutoMemoryUpdates(platformInstall.hooks) && embedding.config.session.autoMemoryUpdates) {
+  if (platformInstall.hooks === undefined && embedding.config.session.autoMemoryUpdates) {
     embedding.config.session.autoMemoryUpdates = false;
     writeGreplicaConfig(embedding.config);
   }
@@ -70,17 +70,12 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
 
 export function platformDisplayName(platform: InstallPlatform): string {
   if (platform === "codex") return "Codex";
-  if (platform === "cline") return "Cline";
   if (platform === "copilot") return "GitHub Copilot CLI";
   if (platform === "opencode") return "OpenCode";
   if (platform === "openhands") return "OpenHands";
   if (platform === "factory-droid") return "Factory Droid";
   if (platform === "antigravity") return "Antigravity";
   return "Claude Code";
-}
-
-function supportsAutoMemoryUpdates(hooks: HookInstallResult | undefined): boolean {
-  return hooks?.events.includes("Stop") === true;
 }
 
 function configureEmbedding(provider: EmbeddingProvider, repo: RepoRef): { config: ReturnType<typeof updateEmbeddingConfig>; configPath: string } {

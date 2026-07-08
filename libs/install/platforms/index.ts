@@ -1,7 +1,6 @@
 import type { InstallPlatform } from "../paths.js";
 import { antigravityInstaller } from "./antigravity.js";
 import { claudeInstaller } from "./claude.js";
-import { clineInstaller } from "./cline.js";
 import { copilotInstaller } from "./copilot.js";
 import { codexInstaller } from "./codex.js";
 import { droidInstaller } from "./droid.js";
@@ -11,7 +10,6 @@ import type { HookInstallResult, PlatformInstallContext, PlatformInstaller, Plat
 
 const platformInstallers: Partial<Record<InstallPlatform, PlatformInstaller>> = {
   claude: claudeInstaller,
-  cline: clineInstaller,
   codex: codexInstaller,
   copilot: copilotInstaller,
   opencode: opencodeInstaller,

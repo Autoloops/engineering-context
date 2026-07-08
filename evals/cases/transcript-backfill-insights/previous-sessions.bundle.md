@@ -403,7 +403,7 @@ Validation passed:
 ### human (2026-06-20T21:03:02.350Z)
 
 have you given good errors? for commands that should fail if running in the wrong place?
-Give me error flows.
+Give me error flows. 
 And what if someone calls bootstrap directly? Does that install as well? Or what does it do?
 
 ### agent (2026-06-20T21:03:11.856Z, commentary)
@@ -458,7 +458,7 @@ One thing I’d improve: make the “Working scope is missing” error match the
 
 ### human (2026-06-20T21:07:56.263Z)
 
-Yes give the same error as well. That you need to install to fix!!
+Yes give the same error as well. That you need to install to fix!! 
 
 Also I think we can install in greplica-bootstrap skill. Because that should happen!!
 
@@ -1449,7 +1449,7 @@ Likely changes:
 ### human (2026-06-02T06:14:28.948Z)
 
 "I would not require every evidence edge to have a reason yet, because compact evidenced_by exists and older proposals may not have metadata."
-Enforce it to have a reason.
+Enforce it to have a reason. 
 And I think you have missed the part where we remove other source types. And allow only session for now
 
 ### agent (2026-06-02T06:14:43.504Z, commentary)
@@ -1667,7 +1667,7 @@ No existing PR is open for this branch. I’m creating one now with the implemen
 
 Committed and opened the PR.
 
-Commit: `f7adde7`
+Commit: `f7adde7`  
 PR: https://github.com/Autoloops/engineering-context/pull/7
 
 Verification included in the PR:
@@ -2007,7 +2007,7 @@ The accidental `cloud.md` is removed. I’m checking the worktree and then I’l
 The right arrangement should be three layers:
 
 1. **Always-loaded project instruction**
-
+   
    Add something like `AGENTS.md` at repo root, if Codex/Conductor loads repo instructions from it. This should be tiny and automatic-context-oriented:
 
    ```md

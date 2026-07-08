@@ -35,7 +35,7 @@ try {
     "utf8",
   );
 
-  const result = droidInstaller.install({ repoRoot: process.cwd(), hooks: true });
+  const result = droidInstaller.install();
 
   // Skills installed in the expected location.
   assert(result.skills.length > 0, "expected at least one skill to be installed");

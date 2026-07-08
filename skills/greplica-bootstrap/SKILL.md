@@ -13,7 +13,7 @@ Create shallow, useful Greplica memory for the current repository. Optimize for 
 - Run from the target repo root, a subdirectory inside it, or a non-Git folder that should have its own memory.
 - Do not run `greplica doctor` as routine preflight. Run needed commands directly; use failures to decide whether install or doctor would help.
 - If `greplica` is missing, tell the user to run the Greplica setup prompt from the README.
-- If a Greplica command says the repo or scope is missing, run `greplica install --platform <platform> --embedding local` from the target repo and retry once. Use `codex`, `claude`, `opencode`, or `cline` to match the current agent; ask only if unclear.
+- If a Greplica command says the repo or scope is missing, run `greplica install --platform <platform> --embedding local` from the target repo and retry once. Use `codex`, `claude`, or `opencode` to match the current agent; ask only if unclear.
 - Local embeddings need no API key. If OpenAI embeddings are configured and `OPENAI_API_KEY` is missing, stop and tell the user to set it in their shell or repo `.env.local`; do not ask for the key in chat.
 
 ## Fast Inspection Path
