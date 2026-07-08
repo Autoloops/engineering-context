@@ -43,8 +43,6 @@ greplica install --platform <codex|claude|copilot|cursor|opencode|openhands|fact
 
 Use the platform matching this agent. Do not manually copy skills. After installation, do not echo the full installer output or repeat its next steps.
 
-Cursor hooks provide guidance and session tracking in this version, but automatic working-memory updates are not supported yet. If the selected platform is Cursor, report the installed mode as Guidance only even when auto-save was requested.
-
 Then bootstrap shallow memory for this repo:
 - Prefer using the `greplica-bootstrap` skill.
 - If the skill is not visible until restart, read the installed `greplica-bootstrap/SKILL.md` file and follow it directly.

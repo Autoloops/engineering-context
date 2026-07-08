@@ -794,6 +794,7 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
   }
   if (result.rules !== undefined) {
     console.log(`Project rules: ${result.rules.configFiles.join(", ")}`);
+    console.log("- note: reload your editor if the new project rule does not appear immediately.");
   }
   console.log(`Automatic memory updates: ${result.session.autoMemoryUpdates ? "enabled" : "disabled"}.`);
   console.log(`Embedding: ${result.embedding}.`);

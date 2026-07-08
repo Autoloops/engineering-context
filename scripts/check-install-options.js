@@ -70,11 +70,11 @@ const cursorHooks = installInTempRepo("cursor-hooks", ["--hooks", "enabled", "--
 assert.match(cursorHooks.output, /Installed Greplica for Cursor\./);
 assert.match(cursorHooks.output, /Hooks: installed for beforeSubmitPrompt, stop\./);
 assert.match(cursorHooks.output, /Project rules: .*\.cursor\/rules\/greplica\.mdc/);
-assert.match(cursorHooks.output, /Automatic memory updates: disabled\./);
-assert.match(cursorHooks.output, /Cursor automatic memory updates are not supported yet/);
+assert.match(cursorHooks.output, /Automatic memory updates: enabled\./);
+assert.doesNotMatch(cursorHooks.output, /automatic memory updates are not supported yet/);
 assert.ok(existsSync(join(cursorHooks.cursorHome, "hooks.json")));
 assert.ok(existsSync(join(cursorHooks.repo, ".cursor", "rules", "greplica.mdc")));
-assert.equal(readConfig(cursorHooks.greplicaHome).session.autoMemoryUpdates, false);
+assert.equal(readConfig(cursorHooks.greplicaHome).session.autoMemoryUpdates, true);
 
 const invalid = spawnSync(
   process.execPath,

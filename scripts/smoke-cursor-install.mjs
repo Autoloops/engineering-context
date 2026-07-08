@@ -122,6 +122,20 @@ try {
   assert(hookCwd(cursorHook) === "c:/Users/dev/project", "leading slash should be stripped from Windows workspace root");
   assert(hookCwd({ workspace_roots: ["/home/dev/project"] }) === "/home/dev/project", "unix workspace root should be unchanged");
 
+  // Transcript projection: Cursor's { role, message: { content: [...] } } JSONL
+  // maps to human/agent Markdown; control lines (turn_ended) are skipped.
+  const md = cursorInstaller.transcriptToMarkdown(
+    [
+      JSON.stringify({ role: "user", message: { content: [{ type: "text", text: "<system_instruction>ignore me</system_instruction>hello there" }] } }),
+      JSON.stringify({ role: "assistant", message: { content: [{ type: "text", text: "hi back" }, { type: "tool_use", name: "Shell", input: {} }] } }),
+      JSON.stringify({ type: "turn_ended", status: "completed" }),
+    ].join("\n"),
+  );
+  assert(md.includes("hello there") && md.includes("hi back"), "transcript projection dropped message text");
+  assert(md.includes("### human") && md.includes("### agent"), "transcript projection did not label roles");
+  assert(!md.includes("ignore me"), "transcript projection retained embedded system instructions");
+  assert(!md.includes("tool_use") && !md.includes("turn_ended"), "transcript projection retained tool or control content");
+
   console.log(`OK: Cursor skills + rule + hooks installed (home=${cursorHome})`);
 } finally {
   if (previousCursorHome === undefined) delete process.env.CURSOR_HOME;
