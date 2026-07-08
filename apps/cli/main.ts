@@ -20,6 +20,7 @@ import { buildGraphFolderExport } from "../../libs/knowledge-graph/folder-export
 import { buildTranscriptBundle } from "../../libs/session-transcript/bundle.js";
 import { installGreplica, platformDisplayName } from "../../libs/install/install.js";
 import { allPlatformInstallers, platformInstaller } from "../../libs/install/platforms/index.js";
+import { installPlatforms, installPlatformUsage } from "../../libs/install/paths.js";
 import type { InstallEmbedding, InstallPlatform } from "../../libs/install/paths.js";
 import { hookCwd, hookEventName, hookSessionId, hookTranscriptPath, readHookInput } from "../../libs/hooks/hook-input.js";
 import { greplicaHookGuidance } from "../../libs/hooks/guidance.js";
@@ -57,7 +58,7 @@ const cliCommands = [
   {
     key: "install",
     path: ["install"],
-    usage: "install --platform codex|claude|copilot|opencode|openhands|factory-droid|antigravity --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]",
+    usage: `install --platform ${installPlatformUsage} --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]`,
     handler: runInstallCommand,
     showInTopLevelHelp: true,
   },
@@ -766,7 +767,7 @@ function requireFlagValue(args: string[], index: number, flag: string, usageText
 }
 
 function parseInstallPlatform(value: string): InstallPlatform {
-  if (value === "codex" || value === "claude" || value === "copilot" || value === "opencode" || value === "openhands" || value === "factory-droid" || value === "antigravity") return value;
+  if ((installPlatforms as readonly string[]).includes(value)) return value as InstallPlatform;
   throw new Error(`Invalid --platform ${value}.\n${usage("install")}`);
 }
 
