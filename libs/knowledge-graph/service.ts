@@ -8,6 +8,8 @@ import { graphContextConfig, type GraphContextConfig } from "./graph-context/con
 import type { EmbeddingStatus, GraphContextResult } from "./graph-context/types.js";
 import { buildGraphViewHtml } from "./graph-view/build-graph-view.js";
 import { auditClaimCodeAnchors } from "./code-anchors/audit.js";
+import { CodeAnchorResolver } from "./code-anchors/resolver.js";
+import { fingerprintClaimAnchors } from "./code-anchors/fingerprint.js";
 import type { ClaimAnchorAuditResult } from "./code-anchors/types.js";
 import { defaultDatabasePath, openDatabase } from "../storage/sqlite/db.js";
 import type { SqliteRepository } from "../storage/sqlite/repository.js";
@@ -122,7 +124,12 @@ export class KnowledgeGraphService {
 
   async auditCodeAnchors(input: RepoRef): Promise<ClaimAnchorAuditResult> {
     const initialized = this.requireRepo(input);
-    return auditClaimCodeAnchors(input.repo_root, this.repository.readGraphView(initialized.repo_id).claims);
+    const claims = this.repository.readGraphView(initialized.repo_id).claims;
+    const baselineFingerprints = this.repository.readClaimAnchorFingerprints(
+      initialized.repo_id,
+      claims.map((claim) => claim.id),
+    );
+    return auditClaimCodeAnchors(input.repo_root, claims, new CodeAnchorResolver(), baselineFingerprints);
   }
 
   async validateProposal(input: RepoRef, proposal: unknown): Promise<ProposalValidationResult> {
@@ -158,7 +165,8 @@ export class KnowledgeGraphService {
       summary: normalizedProposal.summary,
     });
 
-    this.repository.createProposalRecords(working.id, memoryCommit.id, normalizedProposal);
+    const anchorFingerprints = await computeAnchorFingerprints(input.repo_root, normalizedProposal.creates.claims ?? []);
+    this.repository.createProposalRecords(working.id, memoryCommit.id, normalizedProposal, anchorFingerprints);
     const embeddingStatus = await this.contextBuilder.ensureForGraph(
       initialized.repo_id,
       this.repository.readGraphView(initialized.repo_id),
@@ -203,6 +211,23 @@ function anchorAuditErrors(result: ClaimAnchorAuditResult): string[] {
 function formatAnchor(anchor: { file: string; symbol?: string } | undefined): string {
   if (anchor === undefined) return "<missing>";
   return anchor.symbol === undefined ? anchor.file : `${anchor.file}#${anchor.symbol}`;
+}
+
+// Fingerprint each claim's code anchors against the repo as it is now, so the
+// stored baseline reflects the code the fact was written against. A single
+// resolver is shared so per-file parses are cached across claims.
+async function computeAnchorFingerprints(
+  repoRoot: string | undefined,
+  claims: Claim[],
+): Promise<Map<string, Record<string, string>>> {
+  const resolver = new CodeAnchorResolver();
+  const byClaim = new Map<string, Record<string, string>>();
+  for (const claim of claims) {
+    if (claim.code_anchors === undefined || claim.code_anchors.length === 0) continue;
+    const fingerprints = await fingerprintClaimAnchors(repoRoot, claim.code_anchors, resolver);
+    if (Object.keys(fingerprints).length > 0) byClaim.set(claim.id, fingerprints);
+  }
+  return byClaim;
 }
 
 export function createLocalKnowledgeGraphService(
