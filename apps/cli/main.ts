@@ -4,7 +4,6 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isatty } from "node:tty";
 import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { createLocalKnowledgeGraphService, KnowledgeGraphService } from "../../libs/knowledge-graph/service.js";
 import type { ClaimAnchorAuditResult, RepoRef } from "../../libs/knowledge-graph/service.js";
 import { envVarSource, loadRepoEnv, type LoadedRepoEnv } from "../../libs/env/load-local-env.js";
 import {
@@ -12,8 +11,11 @@ import {
   greplicaConfigPath,
   type EmbeddingConfig,
   type GreplicaConfig,
+  type GreplicaMode,
+  type ManagedConfig,
 } from "../../libs/config/greplica-config.js";
-import { graphContextConfigFromGreplicaConfig } from "../../libs/knowledge-graph/graph-context/config.js";
+import { createKnowledgeGraphProvider } from "../../libs/knowledge-graph/provider-factory.js";
+import type { KnowledgeGraphProvider } from "../../libs/knowledge-graph/provider.js";
 import { createEmbedder } from "../../libs/knowledge-graph/graph-context/embedder.js";
 import { renderGraphContextMarkdown } from "../../libs/knowledge-graph/graph-context/render.js";
 import { buildGraphFolderExport } from "../../libs/knowledge-graph/folder-export.js";
@@ -23,18 +25,15 @@ import { allPlatformInstallers, platformInstaller } from "../../libs/install/pla
 import type { InstallEmbedding, InstallPlatform } from "../../libs/install/paths.js";
 import { hookCwd, hookEventName, hookSessionId, hookTranscriptPath, readHookInput } from "../../libs/hooks/hook-input.js";
 import { greplicaHookGuidance } from "../../libs/hooks/guidance.js";
-import { HookSessionStore } from "../../libs/hooks/session-state.js";
 import { runHookWorker, shouldRunAutoMemoryUpdates, startHookWorker } from "../../libs/hooks/worker.js";
 import { withLocalModelLock } from "../../libs/knowledge-graph/graph-context/local-model-lock.js";
-import { openDatabase } from "../../libs/storage/sqlite/db.js";
-import { SqliteRepository as SqliteKnowledgeGraphRepository } from "../../libs/storage/sqlite/repository.js";
 import { detectRepoContext } from "./repo-context.js";
 
 interface CommandContext {
   repo: RepoRef;
   env: LoadedRepoEnv;
   config: GreplicaConfig;
-  service: KnowledgeGraphService;
+  service: KnowledgeGraphProvider;
 }
 
 type HelpMode = "query-aware";
@@ -57,7 +56,7 @@ const cliCommands = [
   {
     key: "install",
     path: ["install"],
-    usage: "install --platform codex|claude|copilot|opencode|openhands|factory-droid --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]",
+    usage: "install --platform codex|claude|copilot|opencode|openhands|factory-droid --embedding local|openai [--mode local|managed] [--api-url <url>] [--token <token>] [--hooks enabled|disabled] [--auto-memory enabled|disabled]",
     handler: runInstallCommand,
     showInTopLevelHelp: true,
   },
@@ -247,9 +246,9 @@ async function runInstallCommand(args: string[]): Promise<void> {
   printInstallResult(result);
 }
 
-function runGraphReadCommand(_args: string[]): void {
+async function runGraphReadCommand(_args: string[]): Promise<void> {
   const { repo, service } = createCommandContext();
-  const graph = service.readGraph(repo);
+  const graph = await service.readGraph(repo);
   console.log("Current graph view: main + working");
   printSection("Components", graph.components, (item) => `${named(item)} ${anchor(item)}`.trim());
   printSection("Flows", graph.flows, named);
@@ -278,19 +277,19 @@ async function runGraphAuditAnchorsCommand(_args: string[]): Promise<void> {
   if (anchorAuditIssueCount(result) > 0) process.exitCode = 1;
 }
 
-function runGraphExportCommand(args: string[]): void {
+async function runGraphExportCommand(args: string[]): Promise<void> {
   const outputDir = requireFile(args[0], usage("graphExport"));
   const { repo, service } = createCommandContext();
-  const files = buildGraphFolderExport(service.readGraph(repo));
+  const files = buildGraphFolderExport(await service.readGraph(repo));
   writeGraphFolderExport(outputDir, files);
   console.log(`Exported current graph view to ${outputDir}`);
   console.log(`Files: ${files.length}`);
 }
 
-function runGraphViewCommand(args: string[]): void {
+async function runGraphViewCommand(args: string[]): Promise<void> {
   const options = parseGraphViewArgs(args);
   const { repo, service } = createCommandContext();
-  const graph = service.readGraph(repo);
+  const graph = await service.readGraph(repo);
   if (graph.components.length === 0) {
     console.log("No components to visualise. Bootstrap memory first.");
     process.exitCode = 1;
@@ -299,7 +298,7 @@ function runGraphViewCommand(args: string[]): void {
 
   const outputPath = options.outputPath ?? defaultGraphViewOutputPath(repo.repo_name);
   mkdirSync(dirname(outputPath), { recursive: true });
-  const html = service.buildGraphView(repo);
+  const html = await service.buildGraphView(repo);
   writeFileSync(outputPath, html, "utf8");
   console.log(`Wrote graph view to ${outputPath}`);
 
@@ -325,7 +324,6 @@ async function runProposalValidateCommand(args: string[]): Promise<void> {
 async function runProposalApplyCommand(args: string[]): Promise<void> {
   const file = requireFile(args[0], usage("proposalApply"));
   const { repo, service } = createCommandContext();
-  const installed = service.requireRepo(repo);
   const proposal = readProposal(file);
   const result = await service.applyProposal(repo, proposal);
   console.log("Applied proposal to working memory.");
@@ -339,7 +337,7 @@ async function runProposalApplyCommand(args: string[]): Promise<void> {
   console.log(`Embeddings checked: ${result.embedding_status.checked_objects}`);
   console.log(`Embeddings created: ${result.embedding_status.created}`);
   console.log(`Embeddings reused: ${result.embedding_status.reused}`);
-  markProposalApplyMemoryUpdated(installed.repo_id, proposal);
+  await markProposalApplyMemoryUpdated(service, repo, proposal);
 }
 
 function printAnchorAudit(result: ClaimAnchorAuditResult): void {
@@ -379,11 +377,11 @@ function createCommandContext(): CommandContext {
   const repo = detectRepoContext();
   const env = loadRepoEnv(repo.repo_root ?? process.cwd());
   const config = ensureGreplicaConfig();
-  const service = createLocalKnowledgeGraphService(graphContextConfigFromGreplicaConfig(config));
+  const service = createKnowledgeGraphProvider(config);
   return { repo, env, config, service };
 }
 
-function runHookIngest(args: string[]): void {
+async function runHookIngest(args: string[]): Promise<void> {
   if (process.env.GREPLICA_HOOK_DISABLE === "1") return;
 
   const platform = parseHookIngestPlatform(args);
@@ -394,31 +392,23 @@ function runHookIngest(args: string[]): void {
   const cwd = hookCwd(hook) ?? process.cwd();
   const transcriptPath = runner.transcriptPathFromHook?.(hook) ?? hookTranscriptPath(hook);
   const repo = detectRepoContext(cwd);
-  const db = openDatabase();
   try {
-    const repository = new SqliteKnowledgeGraphRepository(db);
-    const service = new KnowledgeGraphService(repository);
-    let installed: ReturnType<KnowledgeGraphService["requireRepo"]>;
-    try {
-      installed = service.requireRepo(repo);
-    } catch {
-      return;
-    }
-    const sessionStore = new HookSessionStore(db);
-    const result = sessionStore.recordHook({
+    const config = ensureGreplicaConfig();
+    const service = createKnowledgeGraphProvider(config);
+    const result = await service.recordHook({
+      repo,
       platform,
-      repoId: installed.repo_id,
       sessionId: hookSessionId(hook),
       transcriptPath,
       cwd,
       eventName,
     });
-    if (shouldRunAutoMemoryUpdates(ensureGreplicaConfig())) startHookWorker();
+    if (shouldRunAutoMemoryUpdates(config)) startHookWorker();
 
     if (!result.shouldInjectGuidance) return;
     console.log(JSON.stringify(hookGuidanceOutput(platform, greplicaHookGuidance)));
-  } finally {
-    db.close();
+  } catch {
+    return;
   }
 }
 
@@ -433,22 +423,16 @@ function hookGuidanceOutput(platform: InstallPlatform, additionalContext: string
   };
 }
 
-function runSessionMarkMemoryCurrent(args: string[]): void {
+async function runSessionMarkMemoryCurrent(args: string[]): Promise<void> {
   const sessionRef = parseRequiredOption(args, "--session-ref", usage("sessionMarkMemoryCurrent"));
   const { repo, service } = createCommandContext();
-  const installed = service.requireRepo(repo);
-  const db = openDatabase();
-  try {
-    const marked = markMemoryCurrentFromSessionRef(new HookSessionStore(db), installed.repo_id, sessionRef);
-    if (marked) {
-      console.log("Marked session memory current.");
-      return;
-    }
-    console.log(`No tracked session matched ${sessionRef}`);
-    process.exitCode = 1;
-  } finally {
-    db.close();
+  const marked = await markMemoryCurrentFromSessionRef(service, repo, sessionRef);
+  if (marked) {
+    console.log("Marked session memory current.");
+    return;
   }
+  console.log(`No tracked session matched ${sessionRef}`);
+  process.exitCode = 1;
 }
 
 function runTranscriptBundle(args: string[]): void {
@@ -469,24 +453,18 @@ function runTranscriptBundle(args: string[]): void {
   }
 }
 
-function markProposalApplyMemoryUpdated(repoId: string, proposal: unknown): void {
+async function markProposalApplyMemoryUpdated(service: KnowledgeGraphProvider, repo: RepoRef, proposal: unknown): Promise<void> {
   const sessionRefs = sessionRefsFromProposal(proposal);
   if (sessionRefs.length === 0) return;
 
-  const db = openDatabase();
-  try {
-    const sessionStore = new HookSessionStore(db);
-    for (const sessionRef of sessionRefs) markMemoryCurrentFromSessionRef(sessionStore, repoId, sessionRef);
-  } finally {
-    db.close();
-  }
+  for (const sessionRef of sessionRefs) await markMemoryCurrentFromSessionRef(service, repo, sessionRef);
 }
 
-function markMemoryCurrentFromSessionRef(sessionStore: HookSessionStore, repoId: string, sessionRef: string): boolean {
+function markMemoryCurrentFromSessionRef(service: KnowledgeGraphProvider, repo: RepoRef, sessionRef: string): Promise<boolean> {
   const identity = sessionIdentityFromSourceRef(sessionRef);
-  if (identity === undefined) return false;
-  return sessionStore.markMemoryCurrent({
-    repoId,
+  if (identity === undefined) return Promise.resolve(false);
+  return service.markMemoryCurrent({
+    repo,
     platform: identity.platform,
     sessionId: identity.sessionId,
   });
@@ -542,8 +520,8 @@ async function runDoctor(args: string[]): Promise<void> {
   console.log(`Default branch: ${context.repo.default_branch}`);
 
   try {
-    const result = context.service.requireRepo(context.repo);
-    console.log(`Database: ${result.database_path}`);
+    const result = await context.service.requireRepo(context.repo);
+    console.log(`${context.config.mode === "managed" ? "Managed API" : "Database"}: ${context.config.mode === "managed" ? context.config.managed?.apiUrl ?? "" : result.database_path}`);
     console.log("Memory state: ready");
     console.log(`Main scope: ${result.main_scope_id}`);
     console.log(`Working scope: ${result.working_scope_id}`);
@@ -555,6 +533,11 @@ async function runDoctor(args: string[]): Promise<void> {
   }
 
   console.log(`Config: ${displayConfigPath()}`);
+  console.log(`Mode: ${context.config.mode}`);
+  if (context.config.mode === "managed") {
+    console.log(`Managed API URL: ${context.config.managed?.apiUrl ?? "missing"}`);
+    console.log(`Managed auth token: ${context.config.managed?.authToken !== undefined || process.env.GREPLICA_API_TOKEN !== undefined ? "configured" : "missing"}`);
+  }
   printEmbeddingConfig(context.config.embedding);
   printSessionConfig(context.config.session);
 
@@ -623,6 +606,10 @@ function runConfigCommand(args: string[]): void {
   console.log("- local");
   console.log("- openai");
   console.log("");
+  console.log("Allowed mode values:");
+  console.log("- local");
+  console.log("- managed");
+  console.log("");
   console.log("Session hook settings:");
   printSessionConfig(config.session);
   console.log("- stopThreshold: run background memory update after this many Stop hooks since memory was current.");
@@ -636,9 +623,12 @@ function runConfigCommand(args: string[]): void {
   console.log("- OpenAI small: provider=openai, model=text-embedding-3-small, dimensions=1536, batchSize=100");
 }
 
-function parseInstallArgs(args: string[]): { platform: InstallPlatform; embedding: InstallEmbedding; hooks: boolean; autoMemoryUpdates: boolean } {
+function parseInstallArgs(args: string[]): { platform: InstallPlatform; mode: GreplicaMode; embedding: InstallEmbedding; hooks: boolean; autoMemoryUpdates: boolean; managed?: ManagedConfig } {
   let platform: InstallPlatform | undefined;
   let embedding: InstallEmbedding | undefined;
+  let mode: GreplicaMode | undefined;
+  let apiUrl: string | undefined;
+  let token: string | undefined;
   let hooks: boolean | undefined;
   let autoMemoryUpdates: boolean | undefined;
 
@@ -659,6 +649,39 @@ function parseInstallArgs(args: string[]): { platform: InstallPlatform; embeddin
       if (embedding !== undefined) throw new Error(`Specify --embedding only once.\n${usage("install")}`);
       embedding = parseInstallEmbedding(requireFlagValue(args, index, "--embedding"));
       index += 1;
+      continue;
+    }
+    if (arg === "--mode") {
+      if (mode !== undefined) throw new Error(`Specify --mode only once.\n${usage("install")}`);
+      mode = parseInstallMode(requireFlagValue(args, index, "--mode"));
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--mode=")) {
+      if (mode !== undefined) throw new Error(`Specify --mode only once.\n${usage("install")}`);
+      mode = parseInstallMode(arg.slice("--mode=".length));
+      continue;
+    }
+    if (arg === "--api-url") {
+      if (apiUrl !== undefined) throw new Error(`Specify --api-url only once.\n${usage("install")}`);
+      apiUrl = requireFlagValue(args, index, "--api-url");
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--api-url=")) {
+      if (apiUrl !== undefined) throw new Error(`Specify --api-url only once.\n${usage("install")}`);
+      apiUrl = arg.slice("--api-url=".length);
+      continue;
+    }
+    if (arg === "--token") {
+      if (token !== undefined) throw new Error(`Specify --token only once.\n${usage("install")}`);
+      token = requireFlagValue(args, index, "--token");
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--token=")) {
+      if (token !== undefined) throw new Error(`Specify --token only once.\n${usage("install")}`);
+      token = arg.slice("--token=".length);
       continue;
     }
     if (arg.startsWith("--embedding=")) {
@@ -692,14 +715,23 @@ function parseInstallArgs(args: string[]): { platform: InstallPlatform; embeddin
   }
 
   if (platform === undefined || embedding === undefined) throw new Error(usage("install"));
+  const resolvedMode = mode ?? "local";
+  if (resolvedMode === "local" && (apiUrl !== undefined || token !== undefined)) {
+    throw new Error(`--api-url and --token require --mode managed.\n${usage("install")}`);
+  }
+  if (resolvedMode === "managed" && apiUrl === undefined) {
+    throw new Error(`--mode managed requires --api-url.\n${usage("install")}`);
+  }
   if (hooks === false && autoMemoryUpdates === true) {
     throw new Error(`--auto-memory enabled requires --hooks enabled.\n${usage("install")}`);
   }
   return {
     platform,
+    mode: resolvedMode,
     embedding,
     hooks: hooks ?? true,
     autoMemoryUpdates: hooks === false ? false : autoMemoryUpdates ?? true,
+    managed: resolvedMode === "managed" ? { apiUrl: apiUrl ?? "", authToken: token } : undefined,
   };
 }
 
@@ -775,6 +807,11 @@ function parseInstallEmbedding(value: string): InstallEmbedding {
   throw new Error(`Invalid --embedding ${value}.\n${usage("install")}`);
 }
 
+function parseInstallMode(value: string): GreplicaMode {
+  if (value === "local" || value === "managed") return value;
+  throw new Error(`Invalid --mode ${value}.\n${usage("install")}`);
+}
+
 function parseEnabledFlag(value: string): boolean {
   if (value === "enabled") return true;
   if (value === "disabled") return false;
@@ -792,9 +829,10 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
     console.log("Hooks: not installed.");
   }
   console.log(`Automatic memory updates: ${result.session.autoMemoryUpdates ? "enabled" : "disabled"}.`);
+  console.log(`Mode: ${result.mode}.`);
   console.log(`Embedding: ${result.embedding}.`);
   console.log(`Config: ${result.configFile}`);
-  console.log(`Database: ${result.databasePath}`);
+  console.log(`${result.mode === "managed" ? "Managed API" : "Database"}: ${result.statePath}`);
   console.log("");
   console.log("Next steps:");
   console.log("- Restart your coding agent if the new skills or hooks do not appear immediately.");
@@ -808,7 +846,9 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
     console.log("");
   }
   console.log("- Ask the agent to use greplica-bootstrap once for repos that do not have memory yet.");
-  if (result.embedding === "local") {
+  if (result.mode === "managed") {
+    console.log(`- Optional later: greplica install --platform ${result.platform} --embedding ${result.embedding} --mode local`);
+  } else if (result.embedding === "local") {
     console.log(`- Optional later: greplica install --platform ${result.platform} --embedding openai`);
   } else {
     console.log(`- Optional later: greplica install --platform ${result.platform} --embedding local`);

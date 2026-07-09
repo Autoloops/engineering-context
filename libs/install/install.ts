@@ -1,10 +1,21 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { envVarSource, loadRepoEnv } from "../env/load-local-env.js";
-import { greplicaConfigPath, updateEmbeddingConfig, writeGreplicaConfig, type EmbeddingProvider, type SessionConfig } from "../config/greplica-config.js";
+import {
+  greplicaConfigPath,
+  updateEmbeddingConfig,
+  updateManagedConfig,
+  writeGreplicaConfig,
+  type EmbeddingProvider,
+  type GreplicaConfig,
+  type GreplicaMode,
+  type ManagedConfig,
+  type SessionConfig,
+} from "../config/greplica-config.js";
 import { graphContextConfigFromGreplicaConfig } from "../knowledge-graph/graph-context/config.js";
 import { createLocalKnowledgeGraphService } from "../knowledge-graph/service.js";
 import type { RepoRef } from "../knowledge-graph/service.js";
+import { ManagedKnowledgeGraphClient } from "../knowledge-graph/managed-client.js";
 import { installPlatform, type HookInstallResult } from "./platforms/index.js";
 import {
   type InstallEmbedding,
@@ -13,9 +24,11 @@ import {
 
 export interface InstallOptions {
   platform: InstallPlatform;
+  mode: GreplicaMode;
   embedding: InstallEmbedding;
   hooks: boolean;
   autoMemoryUpdates: boolean;
+  managed?: ManagedConfig;
   repo: RepoRef;
 }
 
@@ -25,29 +38,33 @@ export interface InstallResult {
   hooks?: HookInstallResult;
   hooksRequested: boolean;
   embedding: InstallEmbedding;
+  mode: GreplicaMode;
   session: SessionConfig;
   configFile: string;
-  databasePath: string;
+  statePath: string;
   notes: string[];
 }
 
 export async function installGreplica(options: InstallOptions): Promise<InstallResult> {
-  const embedding = configureEmbedding(options.embedding, options.repo);
-  embedding.config.session.autoMemoryUpdates = options.autoMemoryUpdates;
-  writeGreplicaConfig(embedding.config);
-  const service = createLocalKnowledgeGraphService(graphContextConfigFromGreplicaConfig(embedding.config));
-  const init = service.initRepo(options.repo);
+  const configured = options.mode === "managed"
+    ? configureManaged(options)
+    : configureEmbedding(options.embedding, options.repo);
+  configured.config.session.autoMemoryUpdates = options.autoMemoryUpdates;
+  writeGreplicaConfig(configured.config);
+  const init = await initInstalledRepo(options, configured.config);
   const platformInstall = installPlatform(options.platform, {
     repoRoot: options.repo.repo_root ?? process.cwd(),
     hooks: options.hooks,
   });
-  if (platformInstall.hooks === undefined && embedding.config.session.autoMemoryUpdates) {
-    embedding.config.session.autoMemoryUpdates = false;
-    writeGreplicaConfig(embedding.config);
+  if (platformInstall.hooks === undefined && configured.config.session.autoMemoryUpdates) {
+    configured.config.session.autoMemoryUpdates = false;
+    writeGreplicaConfig(configured.config);
   }
 
   const notes: string[] = [];
-  if (options.embedding === "local") {
+  if (options.mode === "managed") {
+    notes.push("Managed mode is API-backed; graph and session state will be stored by the configured Greplica API.");
+  } else if (options.embedding === "local") {
     if (startLocalEmbeddingPrewarm()) {
       notes.push("Local embedding model prewarm was queued in the background; if another prewarm is already running, this one will skip. The first query may still download the model if prewarm has not finished.");
     } else {
@@ -61,9 +78,10 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
     hooks: platformInstall.hooks,
     hooksRequested: options.hooks,
     embedding: options.embedding,
-    session: embedding.config.session,
-    configFile: embedding.configPath,
-    databasePath: init.database_path,
+    mode: options.mode,
+    session: configured.config.session,
+    configFile: configured.configPath,
+    statePath: options.mode === "managed" ? configured.config.managed?.apiUrl ?? "" : init.database_path,
     notes,
   };
 }
@@ -91,6 +109,29 @@ function configureEmbedding(provider: EmbeddingProvider, repo: RepoRef): { confi
     config,
     configPath: resolve(greplicaConfigPath()),
   };
+}
+
+function configureManaged(options: InstallOptions): { config: ReturnType<typeof updateManagedConfig>; configPath: string } {
+  if (options.managed === undefined) {
+    throw new Error("--mode managed requires --api-url. Set --token or GREPLICA_API_TOKEN when the API requires authentication.");
+  }
+  const config = updateManagedConfig(options.managed);
+  return {
+    config,
+    configPath: resolve(greplicaConfigPath()),
+  };
+}
+
+async function initInstalledRepo(options: InstallOptions, config: GreplicaConfig): Promise<{ database_path: string }> {
+  if (options.mode === "managed") {
+    if (config.managed === undefined) throw new Error("Managed config was not written.");
+    const client = new ManagedKnowledgeGraphClient(config.managed);
+    const init = await client.initRepo(options.repo);
+    return { database_path: init.database_path };
+  }
+
+  const service = createLocalKnowledgeGraphService(graphContextConfigFromGreplicaConfig(config));
+  return service.initRepo(options.repo);
 }
 
 function startLocalEmbeddingPrewarm(): boolean {

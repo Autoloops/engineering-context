@@ -118,7 +118,7 @@ Current showcase rows:
 ## Commands
 
 ```bash
-greplica install --platform codex|claude|copilot|opencode|openhands|factory-droid --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]
+greplica install --platform codex|claude|copilot|opencode|openhands|factory-droid --embedding local|openai [--mode local|managed] [--api-url <url>] [--token <token>] [--hooks enabled|disabled] [--auto-memory enabled|disabled]
 greplica config
 greplica doctor [--check-embeddings]
 greplica graph read
@@ -136,7 +136,7 @@ greplica proposal apply <proposal.json>
 - `greplica graph view` to visualise the current memory in a local HTML, opens in your default browser. Use `--out` to choose where the file is written; by default it goes to a temp path.
 - `greplica transcript bundle` - converts one or more Codex, Claude Code, or GitHub Copilot CLI JSONL transcripts into a sanitized Markdown bundle for `greplica-fast-session-bootstrap`.
 - `greplica doctor` - verifies installation and diagnoses configuration failures. Not a required preflight before every command.
-- `greplica install` prepares repo state, local storage, and agent integration; normal repo commands require install first.
+- `greplica install` prepares repo state and agent integration; local mode uses SQLite, while managed mode sends graph and session state through the configured Greplica API.
 
 For **OpenHands**, install is repo-local: skills are written to `.agents/skills/` and the `UserPromptSubmit`/`Stop` hooks to `.openhands/hooks.json` (Claude/Codex/Copilot install to the agent's home config instead). GitHub Copilot CLI installs personal skills under `~/.copilot/skills` (or `$COPILOT_HOME/skills`) and user hooks under `~/.copilot/hooks/greplica.json`. The hooks inject `graph context` guidance and trigger background working-memory updates; OpenHands must trust the repo hooks for the background save to run.
 

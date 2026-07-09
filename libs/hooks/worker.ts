@@ -7,6 +7,7 @@ import { HookSessionStore } from "./session-state.js";
 import { WorkerLease } from "../utils/worker-lease.js";
 import { ensureGreplicaConfig, type GreplicaConfig } from "../config/greplica-config.js";
 import { platformInstaller } from "../install/platforms/index.js";
+import { createKnowledgeGraphProvider } from "../knowledge-graph/provider-factory.js";
 import { openDatabase } from "../storage/sqlite/db.js";
 
 const hookWorkerLockName = "hook-memory-update-worker";
@@ -33,6 +34,15 @@ export function shouldRunAutoMemoryUpdates(config: Pick<GreplicaConfig, "session
 }
 
 export async function runHookWorker(): Promise<void> {
+  const config = ensureGreplicaConfig();
+  if (config.mode === "managed") {
+    const provider = createKnowledgeGraphProvider(config);
+    for (const attempt of await provider.claimDueMemoryUpdateAttempts()) {
+      await maybeUpdateWorkingMemory(attempt);
+    }
+    return;
+  }
+
   const db = openDatabase();
   const lease = new WorkerLease(db, hookWorkerLockName);
   let acquired = false;
@@ -46,7 +56,6 @@ export async function runHookWorker(): Promise<void> {
     }, hookWorkerHeartbeatMs);
     heartbeat.unref();
 
-    const config = ensureGreplicaConfig();
     const sessionStore = new HookSessionStore(db, config.session);
     if (!lease.renew()) return;
     const attempts = sessionStore.claimDueMemoryUpdateAttempts();
