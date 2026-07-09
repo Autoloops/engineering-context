@@ -1,5 +1,6 @@
 import { normalizeProposal } from "./proposal.js";
 import { validateProposal, type ProposalValidationResult } from "./validate-proposal.js";
+import { countPromotedSubjects, type PromoteReport } from "./graph-promote.js";
 import type { Claim } from "./claim.js";
 import type { Edge } from "./edge.js";
 import type { Component, Flow, GraphObjectType, Source } from "./schema.js";
@@ -17,6 +18,7 @@ import { SqliteRepository as SqliteKnowledgeGraphRepository } from "../storage/s
 
 export type { GraphContextResult } from "./graph-context/types.js";
 export type { ClaimAnchorAuditResult } from "./code-anchors/types.js";
+export type { PromoteReport } from "./graph-promote.js";
 
 export interface RepoRef {
   repo_root?: string;
@@ -130,6 +132,18 @@ export class KnowledgeGraphService {
       claims.map((claim) => claim.id),
     );
     return auditClaimCodeAnchors(input.repo_root, claims, new CodeAnchorResolver(), baselineFingerprints);
+  }
+
+  promoteWorking(input: RepoRef): PromoteReport {
+    const initialized = this.requireRepo(input);
+    const result = this.repository.promoteWorkingToMain(initialized.repo_id, {
+      title: "Promote working memory to main",
+    });
+    return {
+      memory_commit_id: result.memory_commit_id,
+      promoted: countPromotedSubjects(result.refs),
+      total: result.refs.length,
+    };
   }
 
   async validateProposal(input: RepoRef, proposal: unknown): Promise<ProposalValidationResult> {

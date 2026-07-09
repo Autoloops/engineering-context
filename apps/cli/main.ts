@@ -5,7 +5,7 @@ import { isatty } from "node:tty";
 import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { createLocalKnowledgeGraphService, KnowledgeGraphService } from "../../libs/knowledge-graph/service.js";
-import type { ClaimAnchorAuditResult, RepoRef } from "../../libs/knowledge-graph/service.js";
+import type { ClaimAnchorAuditResult, PromoteReport, RepoRef } from "../../libs/knowledge-graph/service.js";
 import { envVarSource, loadRepoEnv, type LoadedRepoEnv } from "../../libs/env/load-local-env.js";
 import {
   ensureGreplicaConfig,
@@ -103,6 +103,13 @@ const cliCommands = [
     path: ["graph", "audit", "anchors"],
     usage: "graph audit anchors",
     handler: runGraphAuditAnchorsCommand,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "graphPromote",
+    path: ["graph", "promote"],
+    usage: "graph promote",
+    handler: runGraphPromoteCommand,
     showInTopLevelHelp: true,
   },
   {
@@ -277,6 +284,28 @@ async function runGraphAuditAnchorsCommand(_args: string[]): Promise<void> {
   const result = await service.auditCodeAnchors(repo);
   printAnchorAudit(result);
   if (anchorAuditIssueCount(result) > 0) process.exitCode = 1;
+}
+
+function runGraphPromoteCommand(args: string[]): void {
+  if (args.length > 0) throw new Error(usage("graphPromote"));
+  const { repo, service } = createCommandContext();
+  const report = service.promoteWorking(repo);
+  printPromoteReport(report);
+}
+
+function printPromoteReport(report: PromoteReport): void {
+  if (report.total === 0) {
+    console.log("Working memory is already empty. Nothing to promote.");
+    return;
+  }
+  const { components, flows, claims, edges } = report.promoted;
+  console.log("Promoted working memory into main.");
+  console.log(`Memory commit: ${report.memory_commit_id}`);
+  console.log(`Components: ${components}`);
+  console.log(`Flows: ${flows}`);
+  console.log(`Claims: ${claims}`);
+  console.log(`Edges: ${edges}`);
+  console.log("Working scope cleared.");
 }
 
 function runGraphExportCommand(args: string[]): void {
