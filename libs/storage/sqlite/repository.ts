@@ -7,6 +7,7 @@ import type { Component, Flow, GraphObjectType, Source } from "../../knowledge-g
 import type { Claim } from "../../knowledge-graph/claim.js";
 import type { GraphScope, GraphScopeKind } from "../../knowledge-graph/scope.js";
 import type { PromoteSubjectRef } from "../../knowledge-graph/graph-promote.js";
+import { installCommandSuggestion } from "../../install/paths.js";
 
 export interface RepoRecord {
   id: string;
@@ -119,7 +120,7 @@ export class SqliteRepository {
   requireRepo(input: UpsertRepoInput): RepoRecord {
     const repo = this.getRepo(input);
     if (!repo) {
-      throw new Error("Greplica is not installed for this repo. Run greplica install --platform <codex|claude|copilot|opencode> --embedding local from the repo you want to use.");
+      throw new Error(`Greplica is not installed for this repo. Run ${installCommandSuggestion} from the repo you want to use.`);
     }
     return repo;
   }
@@ -193,7 +194,7 @@ export class SqliteRepository {
     const scope = this.db
       .prepare("SELECT * FROM graph_scopes WHERE repo_id = ? AND kind = 'working' AND name = 'working'")
       .get(repoId) as GraphScope | undefined;
-    if (!scope) throw new Error("Working scope is missing. Run 'greplica install --platform <codex|claude|copilot|opencode> --embedding local' from this repo.");
+    if (!scope) throw new Error(`Working scope is missing. Run '${installCommandSuggestion}' from this repo.`);
     return scope;
   }
 
@@ -201,7 +202,7 @@ export class SqliteRepository {
     const scope = this.db
       .prepare("SELECT * FROM graph_scopes WHERE repo_id = ? AND kind = 'main' ORDER BY created_at LIMIT 1")
       .get(repoId) as GraphScope | undefined;
-    if (!scope) throw new Error("Main scope is missing. Run 'greplica install --platform <codex|claude|copilot|opencode> --embedding local' from this repo.");
+    if (!scope) throw new Error(`Main scope is missing. Run '${installCommandSuggestion}' from this repo.`);
     return scope;
   }
 
@@ -230,6 +231,21 @@ export class SqliteRepository {
            AND gs.kind IN ('main', 'working')`,
       )
       .all(repoId) as ClaimProvenanceRecord[];
+  }
+
+  // Baseline anchor fingerprints stored when each claim was written, keyed by
+  // claim id then by anchor key. Used by the anchor audit to detect drift.
+  readClaimAnchorFingerprints(repoId: string, ids: string[]): Map<string, Record<string, string>> {
+    const fingerprints = new Map<string, Record<string, string>>();
+    if (ids.length === 0) return fingerprints;
+    const rows = this.db
+      .prepare(`SELECT id, anchor_fingerprints FROM claims WHERE repo_id = ? AND id IN (${placeholders(ids)})`)
+      .all(repoId, ...ids) as Array<{ id: string; anchor_fingerprints: string | null }>;
+    for (const row of rows) {
+      if (row.anchor_fingerprints === null) continue;
+      fingerprints.set(row.id, JSON.parse(row.anchor_fingerprints) as Record<string, string>);
+    }
+    return fingerprints;
   }
 
   readGraphView(repoId: string): {
@@ -325,7 +341,12 @@ export class SqliteRepository {
     return { memory_commit_id: write(), refs };
   }
 
-  createProposalRecords(scopeId: string, memoryCommitId: string, proposal: MemoryCommitProposal): void {
+  createProposalRecords(
+    scopeId: string,
+    memoryCommitId: string,
+    proposal: MemoryCommitProposal,
+    anchorFingerprints?: Map<string, Record<string, string>>,
+  ): void {
     const write = this.db.transaction(() => {
       const repoId = this.repoIdForScope(scopeId);
 
@@ -344,15 +365,18 @@ export class SqliteRepository {
       }
 
       for (const claim of proposal.creates.claims ?? []) {
+        const fingerprints = anchorFingerprints?.get(claim.id);
         this.db
           .prepare(
-            `INSERT INTO claims (repo_id, id, kind, text, truth, intent, code_anchors)
-             VALUES (@repo_id, @id, @kind, @text, @truth, @intent, @code_anchors)`,
+            `INSERT INTO claims (repo_id, id, kind, text, truth, intent, code_anchors, anchor_fingerprints)
+             VALUES (@repo_id, @id, @kind, @text, @truth, @intent, @code_anchors, @anchor_fingerprints)`,
           )
           .run({
             repo_id: repoId,
             ...claim,
             code_anchors: claim.code_anchors === undefined ? null : JSON.stringify(claim.code_anchors),
+            anchor_fingerprints:
+              fingerprints === undefined || Object.keys(fingerprints).length === 0 ? null : JSON.stringify(fingerprints),
           });
         this.createMembership(scopeId, "claim", claim.id, memoryCommitId);
       }

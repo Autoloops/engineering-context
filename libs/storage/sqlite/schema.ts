@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS claims (
   truth TEXT NOT NULL,
   intent TEXT NOT NULL,
   code_anchors TEXT,
+  anchor_fingerprints TEXT,
   PRIMARY KEY(repo_id, id)
 );
 

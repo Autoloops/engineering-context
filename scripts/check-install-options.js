@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const root = new URL("..", import.meta.url);
 const cliPath = fileURLToPath(new URL("dist/apps/cli/main.js", root));
+const { installCommandSuggestion, installPlatformUsage } = await import(new URL("dist/libs/install/paths.js", root));
 const { greplicaHookGuidance } = await import(new URL("dist/libs/hooks/guidance.js", root));
 const { shouldRunAutoMemoryUpdates } = await import(new URL("dist/libs/hooks/worker.js", root));
 
@@ -99,6 +100,26 @@ const invalidValue = spawnSync(
 );
 assert.notEqual(invalidValue.status, 0);
 assert.match(invalidValue.stderr, /expected enabled or disabled/);
+
+const notInstalledRepo = join(tmp, "not-installed", "repo");
+const notInstalledHome = join(tmp, "not-installed", "greplica-home");
+mkdirSync(notInstalledRepo, { recursive: true });
+execFileSync("git", ["init", "--quiet"], { cwd: notInstalledRepo, encoding: "utf8" });
+const notInstalled = spawnSync(process.execPath, [cliPath, "graph", "read"], {
+  cwd: notInstalledRepo,
+  encoding: "utf8",
+  env: {
+    ...process.env,
+    GREPLICA_HOME: notInstalledHome,
+  },
+});
+assert.notEqual(notInstalled.status, 0);
+assert.match(notInstalled.stderr, /Greplica is not installed for this repo/);
+assert.ok(notInstalled.stderr.includes(installCommandSuggestion), "not installed error should use shared install guidance");
+assert.ok(notInstalled.stderr.includes(installPlatformUsage), "not installed error should include every install platform");
+assert.match(notInstalled.stderr, /openhands/);
+assert.match(notInstalled.stderr, /factory-droid/);
+assert.match(notInstalled.stderr, /antigravity/);
 
 console.log("Install option checks passed.");
 

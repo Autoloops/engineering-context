@@ -162,6 +162,62 @@ export class CodeAnchorResolver {
     return resolved;
   }
 
+  /**
+   * Build a normalization-stable signature of the code an anchor points to,
+   * used for drift detection. Comments are excluded via the parse tree rather
+   * than by text heuristics: the signature is the ordered text of the anchored
+   * span's non-comment tokens (the whole file for a file-only anchor). Returns
+   * undefined when the anchor does not resolve to stable content.
+   */
+  async codeSignatureForAnchor(repoRoot: string | undefined, anchor: ClaimCodeAnchor): Promise<string | undefined> {
+    if (repoRoot === undefined) return undefined;
+    const filePath = join(repoRoot, anchor.file);
+    if (!isRepoRelative(repoRoot, filePath) || !existsSync(filePath)) return undefined;
+
+    const resolved = await this.resolve(repoRoot, anchor);
+    let startLine: number;
+    let endLine: number;
+    if (resolved.status === "file_only") {
+      startLine = 1;
+      endLine = Number.MAX_SAFE_INTEGER;
+    } else if (resolved.status === "resolved" && resolved.start_line !== undefined) {
+      startLine = resolved.start_line;
+      endLine = resolved.end_line ?? resolved.start_line;
+    } else {
+      return undefined;
+    }
+
+    const source = readFileSync(filePath, "utf8");
+    const wasmFile = wasmByExtension.get(extname(filePath).toLowerCase());
+    if (wasmFile === undefined) {
+      // No grammar available (e.g. Markdown, SQL): fall back to the span text
+      // with only whitespace normalized.
+      return normalizeLines(sliceLines(source, startLine, endLine));
+    }
+
+    // Any parse failure degrades to "not comparable" (undefined) rather than
+    // aborting the whole apply/audit run, mirroring symbolsForFile. The parser
+    // is always freed.
+    let parser: Parser | undefined;
+    try {
+      const language = await this.loadLanguage(wasmFile);
+      parser = new Parser();
+      parser.setLanguage(language);
+      const tree = parser.parse(source);
+      try {
+        const tokens: string[] = [];
+        collectCodeTokens(tree.rootNode, startLine, endLine, tokens);
+        return tokens.join("\n");
+      } finally {
+        tree.delete();
+      }
+    } catch {
+      return undefined;
+    } finally {
+      parser?.delete();
+    }
+  }
+
   private async symbolsForFile(filePath: string): Promise<SymbolCandidate[] | undefined> {
     const cached = this.fileSymbolCache.get(filePath);
     if (cached !== undefined || this.fileSymbolCache.has(filePath)) return cached;
@@ -325,6 +381,35 @@ function normalizeWhitespace(value: string): string {
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Walk the tree and collect the text of leaf tokens within [startLine, endLine],
+// skipping comment nodes entirely. Whitespace never appears (tokens carry none),
+// so formatting and comment edits do not change the result, while identifiers
+// and literal values still do.
+function collectCodeTokens(node: Parser.SyntaxNode, startLine: number, endLine: number, out: string[]): void {
+  if (isCommentNode(node)) return;
+  if (node.childCount === 0) {
+    const line = node.startPosition.row + 1;
+    const text = node.text.trim();
+    if (text.length > 0 && line >= startLine && line <= endLine) out.push(text);
+    return;
+  }
+  for (const child of node.children) collectCodeTokens(child, startLine, endLine, out);
+}
+
+function isCommentNode(node: Parser.SyntaxNode): boolean {
+  return node.type === "comment" || node.type.includes("comment");
+}
+
+function sliceLines(source: string, startLine: number, endLine: number): string[] {
+  const lines = source.split(/\r?\n/);
+  const end = endLine === Number.MAX_SAFE_INTEGER ? lines.length : endLine;
+  return lines.slice(startLine - 1, end);
+}
+
+function normalizeLines(lines: string[]): string {
+  return lines.map((line) => line.trim()).filter((line) => line.length > 0).join("\n");
 }
 
 function collectSymbols(root: Parser.SyntaxNode): SymbolCandidate[] {

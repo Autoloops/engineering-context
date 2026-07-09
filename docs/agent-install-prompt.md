@@ -38,7 +38,7 @@ Then run:
 
 ```bash
 npm install -g greplica
-greplica install --platform <codex|claude|copilot|opencode|openhands|factory-droid> --embedding local <mapped-hook-and-memory-flags>
+greplica install --platform <codex|claude|copilot|opencode|openhands|factory-droid|antigravity> --embedding local <mapped-hook-and-memory-flags>
 ```
 
 Use the platform matching this agent. Do not manually copy skills. After installation, do not echo the full installer output or repeat its next steps.
