@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { describe, test, expect, beforeAll } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,123 +7,27 @@ import { fileURLToPath } from "node:url";
 
 const root = new URL("..", import.meta.url);
 const cliPath = fileURLToPath(new URL("dist/apps/cli/main.js", root));
-const { installCommandSuggestion, installPlatformUsage } = await import(new URL("dist/libs/install/paths.js", root));
-const { greplicaHookGuidance } = await import(new URL("dist/libs/hooks/guidance.js", root));
-const { shouldRunAutoMemoryUpdates } = await import(new URL("dist/libs/hooks/worker.js", root));
 
-const tmp = mkdtempSync(join(tmpdir(), "greplica-install-options-test-"));
+let installCommandSuggestion;
+let installPlatformUsage;
+let greplicaHookGuidance;
+let shouldRunAutoMemoryUpdates;
 
-const autoSave = installInTempRepo("auto-save", ["--hooks", "enabled", "--auto-memory", "enabled"]);
-assert.match(autoSave.output, /Hooks: installed for UserPromptSubmit, Stop\./);
-assert.match(autoSave.output, /Automatic memory updates: enabled\./);
-assert.ok(existsSync(join(autoSave.codexHome, "hooks.json")));
-assert.equal(readConfig(autoSave.greplicaHome).session.autoMemoryUpdates, true);
-assert.equal(shouldRunAutoMemoryUpdates(readConfig(autoSave.greplicaHome)), true);
-
-const guidanceOnly = installInTempRepo("guidance-only", ["--hooks", "enabled", "--auto-memory", "disabled"]);
-assert.match(guidanceOnly.output, /Hooks: installed for UserPromptSubmit, Stop\./);
-assert.match(guidanceOnly.output, /Automatic memory updates: disabled\./);
-assert.ok(existsSync(join(guidanceOnly.codexHome, "hooks.json")));
-assert.equal(readConfig(guidanceOnly.greplicaHome).session.autoMemoryUpdates, false);
-assert.equal(shouldRunAutoMemoryUpdates(readConfig(guidanceOnly.greplicaHome)), false);
-
-const hookOutput = execFileSync(
-  process.execPath,
-  [cliPath, "hook", "ingest", "--platform", "codex"],
-  {
-    cwd: guidanceOnly.repo,
-    encoding: "utf8",
-    input: JSON.stringify({
-      hook_event_name: "UserPromptSubmit",
-      session_id: "guidance-only-session",
-      cwd: guidanceOnly.repo,
-    }),
-    env: guidanceOnly.env,
-  },
-);
-assert.match(hookOutput, /Greplica hook guidance/);
-assert.match(hookOutput, /greplica graph context/);
-
-const noHooks = installInTempRepo("no-hooks", ["--hooks", "disabled"]);
-assert.match(noHooks.output, /Hooks: not installed\./);
-assert.match(noHooks.output, /Automatic memory updates: disabled\./);
-assert.match(noHooks.output, /To give future agents Greplica guidance without hooks/);
-assert.ok(noHooks.output.includes(greplicaHookGuidance));
-assert.equal(existsSync(join(noHooks.codexHome, "hooks.json")), false);
-assert.equal(readConfig(noHooks.greplicaHome).session.autoMemoryUpdates, false);
-
-const opencodeHooks = installInTempRepo("opencode-hooks", ["--hooks", "enabled", "--auto-memory", "enabled"], "opencode");
-assert.match(opencodeHooks.output, /Installed Greplica for OpenCode\./);
-assert.match(opencodeHooks.output, /Hooks: installed for UserPromptSubmit, Stop\./);
-assert.match(opencodeHooks.output, /Automatic memory updates: enabled\./);
-assert.ok(existsSync(join(opencodeHooks.xdgConfigHome, "opencode", "hooks.json")));
-assert.equal(readConfig(opencodeHooks.greplicaHome).session.autoMemoryUpdates, true);
-
-const copilotHooks = installInTempRepo("copilot-hooks", ["--hooks", "enabled", "--auto-memory", "enabled"], "copilot");
-assert.match(copilotHooks.output, /Installed Greplica for GitHub Copilot CLI\./);
-assert.match(copilotHooks.output, /Hooks: installed for SessionStart, Stop\./);
-assert.match(copilotHooks.output, /Automatic memory updates: enabled\./);
-assert.ok(existsSync(join(copilotHooks.copilotHome, "hooks", "greplica.json")));
-assert.equal(readConfig(copilotHooks.greplicaHome).session.autoMemoryUpdates, true);
-
-const invalid = spawnSync(
-  process.execPath,
-  [
-    cliPath,
-    "install",
-    "--platform",
-    "codex",
-    "--embedding",
-    "local",
-    "--hooks",
-    "disabled",
-    "--auto-memory",
-    "enabled",
-  ],
-  {
-    cwd: noHooks.repo,
-    encoding: "utf8",
-    env: noHooks.env,
-  },
-);
-assert.notEqual(invalid.status, 0);
-assert.match(invalid.stderr, /--auto-memory enabled requires --hooks enabled/);
-
-const invalidValue = spawnSync(
-  process.execPath,
-  [cliPath, "install", "--platform", "codex", "--embedding", "local", "--hooks", "sometimes"],
-  {
-    cwd: noHooks.repo,
-    encoding: "utf8",
-    env: noHooks.env,
-  },
-);
-assert.notEqual(invalidValue.status, 0);
-assert.match(invalidValue.stderr, /expected enabled or disabled/);
-
-const notInstalledRepo = join(tmp, "not-installed", "repo");
-const notInstalledHome = join(tmp, "not-installed", "greplica-home");
-mkdirSync(notInstalledRepo, { recursive: true });
-execFileSync("git", ["init", "--quiet"], { cwd: notInstalledRepo, encoding: "utf8" });
-const notInstalled = spawnSync(process.execPath, [cliPath, "graph", "read"], {
-  cwd: notInstalledRepo,
-  encoding: "utf8",
-  env: {
-    ...process.env,
-    GREPLICA_HOME: notInstalledHome,
-  },
+beforeAll(async () => {
+  const paths = await import(new URL("dist/libs/install/paths.js", root));
+  const guidance = await import(new URL("dist/libs/hooks/guidance.js", root));
+  const worker = await import(new URL("dist/libs/hooks/worker.js", root));
+  installCommandSuggestion = paths.installCommandSuggestion;
+  installPlatformUsage = paths.installPlatformUsage;
+  greplicaHookGuidance = guidance.greplicaHookGuidance;
+  shouldRunAutoMemoryUpdates = worker.shouldRunAutoMemoryUpdates;
 });
-assert.notEqual(notInstalled.status, 0);
-assert.match(notInstalled.stderr, /Greplica is not installed for this repo/);
-assert.ok(notInstalled.stderr.includes(installCommandSuggestion), "not installed error should use shared install guidance");
-assert.ok(notInstalled.stderr.includes(installPlatformUsage), "not installed error should include every install platform");
-assert.match(notInstalled.stderr, /openhands/);
-assert.match(notInstalled.stderr, /factory-droid/);
-assert.match(notInstalled.stderr, /antigravity/);
 
-console.log("Install option checks passed.");
+function readConfig(greplicaHome) {
+  return JSON.parse(readFileSync(join(greplicaHome, "config.json"), "utf8"));
+}
 
-function installInTempRepo(name, flags, platform = "codex") {
+function installInTempRepo(tmp, name, flags, platform = "codex") {
   const repo = join(tmp, name, "repo");
   const greplicaHome = join(tmp, name, "greplica-home");
   const codexHome = join(tmp, name, "codex-home");
@@ -143,20 +47,130 @@ function installInTempRepo(name, flags, platform = "codex") {
   const output = execFileSync(
     process.execPath,
     [cliPath, "install", "--platform", platform, "--embedding", "local", ...flags],
-    {
-      cwd: repo,
-      encoding: "utf8",
-      env,
-    },
+    { cwd: repo, encoding: "utf8", env },
   );
-  execFileSync(process.execPath, [cliPath, "doctor"], {
-    cwd: repo,
-    encoding: "utf8",
-    env,
-  });
+  execFileSync(process.execPath, [cliPath, "doctor"], { cwd: repo, encoding: "utf8", env });
   return { repo, greplicaHome, codexHome, copilotHome, xdgConfigHome, output, env };
 }
 
-function readConfig(greplicaHome) {
-  return JSON.parse(readFileSync(join(greplicaHome, "config.json"), "utf8"));
-}
+describe("install options", () => {
+  test("auto-save mode installs hooks and enables auto memory updates", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "greplica-install-options-test-"));
+    const autoSave = installInTempRepo(tmp, "auto-save", ["--hooks", "enabled", "--auto-memory", "enabled"]);
+
+    expect(autoSave.output).toMatch(/Hooks: installed for UserPromptSubmit, Stop\./);
+    expect(autoSave.output).toMatch(/Automatic memory updates: enabled\./);
+    expect(existsSync(join(autoSave.codexHome, "hooks.json"))).toBe(true);
+    expect(readConfig(autoSave.greplicaHome).session.autoMemoryUpdates).toBe(true);
+    expect(shouldRunAutoMemoryUpdates(readConfig(autoSave.greplicaHome))).toBe(true);
+  });
+
+  test("guidance-only mode installs hooks and injects guidance but disables auto memory updates", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "greplica-install-options-test-"));
+    const guidanceOnly = installInTempRepo(tmp, "guidance-only", ["--hooks", "enabled", "--auto-memory", "disabled"]);
+
+    expect(guidanceOnly.output).toMatch(/Hooks: installed for UserPromptSubmit, Stop\./);
+    expect(guidanceOnly.output).toMatch(/Automatic memory updates: disabled\./);
+    expect(existsSync(join(guidanceOnly.codexHome, "hooks.json"))).toBe(true);
+    expect(readConfig(guidanceOnly.greplicaHome).session.autoMemoryUpdates).toBe(false);
+    expect(shouldRunAutoMemoryUpdates(readConfig(guidanceOnly.greplicaHome))).toBe(false);
+
+    const hookOutput = execFileSync(
+      process.execPath,
+      [cliPath, "hook", "ingest", "--platform", "codex"],
+      {
+        cwd: guidanceOnly.repo,
+        encoding: "utf8",
+        input: JSON.stringify({
+          hook_event_name: "UserPromptSubmit",
+          session_id: "guidance-only-session",
+          cwd: guidanceOnly.repo,
+        }),
+        env: guidanceOnly.env,
+      },
+    );
+    expect(hookOutput).toMatch(/Greplica hook guidance/);
+    expect(hookOutput).toMatch(/greplica graph context/);
+  });
+
+  test("no-hooks mode does not install hooks and disables auto memory updates", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "greplica-install-options-test-"));
+    const noHooks = installInTempRepo(tmp, "no-hooks", ["--hooks", "disabled"]);
+
+    expect(noHooks.output).toMatch(/Hooks: not installed\./);
+    expect(noHooks.output).toMatch(/Automatic memory updates: disabled\./);
+    expect(noHooks.output).toMatch(/To give future agents Greplica guidance without hooks/);
+    expect(noHooks.output).toContain(greplicaHookGuidance);
+    expect(existsSync(join(noHooks.codexHome, "hooks.json"))).toBe(false);
+    expect(readConfig(noHooks.greplicaHome).session.autoMemoryUpdates).toBe(false);
+  });
+
+  test("opencode installs hooks and enables auto memory updates", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "greplica-install-options-test-"));
+    const opencodeHooks = installInTempRepo(tmp, "opencode-hooks", ["--hooks", "enabled", "--auto-memory", "enabled"], "opencode");
+
+    expect(opencodeHooks.output).toMatch(/Installed Greplica for OpenCode\./);
+    expect(opencodeHooks.output).toMatch(/Hooks: installed for UserPromptSubmit, Stop\./);
+    expect(opencodeHooks.output).toMatch(/Automatic memory updates: enabled\./);
+    expect(existsSync(join(opencodeHooks.xdgConfigHome, "opencode", "hooks.json"))).toBe(true);
+    expect(readConfig(opencodeHooks.greplicaHome).session.autoMemoryUpdates).toBe(true);
+  });
+
+  test("copilot installs hooks and enables auto memory updates", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "greplica-install-options-test-"));
+    const copilotHooks = installInTempRepo(tmp, "copilot-hooks", ["--hooks", "enabled", "--auto-memory", "enabled"], "copilot");
+
+    expect(copilotHooks.output).toMatch(/Installed Greplica for GitHub Copilot CLI\./);
+    expect(copilotHooks.output).toMatch(/Hooks: installed for SessionStart, Stop\./);
+    expect(copilotHooks.output).toMatch(/Automatic memory updates: enabled\./);
+    expect(existsSync(join(copilotHooks.copilotHome, "hooks", "greplica.json"))).toBe(true);
+    expect(readConfig(copilotHooks.greplicaHome).session.autoMemoryUpdates).toBe(true);
+  });
+
+  test("rejects auto-memory enabled without hooks enabled", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "greplica-install-options-test-"));
+    const noHooks = installInTempRepo(tmp, "invalid-combo", ["--hooks", "disabled"]);
+
+    const invalid = spawnSync(
+      process.execPath,
+      [cliPath, "install", "--platform", "codex", "--embedding", "local", "--hooks", "disabled", "--auto-memory", "enabled"],
+      { cwd: noHooks.repo, encoding: "utf8", env: noHooks.env },
+    );
+    expect(invalid.status).not.toBe(0);
+    expect(invalid.stderr).toMatch(/--auto-memory enabled requires --hooks enabled/);
+  });
+
+  test("rejects invalid flag values", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "greplica-install-options-test-"));
+    const noHooks = installInTempRepo(tmp, "invalid-flag", ["--hooks", "disabled"]);
+
+    const invalidValue = spawnSync(
+      process.execPath,
+      [cliPath, "install", "--platform", "codex", "--embedding", "local", "--hooks", "sometimes"],
+      { cwd: noHooks.repo, encoding: "utf8", env: noHooks.env },
+    );
+    expect(invalidValue.status).not.toBe(0);
+    expect(invalidValue.stderr).toMatch(/expected enabled or disabled/);
+  });
+
+  test("graph read on uninstalled repo reports not installed with install guidance", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "greplica-install-options-test-"));
+    const notInstalledRepo = join(tmp, "not-installed", "repo");
+    const notInstalledHome = join(tmp, "not-installed", "greplica-home");
+    mkdirSync(notInstalledRepo, { recursive: true });
+    execFileSync("git", ["init", "--quiet"], { cwd: notInstalledRepo, encoding: "utf8" });
+
+    const notInstalled = spawnSync(process.execPath, [cliPath, "graph", "read"], {
+      cwd: notInstalledRepo,
+      encoding: "utf8",
+      env: { ...process.env, GREPLICA_HOME: notInstalledHome },
+    });
+    expect(notInstalled.status).not.toBe(0);
+    expect(notInstalled.stderr).toMatch(/Greplica is not installed for this repo/);
+    expect(notInstalled.stderr).toContain(installCommandSuggestion);
+    expect(notInstalled.stderr).toContain(installPlatformUsage);
+    expect(notInstalled.stderr).toMatch(/openhands/);
+    expect(notInstalled.stderr).toMatch(/factory-droid/);
+    expect(notInstalled.stderr).toMatch(/antigravity/);
+  });
+});
