@@ -1,0 +1,59 @@
+{
+  "title": "Seed memory for anchor drift supersede eval",
+  "summary": "Baseline code_verified claims. Two are anchored to graph-context config values that the session patch changes (should drift and be superseded); two are anchored to stable storage code the patch does not touch (should stay fresh and be left alone).",
+  "creates": {
+    "components": [
+      {
+        "id": "component.graph_context_config",
+        "name": "Graph context config",
+        "code_anchor": "libs/knowledge-graph/graph-context/config.ts"
+      },
+      {
+        "id": "component.sqlite_storage",
+        "name": "SQLite storage",
+        "code_anchor": "libs/storage/sqlite/db.ts"
+      }
+    ],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.default_embedding_model",
+        "kind": "fact",
+        "text": "Graph context defaults to the local all-mpnet-base-v2 embedding model with 768 dimensions.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": ["component.graph_context_config"],
+        "code_anchors": [{ "file": "libs/knowledge-graph/graph-context/config.ts", "symbol": "graphContextConfig" }]
+      },
+      {
+        "id": "claim.minimum_selected_claims",
+        "kind": "fact",
+        "text": "Ranking always selects at least 3 claims for a context packet (minimumSelectedClaims = 3).",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": ["component.graph_context_config"],
+        "code_anchors": [{ "file": "libs/knowledge-graph/graph-context/config.ts", "symbol": "rankingConfig" }]
+      },
+      {
+        "id": "claim.default_database_path",
+        "kind": "fact",
+        "text": "The SQLite graph database lives at graph.db inside the Greplica home directory (~/.greplica by default).",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": ["component.sqlite_storage"],
+        "code_anchors": [{ "file": "libs/storage/sqlite/db.ts", "symbol": "defaultDatabasePath" }]
+      },
+      {
+        "id": "claim.database_enables_foreign_keys",
+        "kind": "fact",
+        "text": "openDatabase turns on SQLite foreign keys and runs migrations every time the database is opened.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": ["component.sqlite_storage"],
+        "code_anchors": [{ "file": "libs/storage/sqlite/db.ts", "symbol": "openDatabase" }]
+      }
+    ],
+    "sources": [],
+    "edges": []
+  }
+}
