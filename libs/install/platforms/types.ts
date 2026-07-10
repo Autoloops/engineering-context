@@ -44,4 +44,7 @@ export interface PlatformInstaller {
   transcriptPathFromHook?(hook: HookInput): string | undefined;
   // Override when the transcript is not a single readable file. Default: readFileSync(path).
   loadTranscript?(transcriptPath: string): string;
+  // Override when a resolved transcript path is not a plain filesystem path (e.g. a
+  // "sqlite:<dbPath>#<sessionId>" pointer). Default: existsSync(transcriptPath).
+  transcriptExists?(transcriptPath: string): boolean;
 }
