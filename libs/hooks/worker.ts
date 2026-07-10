@@ -64,9 +64,15 @@ export async function runHookWorker(): Promise<void> {
 async function maybeUpdateWorkingMemory(attempt: ClaimedMemoryUpdateAttempt): Promise<void> {
   const cwd = attempt.session.cwd;
   const transcriptPath = attempt.session.transcript_path;
-  if (cwd === null || transcriptPath === null || !existsSync(transcriptPath)) return;
+  if (cwd === null || transcriptPath === null) return;
 
   const runner = platformInstaller(attempt.session.platform);
+  // Not every platform's transcript path is a plain file on disk (OpenCode, for one, can
+  // point at a row inside its own sqlite database). Let the platform decide what "exists"
+  // means for its own transcript path shape, falling back to a normal file check otherwise.
+  const transcriptExists = runner.transcriptExists ?? existsSync;
+  if (!transcriptExists(transcriptPath)) return;
+
   const sessionRef = runner.sessionSourceRef(attempt.session.session_id);
   const transcript = runner.loadTranscript ? runner.loadTranscript(transcriptPath) : readFileSync(transcriptPath, "utf8");
   const transcriptMarkdown = runner.transcriptToMarkdown(transcript);
