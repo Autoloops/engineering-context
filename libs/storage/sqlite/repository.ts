@@ -3,7 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { MemoryCommit } from "../../knowledge-graph/commit.js";
 import type { Edge } from "../../knowledge-graph/edge.js";
 import type { MemoryCommitProposal } from "../../knowledge-graph/proposal.js";
-import type { Component, Flow, GraphObjectType, Source } from "../../knowledge-graph/schema.js";
+import type { Component, Flow, GraphObjectType, MembershipSubjectType, Source } from "../../knowledge-graph/schema.js";
 import type { Claim } from "../../knowledge-graph/claim.js";
 import type { GraphScope, GraphScopeKind } from "../../knowledge-graph/scope.js";
 import { installCommandSuggestion } from "../../install/paths.js";
@@ -39,7 +39,7 @@ export interface CreateMemoryCommitInput {
 }
 
 type MembershipRow = {
-  subject_type: "component" | "flow" | "claim" | "edge";
+  subject_type: MembershipSubjectType;
   subject_id: string;
 };
 
@@ -263,14 +263,14 @@ export class SqliteRepository {
       (edge) =>
         active.has(subjectKey("edge", edge.id)) &&
         active.has(subjectKey(edge.from_type, edge.from_id)) &&
-        (edge.to_type === "source" || active.has(subjectKey(edge.to_type, edge.to_id))),
+        active.has(subjectKey(edge.to_type, edge.to_id)),
     );
 
     return {
       components: this.loadComponents(repoId, selectActiveIds(memberships, active, "component")),
       flows: this.loadFlows(repoId, selectActiveIds(memberships, active, "flow")),
       claims: this.loadClaims(repoId, selectActiveIds(memberships, active, "claim")),
-      sources: this.loadSources(repoId, [...new Set(edges.filter((edge) => edge.to_type === "source").map((edge) => edge.to_id))]),
+      sources: this.loadSources(repoId, selectActiveIds(memberships, active, "source")),
       edges,
     };
   }
@@ -346,6 +346,7 @@ export class SqliteRepository {
         this.db
           .prepare("INSERT INTO sources (repo_id, id, kind, ref, title) VALUES (@repo_id, @id, @kind, @ref, @title)")
           .run({ repo_id: repoId, ...source, title: source.title ?? null });
+        this.createMembership(scopeId, "source", source.id, memoryCommitId);
       }
 
       for (const edge of proposal.creates.edges ?? []) {
@@ -409,7 +410,7 @@ export class SqliteRepository {
 
   private createMembership(
     scopeId: string,
-    subjectType: "component" | "flow" | "claim" | "edge",
+    subjectType: MembershipSubjectType,
     subjectId: string,
     memoryCommitId: string,
   ): void {
