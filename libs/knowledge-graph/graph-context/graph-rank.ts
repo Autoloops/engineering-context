@@ -45,6 +45,7 @@ function applyPostGraphThreshold(
 ): RankedContextDocument[] {
   return ranked.filter((document) =>
     document.signals.semantic_score >= config.ranking.semanticThreshold ||
+    document.signals.bm25_score >= config.ranking.semanticThreshold ||
     document.signals.graph_score >= config.ranking.semanticThreshold ||
     document.signals.coherence_score >= config.ranking.semanticThreshold,
   );
