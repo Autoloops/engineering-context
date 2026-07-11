@@ -7,6 +7,7 @@ export function migrate(db: Database.Database): void {
   migrateClaimsTable(db);
   migrateGraphObjectTables(db);
   migrateClaimAnchorFingerprints(db);
+  migrateAgentSessionsTable(db);
 }
 
 function migrateReposTable(db: Database.Database): void {
@@ -199,4 +200,16 @@ function migrateClaimAnchorFingerprints(db: Database.Database): void {
     if (error instanceof Error && /duplicate column name/i.test(error.message)) return;
     throw error;
   }
+}
+
+function migrateAgentSessionsTable(db: Database.Database): void {
+  const columns = db.prepare("PRAGMA table_info(agent_sessions)").all() as Array<{ name: string }>;
+  if (!columns.some((column) => column.name === "first_seen_at")) {
+    try {
+      db.exec("ALTER TABLE agent_sessions ADD COLUMN first_seen_at TEXT");
+    } catch (error: unknown) {
+      if (!(error instanceof Error && /duplicate column name/i.test(error.message))) throw error;
+    }
+  }
+  db.exec("UPDATE agent_sessions SET first_seen_at = last_seen_at WHERE first_seen_at IS NULL");
 }

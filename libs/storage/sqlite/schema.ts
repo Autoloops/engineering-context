@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS agent_sessions (
   cwd TEXT,
   guidance_injected_at TEXT,
   stops_since_memory_current INTEGER NOT NULL DEFAULT 0,
+  first_seen_at TEXT NOT NULL,
   last_seen_at TEXT NOT NULL,
   last_memory_current_at TEXT,
   PRIMARY KEY(platform, session_id)
