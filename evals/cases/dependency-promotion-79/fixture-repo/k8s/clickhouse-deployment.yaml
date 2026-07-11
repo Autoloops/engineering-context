@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clickhouse
+  namespace: order-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clickhouse
+  template:
+    metadata:
+      labels:
+        app: clickhouse
+    spec:
+      containers:
+        - name: clickhouse
+          image: clickhouse/clickhouse-server:24
+          ports:
+            - containerPort: 8123
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse
+  namespace: order-api
+spec:
+  selector:
+    app: clickhouse
+  ports:
+    - port: 8123
+      targetPort: 8123

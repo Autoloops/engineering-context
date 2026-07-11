@@ -1,6 +1,6 @@
 {
-  "title": "Dependency promotion sample: Redis promoted to a component",
-  "summary": "Sample proposal showing Redis promoted per the promotion guidance.",
+  "title": "Dependency promotion sample: all six dependencies promoted",
+  "summary": "Sample proposal showing every external dependency promoted per the promotion guidance.",
   "creates": {
     "components": [
       {
@@ -9,22 +9,109 @@
         "code_anchor": "src/server.js"
       },
       {
+        "id": "component.postgres",
+        "name": "Postgres",
+        "code_anchor": "docker-compose.yml"
+      },
+      {
+        "id": "component.kafka",
+        "name": "Kafka",
+        "code_anchor": "k8s/kafka-statefulset.yaml"
+      },
+      {
         "id": "component.redis",
         "name": "Redis",
         "code_anchor": "docker-compose.yml"
+      },
+      {
+        "id": "component.clickhouse",
+        "name": "ClickHouse",
+        "code_anchor": "k8s/clickhouse-deployment.yaml"
+      },
+      {
+        "id": "component.docker",
+        "name": "Docker",
+        "code_anchor": "Dockerfile"
+      },
+      {
+        "id": "component.ecs",
+        "name": "ECS",
+        "code_anchor": "deploy/ecs-task-definition.json"
       }
     ],
     "claims": [
       {
-        "id": "claim.publishes_order_created_to_redis",
+        "id": "claim.persists_orders_to_postgres",
         "kind": "fact",
-        "text": "The Order API publishes order-created events to Redis via publishOrderCreated so downstream workers can process orders asynchronously.",
+        "text": "The Order API persists orders to Postgres via Prisma (prisma/schema.prisma).",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": ["component.order_api", "component.postgres"],
+        "code_anchors": [
+          { "file": "src/routes.js", "symbol": "handleCreateOrder" }
+        ]
+      },
+      {
+        "id": "claim.publishes_order_created_to_kafka",
+        "kind": "fact",
+        "text": "The Order API publishes order-created events to Kafka via publishOrderCreated so downstream workers can process orders asynchronously.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": ["component.order_api", "component.kafka"],
+        "code_anchors": [
+          { "file": "src/server.js", "symbol": "publishOrderCreated" }
+        ]
+      },
+      {
+        "id": "claim.caches_latest_order_in_redis",
+        "kind": "fact",
+        "text": "The Order API caches the most recent order per customer in Redis via cacheLatestOrder.",
         "truth": "code_verified",
         "intent": "intended",
         "about": ["component.order_api", "component.redis"],
         "code_anchors": [
-          { "file": "src/server.js", "symbol": "publishOrderCreated" }
+          { "file": "src/server.js", "symbol": "cacheLatestOrder" }
         ]
+      },
+      {
+        "id": "claim.records_analytics_events_to_clickhouse",
+        "kind": "fact",
+        "text": "The Order API records order analytics events to ClickHouse via recordOrderAnalyticsEvent.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": ["component.order_api", "component.clickhouse"],
+        "code_anchors": [
+          { "file": "src/analytics.js", "symbol": "recordOrderAnalyticsEvent" }
+        ]
+      },
+      {
+        "id": "claim.containerized_with_docker",
+        "kind": "fact",
+        "text": "The Order API is containerized with Docker for local builds and deployment images.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": ["component.order_api", "component.docker"],
+        "code_anchors": [
+          { "file": "Dockerfile" }
+        ]
+      },
+      {
+        "id": "claim.deployed_on_ecs",
+        "kind": "fact",
+        "text": "The Order API is deployed to ECS as a Fargate task.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": ["component.order_api", "component.ecs"],
+        "code_anchors": [
+          { "file": "deploy/ecs-task-definition.json" }
+        ]
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.create_order",
+        "name": "Create and process an order",
+        "touches": ["component.order_api", "component.postgres", "component.kafka", "component.redis", "component.clickhouse"]
       }
     ]
   }

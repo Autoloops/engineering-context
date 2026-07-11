@@ -19,14 +19,24 @@ import type { AgentRunResult } from "../../../libs/agent-runner/types.js";
 import { loadRepoEnv } from "../../../libs/env/load-local-env.js";
 
 // This eval case exists specifically to check issue #79: does the bootstrap
-// skill actually make an agent promote an external dependency (Redis, in
-// the bundled fixture) to its own first-class component, instead of only
-// mentioning it inside claim text? Unlike the other eval cases, the target
-// is a small fixture repo bundled in this directory (not a live clone),
-// git-initialized fresh on every run, so the result is deterministic and
-// does not depend on a third-party repo staying reachable/unchanged.
+// skill actually make an agent promote external dependencies to their own
+// first-class components, instead of only mentioning them inside claim text
+// or folding them into an internal component's name/description? The
+// bundled fixture is a small "Order API" that depends on six real external
+// systems declared through several different formats (docker-compose,
+// Kubernetes manifests, an ORM schema, a Dockerfile, an ECS task
+// definition) - not just one - so the result generalizes across dependency
+// shapes and declaration-point formats, not one narrow case. Unlike the
+// other eval cases, the target is a small fixture repo bundled in this
+// directory (not a live clone), git-initialized fresh on every run, so the
+// result is deterministic and does not depend on a third-party repo
+// staying reachable/unchanged.
 
 const caseId = "dependency-promotion-79";
+
+// Component id tokens the fixture's dependencies should be promoted under.
+// Matched against `id` only (not `name`) - see checkDependenciesPromoted.
+const expectedDependencyTokens = ["postgres", "kafka", "redis", "clickhouse", "docker", "ecs"];
 
 interface Args {
   proposal?: string;
@@ -57,7 +67,7 @@ interface EvalResult {
   greplica_home_dir: string;
   proposal_path: string;
   success: boolean;
-  redis_component_promoted: boolean;
+  dependencies_promoted: Record<string, boolean>;
   commands: CommandResult[];
   generation?: AgentRunResult;
   judge?: {
@@ -154,18 +164,23 @@ async function main(): Promise<void> {
     ...runProductCommands(context),
   ];
   const commandsSucceeded = commands.every((command) => command.exit_code === 0);
-  const redisComponentPromoted = commandsSucceeded ? checkRedisComponentPromoted(context) : false;
+  const dependenciesPromoted = commandsSucceeded
+    ? checkDependenciesPromoted(context)
+    : Object.fromEntries(expectedDependencyTokens.map((token) => [token, false]));
+  const allDependenciesPromoted = Object.values(dependenciesPromoted).every(Boolean);
   const judge = commandsSucceeded && args.judge === "openai" ? await runOpenAiJudge(context, args) : undefined;
-  const success = commandsSucceeded && redisComponentPromoted && (judge === undefined || judge.score.passed);
-  writeResult(context, targetCommit, commands, redisComponentPromoted, success, generation, judge);
+  const success = commandsSucceeded && allDependenciesPromoted && (judge === undefined || judge.score.passed);
+  writeResult(context, targetCommit, commands, dependenciesPromoted, success, generation, judge);
 
   console.log(success ? "Dependency-promotion eval passed." : "Dependency-promotion eval failed.");
   console.log(`Run directory: ${context.runDir}`);
-  console.log(
-    redisComponentPromoted
-      ? "Redis was promoted to its own component."
-      : "Redis was NOT promoted to its own component (this is the failure mode issue #79 describes).",
-  );
+  for (const [token, promoted] of Object.entries(dependenciesPromoted)) {
+    console.log(
+      promoted
+        ? `${token}: promoted to its own component.`
+        : `${token}: NOT promoted to its own component (this is the failure mode issue #79 describes).`,
+    );
+  }
   if (judge) {
     console.log(`Judge score: ${judge.score.final_score.toFixed(2)} / 100`);
   }
@@ -205,7 +220,7 @@ function prepareTargetRepo(context: RunContext): string {
   runOrThrow(["git", "config", "user.email", "eval@greplica.local"], context.targetRepoDir);
   runOrThrow(["git", "config", "user.name", "Greplica Eval"], context.targetRepoDir);
   runOrThrow(["git", "add", "-A"], context.targetRepoDir);
-  runOrThrow(["git", "commit", "-q", "-m", "Fixture: Order API with Redis event publishing"], context.targetRepoDir);
+  runOrThrow(["git", "commit", "-q", "-m", "Fixture: Order API with several external dependencies"], context.targetRepoDir);
   return git(context.targetRepoDir, ["rev-parse", "HEAD"]);
 }
 
@@ -273,23 +288,26 @@ function evalEnv(context: RunContext): NodeJS.ProcessEnv {
   };
 }
 
-// Deterministic, judge-independent check: is there a component that is
-// SPECIFICALLY about Redis, not a compound/internal component whose name
-// merely mentions Redis in passing (e.g. "Order API server and Redis
-// publisher")? That compound-name shape is the exact bug issue #79
-// describes wearing a different disguise - Redis still has no component of
-// its own, no dedicated node, nothing `about`/`touches` it directly. Only
-// the component `id` is checked: ids are structured, canonical identifiers
-// an agent assigns specifically to a concept, unlike free-text `name`
-// fields which can smuggle a mention of Redis into an unrelated component's
-// description without giving Redis its own identity.
-function checkRedisComponentPromoted(context: RunContext): boolean {
+// Deterministic, judge-independent check: for each expected dependency, is
+// there a component that is SPECIFICALLY about it, not a compound/internal
+// component whose name merely mentions it in passing (e.g. "Order API
+// server and Redis publisher")? That compound-name shape is the exact bug
+// issue #79 describes wearing a different disguise - the dependency still
+// has no component of its own, no dedicated node, nothing `about`/`touches`
+// it directly. Only the component `id` is checked: ids are structured,
+// canonical identifiers an agent assigns specifically to a concept, unlike
+// free-text `name` fields which can smuggle a mention of a dependency into
+// an unrelated component's description without giving it its own identity.
+function checkDependenciesPromoted(context: RunContext): Record<string, boolean> {
   const proposal = readJson<{ creates?: { components?: Array<{ id?: string }> } }>(context.proposalPath);
   const components = proposal.creates?.components ?? [];
-  return components.some((component) => {
-    const tokens = (component.id ?? "").toLowerCase().split(/[^a-z0-9]+/);
-    return tokens.includes("redis");
-  });
+  const componentIdTokens = components.map((component) => new Set((component.id ?? "").toLowerCase().split(/[^a-z0-9]+/)));
+
+  const result: Record<string, boolean> = {};
+  for (const token of expectedDependencyTokens) {
+    result[token] = componentIdTokens.some((tokens) => tokens.has(token));
+  }
+  return result;
 }
 
 async function runOpenAiJudge(
@@ -305,7 +323,7 @@ async function runOpenAiJudge(
   const rubric = readJson<Rubric>(context.rubricPath);
   const proposal = readJson<unknown>(context.proposalPath);
   const judgeInput: JudgeInput = {
-    task: "Judge this Greplica bootstrap proposal for a fixture repo that exists to test whether an external dependency (Redis) gets promoted to a first-class component. Return JSON classification only; do not compute numeric scores.",
+    task: "Judge this Greplica bootstrap proposal for a fixture repo that exists to test whether external dependencies (Postgres, Kafka, Redis, ClickHouse, Docker, ECS) get promoted to first-class components. Return JSON classification only; do not compute numeric scores.",
     rubric: rubric.judge,
     repo_tree: repoTree(context.targetRepoDir),
     proposal,
@@ -329,7 +347,7 @@ function writeResult(
   context: RunContext,
   targetCommit: string,
   commands: CommandResult[],
-  redisComponentPromoted: boolean,
+  dependenciesPromoted: Record<string, boolean>,
   success: boolean,
   generation: AgentRunResult | undefined,
   judge: EvalResult["judge"],
@@ -343,7 +361,7 @@ function writeResult(
     greplica_home_dir: context.greplicaHomeDir,
     proposal_path: context.proposalPath,
     success,
-    redis_component_promoted: redisComponentPromoted,
+    dependencies_promoted: dependenciesPromoted,
     commands,
     generation,
     judge,

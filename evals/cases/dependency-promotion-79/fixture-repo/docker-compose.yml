@@ -1,4 +1,10 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: orders
+    ports:
+      - "5432:5432"
   redis:
     image: redis:7-alpine
     ports:
@@ -6,6 +12,10 @@ services:
   api:
     build: .
     depends_on:
+      - postgres
       - redis
     environment:
+      DATABASE_URL: postgresql://postgres:orders@postgres:5432/orders
       REDIS_URL: redis://redis:6379
+      KAFKA_BROKER: kafka.order-api.svc.cluster.local:9092
+      CLICKHOUSE_URL: http://clickhouse.order-api.svc.cluster.local:8123
