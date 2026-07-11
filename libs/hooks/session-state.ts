@@ -30,6 +30,7 @@ export class HookSessionStore {
         cwd: input.cwd ?? null,
         guidance_injected_at: shouldInjectGuidance ? now : null,
         stops_since_memory_current: incrementStop,
+        first_seen_at: now,
         last_seen_at: now,
         last_memory_current_at: null,
       };
@@ -93,10 +94,10 @@ export class HookSessionStore {
       .prepare(
         `INSERT INTO agent_sessions (
           platform, session_id, repo_id, transcript_path, cwd, guidance_injected_at,
-          stops_since_memory_current, last_seen_at, last_memory_current_at
+          stops_since_memory_current, first_seen_at, last_seen_at, last_memory_current_at
         ) VALUES (
           @platform, @session_id, @repo_id, @transcript_path, @cwd, @guidance_injected_at,
-          @stops_since_memory_current, @last_seen_at, @last_memory_current_at
+          @stops_since_memory_current, @first_seen_at, @last_seen_at, @last_memory_current_at
         )`,
       )
       .run(session);
@@ -130,15 +131,16 @@ export function shouldAttemptUpdate(
   }
 
   const lastCurrentAt = parseTime(session.last_memory_current_at);
-  const lastSeenAt = parseTime(session.last_seen_at);
-  if (lastSeenAt === undefined) return undefined;
-
   if (lastCurrentAt === undefined) {
-    return now.getTime() - lastSeenAt.getTime() >= thresholds.timeAttemptIntervalMs
+    const firstSeenAt = parseTime(session.first_seen_at);
+    if (firstSeenAt === undefined) return undefined;
+    return now.getTime() - firstSeenAt.getTime() >= thresholds.timeAttemptIntervalMs
       ? "time_threshold"
       : undefined;
   }
 
+  const lastSeenAt = parseTime(session.last_seen_at);
+  if (lastSeenAt === undefined) return undefined;
   if (lastSeenAt.getTime() <= lastCurrentAt.getTime() + thresholds.memoryCurrentGraceMs) return undefined;
   return now.getTime() - lastCurrentAt.getTime() >= thresholds.timeAttemptIntervalMs ? "time_threshold" : undefined;
 }

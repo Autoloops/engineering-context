@@ -8,6 +8,7 @@ export interface AgentSession {
   cwd: string | null;
   guidance_injected_at: string | null;
   stops_since_memory_current: number;
+  first_seen_at: string;
   last_seen_at: string;
   last_memory_current_at: string | null;
 }
