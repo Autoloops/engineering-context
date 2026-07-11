@@ -273,16 +273,22 @@ function evalEnv(context: RunContext): NodeJS.ProcessEnv {
   };
 }
 
-// Deterministic, judge-independent check: is there a component whose name
-// or id plausibly refers to Redis? This is the actual pass/fail signal for
-// issue #79 - the OpenAI judge (when used) adds a richer quality read on
-// top, but this check alone is enough to prove or disprove the fix.
+// Deterministic, judge-independent check: is there a component that is
+// SPECIFICALLY about Redis, not a compound/internal component whose name
+// merely mentions Redis in passing (e.g. "Order API server and Redis
+// publisher")? That compound-name shape is the exact bug issue #79
+// describes wearing a different disguise - Redis still has no component of
+// its own, no dedicated node, nothing `about`/`touches` it directly. Only
+// the component `id` is checked: ids are structured, canonical identifiers
+// an agent assigns specifically to a concept, unlike free-text `name`
+// fields which can smuggle a mention of Redis into an unrelated component's
+// description without giving Redis its own identity.
 function checkRedisComponentPromoted(context: RunContext): boolean {
-  const proposal = readJson<{ creates?: { components?: Array<{ id?: string; name?: string }> } }>(context.proposalPath);
+  const proposal = readJson<{ creates?: { components?: Array<{ id?: string }> } }>(context.proposalPath);
   const components = proposal.creates?.components ?? [];
   return components.some((component) => {
-    const haystack = `${component.id ?? ""} ${component.name ?? ""}`.toLowerCase();
-    return haystack.includes("redis");
+    const tokens = (component.id ?? "").toLowerCase().split(/[^a-z0-9]+/);
+    return tokens.includes("redis");
   });
 }
 
