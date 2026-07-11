@@ -39,7 +39,17 @@ Treat cross-cutting utility layers as ownership boundaries when they encode dura
 
 For large repos, process one module group at a time. When your environment supports parallel workers and the user asked for parallelism, split independent module groups across workers, then merge proposals sequentially.
 
-### 3. Inspect Deeply
+### 3. Promote First-Class Dependencies
+
+Some things the repo depends on deserve their own component even though the repo does not own their code — a message broker, a datastore, a third-party API client, a build/deploy platform. Do not leave these buried inside claim text as an aside. Promote a dependency to a component when any of these hold: it is externally owned but operationally load-bearing (the system misbehaves without it); multiple claims or flows would reference it by name; a future agent would plausibly ask `greplica graph context "<its name>"`. Do not promote incidental utilities or dev-only tooling that no claim needs to reference. This is a generic judgment call, not a fixed technology list — apply the same criteria whether the dependency is infrastructure, a datastore, a library, or an external service.
+
+When you promote one:
+
+- Set `code_anchor` to the file where the repo declares or configures it: a deploy/compose file, schema file, client-initialization module, or dependency manifest.
+- Connect it the same way as any component: write claims `about` both the dependency and the internal components that use it (with code anchors at the usage sites), and include it in flow `touches` where it participates in a runtime behavior.
+- Never nest an external dependency under an internal component with `component.contains` — `contains` means ownership, and the repo does not own it.
+
+### 4. Inspect Deeply
 
 For each module group:
 
@@ -54,7 +64,7 @@ Deep bootstrap should produce memory that lets a future agent jump near the righ
 
 Do not skip behavior-heavy helpers just because they are private or small. If a helper owns visible behavior such as truncation, column layout, selector parsing, retry logic, pagination, API query shaping, or config fallback, write a precise claim anchored to that helper or its smallest stable caller/test pair.
 
-### 4. Write Proposals In Batches
+### 5. Write Proposals In Batches
 
 Write one focused proposal per module group or cross-cutting flow. Validate and apply each proposal before moving to the next group so later groups can reuse existing components and supersede stale claims.
 
@@ -129,7 +139,7 @@ Use compact relationship fields where possible:
 Do not create session sources for code inspection during bootstrap. Code-grounded bootstrap claims should usually be `code_verified`, source-free, and include `code_anchors`.
 Do not create broad code claims merely to cover a module. If a module has list, view, parse, render, truncate, width calculation, format, validate, and API-query behaviors, create separate claims for those behaviors with separate anchors.
 
-### 5. Add Cross-Cutting Flows
+### 6. Add Cross-Cutting Flows
 
 After module passes, add cross-cutting flows that future agents would search for:
 
@@ -143,7 +153,7 @@ After module passes, add cross-cutting flows that future agents would search for
 
 Do not add a flow unless it touches at least two meaningful components.
 
-### 6. Validate And Apply
+### 7. Validate And Apply
 
 For each proposal:
 

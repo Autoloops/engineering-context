@@ -79,7 +79,18 @@ Create a short plan before inspecting deeply:
 - Treat cross-cutting utility layers as possible refresh targets when they own durable behavior: table/output rendering, terminal width and truncation, formatter helpers, parser/selector helpers, query builders, pagination, config bootstrap, and test harness utilities.
 - Do not use git history to infer what changed. If no changed-file list is supplied, use existing memory queries plus the current source tree to decide which areas need a partial rewalk.
 
-### 3. Inspect Current Code
+### 3. Promote First-Class Dependencies
+
+While building the refresh plan, scan existing claims for named systems that the repo depends on but that have no component of their own — a message broker, a datastore, a third-party API client, a build/deploy platform mentioned only in claim text. Promote one to a component when it is externally owned but operationally load-bearing, referenced by multiple claims or flows, or something a future agent would plausibly query by name (`greplica graph context "<its name>"`). This is a generic judgment call, not a fixed technology list.
+
+When you promote one:
+
+- Create the component with a `code_anchor` at its declaration point (deploy/compose file, schema file, client-init module, dependency manifest).
+- Add `about` edges from the *existing* claims that already mention it — these edges may reference existing subjects directly; no `supersedes` is needed for the edge itself. Only supersede a claim if its text is now wrong or needs to change, not merely because it now also links to the new component.
+- Include it in flow `touches` where it participates in a refreshed runtime behavior.
+- Never nest it under an internal component with `contains` — that means ownership, and the repo does not own it.
+
+### 4. Inspect Current Code
 
 For each planned module group:
 
@@ -91,7 +102,7 @@ For each planned module group:
 
 Do not write memory for every helper. Store facts that improve future navigation, correctness, or task planning. If a helper owns visible behavior such as truncation, column layout, selector parsing, API query shaping, pagination, config fallback, or error formatting, it is a valid memory target even when it is private.
 
-### 4. Write Layered Proposals
+### 5. Write Layered Proposals
 
 Write one proposal per changed module group or cross-cutting flow. Apply each proposal before moving to the next group so later proposals can reuse IDs already present in the parent graph or created earlier in this layered refresh.
 
@@ -163,7 +174,7 @@ For claim `code_anchors`:
 - Use a private/helper symbol when that helper is the smallest accurate anchor for the claim and its behavior is externally visible or cross-cutting.
 - When refreshing a broad old claim, create narrower superseding claims instead of copying the old breadth with many anchors.
 
-### 5. Validate, Apply, And Probe
+### 6. Validate, Apply, And Probe
 
 For each proposal:
 
@@ -177,7 +188,7 @@ After all proposals, run 3-5 retrieval probes matching likely future questions, 
 
 Run `greplica graph audit anchors` when available. Treat missing anchors, missing files, missing symbols, ambiguous symbols, or unsupported languages on active `code_verified` claims as failures to fix before handing off to GitHub packet ingestion.
 
-### 6. Write A Build Report
+### 7. Write A Build Report
 
 When an output directory is available, write a small JSON or Markdown report with:
 
