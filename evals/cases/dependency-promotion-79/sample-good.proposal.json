@@ -1,0 +1,31 @@
+{
+  "title": "Dependency promotion sample: Redis promoted to a component",
+  "summary": "Sample proposal showing Redis promoted per the promotion guidance.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.order_api",
+        "name": "Order API",
+        "code_anchor": "src/server.js"
+      },
+      {
+        "id": "component.redis",
+        "name": "Redis",
+        "code_anchor": "docker-compose.yml"
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.publishes_order_created_to_redis",
+        "kind": "fact",
+        "text": "The Order API publishes order-created events to Redis via publishOrderCreated so downstream workers can process orders asynchronously.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": ["component.order_api", "component.redis"],
+        "code_anchors": [
+          { "file": "src/server.js", "symbol": "publishOrderCreated" }
+        ]
+      }
+    ]
+  }
+}

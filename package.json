@@ -27,6 +27,7 @@
     "test:transcript-bundle": "npm run build && node scripts/check-transcript-bundle.js",
     "test:repo-context": "npm run build && node scripts/check-repo-context.js",
     "test:dependency-promotion-retrieval": "npm run build && node scripts/check-dependency-promotion-retrieval.js",
+    "eval:dependency-promotion-79": "npm run build && node dist/evals/cases/dependency-promotion-79/run.js",
     "eval:bootstrap-current": "npm run build && node dist/evals/cases/bootstrap-current-repo-at-8038fe8/run.js",
     "eval:coding-proposal-apply-atomicity": "npm run build && node dist/evals/cases/coding-proposal-apply-atomicity-at-d6ebf80/run.js",
     "eval:curated-doc-bootstrap-vercel-chat": "npm run build && node dist/evals/cases/curated-doc-bootstrap-vercel-chat-at-f3de128/run.js",

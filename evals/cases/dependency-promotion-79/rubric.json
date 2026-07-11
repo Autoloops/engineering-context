@@ -1,0 +1,85 @@
+{
+  "case_id": "dependency-promotion-79",
+  "target_repo_url": "local-fixture:evals/cases/dependency-promotion-79/fixture-repo",
+  "target_commit": "generated-at-run-time",
+  "score": {
+    "pass_threshold": 80,
+    "node_coverage_points": 50,
+    "edge_coverage_points": 15,
+    "quality_points": 35,
+    "quality_penalties": {
+      "noisy_structure_node_points": 3,
+      "noisy_structure_node_max": 12,
+      "bad_claim_points": 4,
+      "bad_claim_max": 16,
+      "bad_anchor_points": 3,
+      "bad_anchor_max": 9,
+      "depth_violation_points": 8,
+      "weak_graph_linking_points": 8
+    }
+  },
+  "judge": {
+    "instructions": [
+      "This eval tests one thing specifically: whether the bootstrap proposal promotes Redis to its own first-class component instead of only mentioning it inside claim text (Greplica issue #79).",
+      "Judge whether the proposal is a good shallow bootstrap memory graph for this exact fixture repo.",
+      "Do not compute a numeric score. Only classify expected nodes, expected edges, and quality issues.",
+      "Judge semantic equivalence, not exact IDs or exact wording. A node can satisfy an expected item if it clearly represents the same concept under any reasonable id/name (e.g. component.redis, component.message_broker, 'Redis').",
+      "The critical check is component-level: Redis must appear as its own component object in creates.components, not only as a word inside a claim's text or inside a component named something generic like 'Dependencies' or 'Infrastructure' that bundles multiple technologies together without being specifically about Redis.",
+      "Compact relationship fields are graph edges: flow.touches creates Flow -> Component touches edges, claim.about creates Claim -> Component/Flow about edges, component.contains creates Component -> Component contains edges.",
+      "When judging expected edges, inspect compact relationship arrays directly. Do not require a separate creates.edges entry.",
+      "The Redis component must be connected via `about` (from a claim) and/or `touches` (from a flow), not by being nested under the API component via `contains`. `contains` means ownership, and this repo does not own Redis - nesting Redis under the API component via contains is a quality defect, note it under bad_claims with a reason mentioning contains misuse even though it is a component-level defect, since bad_claims is the closest available category.",
+      "Judge claim code_anchors as navigation aids. For code_verified claims, a stable implementation symbol or a file-only anchor (e.g. docker-compose.yml, package.json) for config/manifest files without symbols is acceptable.",
+      "Do not penalize the proposal for keeping the fixture shallow - it is a tiny repo and a compact proposal with 2-4 components, 0-1 flows, and a handful of claims is appropriate depth, not a depth violation.",
+      "The proposal should be useful to a future coding agent that needs to know this repo depends on Redis and where that dependency is declared/used."
+    ],
+    "actual_repo_facts": [
+      "This is a tiny Node.js HTTP API named order-api.",
+      "README.md states the server accepts orders and publishes order-created events to Redis for downstream async processing.",
+      "README.md states Redis is required at runtime - the server fails to start without it.",
+      "docker-compose.yml declares a `redis` service (image redis:7-alpine) and an `api` service that depends_on redis and receives REDIS_URL as an environment variable.",
+      "package.json lists `redis` (^4.6.0) as a runtime dependency.",
+      "src/server.js creates a Redis client via createClient from the `redis` package, connects to it at module load, and exports publishOrderCreated(order), which publishes JSON to the `orders.created` Redis channel.",
+      "src/server.js also exports createOrder(body), a pure function that builds an order object with a generated id and status 'created'.",
+      "src/routes.js exports handleCreateOrder(request, response), an HTTP handler that calls createOrder then publishOrderCreated, then responds 201 with the order.",
+      "There is no internal message broker, queue, or datastore other than Redis in this fixture - Redis is the only external dependency."
+    ],
+    "expected_nodes": [
+      {
+        "id": "component.order_api",
+        "kind": "component",
+        "description": "The internal Order API - server/route handling for creating orders (src/server.js, src/routes.js)."
+      },
+      {
+        "id": "component.redis",
+        "kind": "component",
+        "description": "Redis, the external dependency the repo does not own, declared in docker-compose.yml and used as a runtime dependency for publishing order-created events. THIS IS THE NODE THIS EVAL EXISTS TO CHECK FOR."
+      },
+      {
+        "id": "claim.publishes_order_created_to_redis",
+        "kind": "claim",
+        "description": "A claim describing that the API publishes order-created events to Redis (e.g. via publishOrderCreated in src/server.js)."
+      }
+    ],
+    "expected_edges": [
+      {
+        "id": "edge.claim_about_redis",
+        "from": "the claim about publishing to Redis",
+        "to": "the Redis component",
+        "description": "The claim that connects the API to Redis must be `about` the Redis component (not just the API component alone)."
+      },
+      {
+        "id": "edge.claim_about_order_api",
+        "from": "the claim about publishing to Redis",
+        "to": "the Order API component",
+        "description": "The same claim should also be `about` the internal Order API component, since it describes behavior owned by that component."
+      }
+    ],
+    "quality_rules": {
+      "noisy_structure_nodes": "Components that fragment this tiny fixture too finely (e.g. a separate component for every single file) or that are so generic they carry no information (e.g. a bare 'Dependencies' component listing several unrelated technologies). A single Redis component is exactly right, not noisy.",
+      "bad_claims": "Claims that are wrong, unsupported by the fixture, vague, or that nest Redis under the Order API using `contains` (ownership) instead of `about`/`touches`. Also bad: a proposal that only mentions Redis inside claim text with no Redis component at all - that is the exact bug this eval exists to catch.",
+      "bad_anchors": "Fake paths, dependency/generated paths, or a vague repo-root anchor without reason. A file-only anchor on docker-compose.yml or package.json for the Redis component is good, not bad - those are its declaration points.",
+      "depth_violation": "Not applicable to this tiny fixture unless the proposal does something absurd like a claim per line of code.",
+      "weak_graph_linking": "The Redis component exists but is not linked to any claim or flow, making it an orphan node with no relationships - this defeats the purpose of promoting it."
+    }
+  }
+}
