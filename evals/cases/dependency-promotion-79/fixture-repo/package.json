@@ -1,0 +1,12 @@
+{
+  "name": "order-api",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": { "start": "node src/server.js" },
+  "dependencies": {
+    "@prisma/client": "^5.14.0",
+    "kafkajs": "^2.2.4",
+    "redis": "^4.6.0",
+    "@clickhouse/client": "^1.1.0"
+  }
+}

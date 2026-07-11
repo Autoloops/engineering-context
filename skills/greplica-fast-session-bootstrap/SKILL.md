@@ -99,6 +99,8 @@ Reject mechanism trivia. Do not store internal helper names, command registry in
 
 For multi-session bundles, a complete proposal may need many claims. Do not stop early because the proposal feels long. If the claim count grows, review for code-detail sprawl, existing-memory leakage, duplicate implementation/decision pairs, and claims not directly raised by the bundle; keep the durable bundle-supported memories.
 
+If the bundle repeatedly names a system the repo depends on but does not own — a datastore, message broker, third-party API, or build/deploy platform — and that name would otherwise only live inside claim text, give it its own component instead, anchored at its declaration point if the bundle names one, and linked via `about` edges to the components/claims that reference it. Only do this when the bundle itself raised the dependency as durable; do not go looking for dependencies in code that the bundle never mentioned.
+
 Allowed values:
 
 - claim `kind`: `fact`, `requirement`, `decision`, `task`, `question`, `risk`

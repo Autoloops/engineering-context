@@ -1,0 +1,127 @@
+{
+  "case_id": "dependency-promotion-79",
+  "target_repo_url": "local-fixture:evals/cases/dependency-promotion-79/fixture-repo",
+  "target_commit": "generated-at-run-time",
+  "score": {
+    "pass_threshold": 80,
+    "node_coverage_points": 50,
+    "edge_coverage_points": 15,
+    "quality_points": 35,
+    "quality_penalties": {
+      "noisy_structure_node_points": 3,
+      "noisy_structure_node_max": 12,
+      "bad_claim_points": 4,
+      "bad_claim_max": 16,
+      "bad_anchor_points": 3,
+      "bad_anchor_max": 9,
+      "depth_violation_points": 8,
+      "weak_graph_linking_points": 8
+    }
+  },
+  "judge": {
+    "instructions": [
+      "This eval tests one thing specifically: whether the bootstrap proposal promotes the fixture's external dependencies (Postgres, Kafka, Redis, ClickHouse, Docker, ECS) to their own first-class components instead of only mentioning them inside claim text or bundling them into an internal component's name/description (Greplica issue #79).",
+      "Judge whether the proposal is a good shallow bootstrap memory graph for this exact fixture repo.",
+      "Do not compute a numeric score. Only classify expected nodes, expected edges, and quality issues.",
+      "Judge semantic equivalence, not exact IDs or exact wording. A node can satisfy an expected item if it clearly represents the same concept under any reasonable id/name (e.g. component.kafka, component.message_broker, 'Kafka').",
+      "The critical check is component-level, per dependency: each of Postgres, Kafka, Redis, ClickHouse, Docker, and ECS must appear as its own component object in creates.components, not only as a word inside a claim's text, and not folded into a compound internal component name/description like 'Order API server (Postgres, Kafka, Redis)' that bundles several technologies together without giving any of them their own identity.",
+      "Compact relationship fields are graph edges: flow.touches creates Flow -> Component touches edges, claim.about creates Claim -> Component/Flow about edges, component.contains creates Component -> Component contains edges.",
+      "When judging expected edges, inspect compact relationship arrays directly. Do not require a separate creates.edges entry.",
+      "Each dependency component must be connected via `about` (from a claim) and/or `touches` (from a flow), not by being nested under the internal API component via `contains`. `contains` means ownership, and this repo does not own any of these external systems - nesting one of them under the API component via contains is a quality defect, note it under bad_claims with a reason mentioning contains misuse even though it is a component-level defect, since bad_claims is the closest available category.",
+      "It is fine, and arguably good, for the proposal to represent Prisma as the code_anchor/tooling detail on the Postgres component rather than as its own separate component, since Prisma is the ORM through which the repo talks to Postgres rather than a distinct runtime system. Do not penalize a proposal for treating Prisma this way; only flag it as missing if the proposal fails to represent Postgres as a component at all.",
+      "Judge claim code_anchors as navigation aids. For code_verified claims, a stable implementation symbol or a file-only anchor (e.g. docker-compose.yml, package.json, prisma/schema.prisma, deploy/ecs-task-definition.json) for config/manifest files without symbols is acceptable.",
+      "Do not penalize the proposal for keeping the fixture shallow - it is a small repo and a compact proposal with several components, a few flows, and a moderate number of claims is appropriate depth, not a depth violation.",
+      "The proposal should be useful to a future coding agent that needs to know this repo depends on these external systems and where each dependency is declared/used."
+    ],
+    "actual_repo_facts": [
+      "This is a small Node.js HTTP API named order-api.",
+      "README.md states the server persists orders to Postgres (via Prisma), publishes order-created events to Kafka, caches the most recent order per customer in Redis, and ships order analytics events to ClickHouse.",
+      "README.md states the service is containerized with Docker (Dockerfile) and deployed to ECS (deploy/ecs-task-definition.json).",
+      "README.md states Postgres, Kafka, Redis, and ClickHouse are all required at runtime - the server fails to start if any is unreachable.",
+      "docker-compose.yml declares postgres and redis services for local development, plus an api service that depends_on both and receives DATABASE_URL, REDIS_URL, KAFKA_BROKER, and CLICKHOUSE_URL as environment variables.",
+      "k8s/kafka-statefulset.yaml is a Kubernetes StatefulSet and Service that declares Kafka in the order-api namespace.",
+      "k8s/clickhouse-deployment.yaml is a Kubernetes Deployment and Service that declares ClickHouse in the order-api namespace.",
+      "Dockerfile builds the api service's container image.",
+      "deploy/ecs-task-definition.json is a Fargate ECS task definition for the order-api container, listing the same environment variables as docker-compose.yml.",
+      "prisma/schema.prisma declares a postgresql datasource read from DATABASE_URL and an Order model (id, customer, status, createdAt).",
+      "package.json lists @prisma/client, kafkajs, redis, and @clickhouse/client as runtime dependencies.",
+      "src/server.js creates a PrismaClient (exported as `prisma`), a kafkajs Kafka producer connected at module load, and a Redis client connected at module load. It exports publishOrderCreated(order) (sends to the orders.created Kafka topic), cacheLatestOrder(order) (Redis SET keyed by customer), and createOrder(body) (pure order-object builder).",
+      "src/analytics.js creates a ClickHouse client and exports recordOrderAnalyticsEvent(order), which inserts a row into the order_events table.",
+      "src/routes.js exports handleCreateOrder(request, response), an HTTP handler that builds an order, writes it via prisma.order.create, publishes it to Kafka, caches it in Redis, records a ClickHouse analytics event, then responds 201 with the order."
+    ],
+    "expected_nodes": [
+      {
+        "id": "component.order_api",
+        "kind": "component",
+        "description": "The internal Order API - server/route handling for creating orders (src/server.js, src/routes.js)."
+      },
+      {
+        "id": "component.postgres",
+        "kind": "component",
+        "description": "Postgres, the relational datastore the repo does not own, declared in docker-compose.yml and accessed through prisma/schema.prisma. Part of the set of dependencies this eval exists to check for."
+      },
+      {
+        "id": "component.kafka",
+        "kind": "component",
+        "description": "Kafka, the message broker the repo does not own, declared in k8s/kafka-statefulset.yaml and used to publish order-created events. Part of the set of dependencies this eval exists to check for."
+      },
+      {
+        "id": "component.redis",
+        "kind": "component",
+        "description": "Redis, the cache the repo does not own, declared in docker-compose.yml and used to cache the latest order per customer. Part of the set of dependencies this eval exists to check for."
+      },
+      {
+        "id": "component.clickhouse",
+        "kind": "component",
+        "description": "ClickHouse, the analytics datastore the repo does not own, declared in k8s/clickhouse-deployment.yaml and used to record order analytics events. Part of the set of dependencies this eval exists to check for."
+      },
+      {
+        "id": "component.docker",
+        "kind": "component",
+        "description": "Docker, the container platform the repo is packaged with (Dockerfile). Part of the set of dependencies this eval exists to check for."
+      },
+      {
+        "id": "component.ecs",
+        "kind": "component",
+        "description": "ECS, the deployment/orchestration platform the repo runs on (deploy/ecs-task-definition.json). Part of the set of dependencies this eval exists to check for."
+      },
+      {
+        "id": "claim.persists_orders_to_postgres",
+        "kind": "claim",
+        "description": "A claim describing that the API persists orders to Postgres via Prisma."
+      },
+      {
+        "id": "claim.publishes_order_created_to_kafka",
+        "kind": "claim",
+        "description": "A claim describing that the API publishes order-created events to Kafka."
+      }
+    ],
+    "expected_edges": [
+      {
+        "id": "edge.claim_about_postgres",
+        "from": "the claim about persisting orders",
+        "to": "the Postgres component",
+        "description": "The claim connecting the API to Postgres must be `about` the Postgres component (not just the API component alone)."
+      },
+      {
+        "id": "edge.claim_about_kafka",
+        "from": "the claim about publishing order-created events",
+        "to": "the Kafka component",
+        "description": "The claim connecting the API to Kafka must be `about` the Kafka component (not just the API component alone)."
+      },
+      {
+        "id": "edge.claim_about_order_api",
+        "from": "important dependency claims",
+        "to": "the Order API component",
+        "description": "Claims describing a dependency interaction should also be `about` the internal Order API component, since the behavior is owned by that component."
+      }
+    ],
+    "quality_rules": {
+      "noisy_structure_nodes": "Components that fragment this fixture too finely (e.g. a separate component for every single file) or that are so generic they carry no information (e.g. a bare 'Dependencies' or 'Infrastructure' component listing several unrelated technologies together). One component per real dependency (Postgres, Kafka, Redis, ClickHouse, Docker, ECS) is exactly right, not noisy.",
+      "bad_claims": "Claims that are wrong, unsupported by the fixture, vague, or that nest a dependency under the Order API using `contains` (ownership) instead of `about`/`touches`. Also bad: a proposal that only mentions a dependency inside claim text, or folds it into an internal component's compound name, with no component of its own - that is the exact bug this eval exists to catch.",
+      "bad_anchors": "Fake paths, dependency/generated paths, or a vague repo-root anchor without reason. File-only anchors on docker-compose.yml, k8s/kafka-statefulset.yaml, k8s/clickhouse-deployment.yaml, prisma/schema.prisma, Dockerfile, or deploy/ecs-task-definition.json for the corresponding dependency component are good, not bad - those are the declaration points, and they intentionally span several different formats (compose, Kubernetes manifests, ORM schema, Dockerfile, ECS task definition), not just one.",
+      "depth_violation": "The proposal is clearly too deep for a bootstrap of this fixture, such as a claim per line of code or per environment variable.",
+      "weak_graph_linking": "One or more dependency components exist but are not linked to any claim or flow, making them orphan nodes with no relationships - this defeats the purpose of promoting them."
+    }
+  }
+}

@@ -53,6 +53,8 @@ Use `component.repository` for whole-repo facts:
 
 Create narrower components or flows when they help navigation for public boundaries. Do not bury config, storage, validation, retrieval, protocol, or persistence boundaries inside a generic repo component when those boundaries have stable files. Flow `touches` should include the public boundary components that the flow claim depends on.
 
+Promote a dependency the repo does not own — a datastore, message broker, third-party API, or build/deploy platform — to its own component when it is operationally load-bearing or a future agent would plausibly query it by name. Give it a `code_anchor` at its declaration point (compose/deploy file, schema, client-init module, manifest). Link it with claims `about` both it and the components that use it; never `contains`-nest it under an internal component.
+
 ## Evidence And Anchors
 
 - Use `source_verified` for doc-derived claims and anchor them to the relevant doc/config file.

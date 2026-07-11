@@ -1,0 +1,20 @@
+{
+  "family": "order-api",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "containerDefinitions": [
+    {
+      "name": "order-api",
+      "image": "order-api:latest",
+      "portMappings": [{ "containerPort": 3000, "protocol": "tcp" }],
+      "environment": [
+        { "name": "DATABASE_URL", "value": "postgresql://postgres:orders@postgres:5432/orders" },
+        { "name": "KAFKA_BROKER", "value": "kafka:9092" },
+        { "name": "REDIS_URL", "value": "redis://redis:6379" },
+        { "name": "CLICKHOUSE_URL", "value": "http://clickhouse:8123" }
+      ]
+    }
+  ]
+}
