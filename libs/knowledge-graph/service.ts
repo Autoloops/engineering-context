@@ -159,19 +159,28 @@ export class KnowledgeGraphService {
     }
 
     const working = this.repository.requireWorkingScope(initialized.repo_id);
-    const memoryCommit = this.repository.createMemoryCommit({
-      scope_id: working.id,
-      title: normalizedProposal.title,
-      summary: normalizedProposal.summary,
-    });
-
     const anchorFingerprints = await computeAnchorFingerprints(input.repo_root, normalizedProposal.creates.claims ?? []);
-    this.repository.createProposalRecords(working.id, memoryCommit.id, normalizedProposal, anchorFingerprints);
-    const embeddingStatus = await this.contextBuilder.ensureForGraph(
-      initialized.repo_id,
-      this.repository.readGraphView(initialized.repo_id),
-      this.contextConfig,
+    const memoryCommit = this.repository.createMemoryCommitWithProposal(
+      {
+        scope_id: working.id,
+        title: normalizedProposal.title,
+        summary: normalizedProposal.summary,
+      },
+      normalizedProposal,
+      anchorFingerprints,
     );
+
+    let embeddingStatus: EmbeddingStatus;
+    try {
+      embeddingStatus = await this.contextBuilder.ensureForGraph(
+        initialized.repo_id,
+        this.repository.readGraphView(initialized.repo_id),
+        this.contextConfig,
+      );
+    } catch (error: unknown) {
+      this.repository.rollbackProposalRecords(working.id, memoryCommit.id, normalizedProposal);
+      throw error;
+    }
 
     return {
       memory_commit_id: memoryCommit.id,

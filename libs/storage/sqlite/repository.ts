@@ -302,6 +302,19 @@ export class SqliteRepository {
     return memoryCommit;
   }
 
+  createMemoryCommitWithProposal(
+    input: CreateMemoryCommitInput,
+    proposal: MemoryCommitProposal,
+    anchorFingerprints?: Map<string, Record<string, string>>,
+  ): MemoryCommit {
+    const write = this.db.transaction(() => {
+      const memoryCommit = this.createMemoryCommit(input);
+      this.createProposalRecords(input.scope_id, memoryCommit.id, proposal, anchorFingerprints);
+      return memoryCommit;
+    });
+    return write() as MemoryCommit;
+  }
+
   createProposalRecords(
     scopeId: string,
     memoryCommitId: string,
@@ -362,6 +375,22 @@ export class SqliteRepository {
     write();
   }
 
+  rollbackProposalRecords(scopeId: string, memoryCommitId: string, proposal: MemoryCommitProposal): void {
+    const write = this.db.transaction(() => {
+      const repoId = this.repoIdForScope(scopeId);
+      this.deleteEmbeddings(repoId, "component", proposal.creates.components?.map((component) => component.id) ?? []);
+      this.deleteEmbeddings(repoId, "flow", proposal.creates.flows?.map((flow) => flow.id) ?? []);
+      this.deleteEmbeddings(repoId, "claim", proposal.creates.claims?.map((claim) => claim.id) ?? []);
+      this.deleteByIds(repoId, "edges", proposal.creates.edges?.map((edge) => edge.id) ?? []);
+      this.deleteByIds(repoId, "components", proposal.creates.components?.map((component) => component.id) ?? []);
+      this.deleteByIds(repoId, "flows", proposal.creates.flows?.map((flow) => flow.id) ?? []);
+      this.deleteByIds(repoId, "claims", proposal.creates.claims?.map((claim) => claim.id) ?? []);
+      this.deleteByIds(repoId, "sources", proposal.creates.sources?.map((source) => source.id) ?? []);
+      this.db.prepare("DELETE FROM memory_commits WHERE id = ? AND scope_id = ?").run(memoryCommitId, scopeId);
+    });
+    write();
+  }
+
   subjectExists(repoId: string, type: GraphObjectType, id: string): boolean {
     const table = tableForType(type);
     const row = this.db.prepare(`SELECT id FROM ${table} WHERE repo_id = ? AND id = ?`).get(repoId, id);
@@ -419,6 +448,21 @@ export class SqliteRepository {
          VALUES (?, ?, ?, ?)`,
       )
       .run(scopeId, subjectType, subjectId, memoryCommitId);
+  }
+
+  private deleteEmbeddings(repoId: string, objectType: EmbeddingObjectType, ids: string[]): void {
+    if (ids.length === 0) return;
+    this.db
+      .prepare(
+        `DELETE FROM graph_object_embeddings
+         WHERE repo_id = ? AND object_type = ? AND object_id IN (${placeholders(ids)})`,
+      )
+      .run(repoId, objectType, ...ids);
+  }
+
+  private deleteByIds(repoId: string, table: string, ids: string[]): void {
+    if (ids.length === 0) return;
+    this.db.prepare(`DELETE FROM ${table} WHERE repo_id = ? AND id IN (${placeholders(ids)})`).run(repoId, ...ids);
   }
 
   private repoIdForScope(scopeId: string): string {
