@@ -190,10 +190,12 @@ export class KnowledgeGraphService {
   private subjectLookup(repoId: string): {
     subjectExists: (type: GraphObjectType, id: string) => boolean;
     subjectType: (id: string) => GraphObjectType | undefined;
+    existingEdges: () => Edge[];
   } {
     return {
       subjectExists: (type, id) => this.repository.subjectExists(repoId, type, id),
       subjectType: (id) => this.repository.subjectType(repoId, id),
+      existingEdges: () => this.repository.readEdges(repoId),
     };
   }
 }

@@ -1,5 +1,5 @@
 import { isAllowedEdge } from "./edge.js";
-import type { EdgeKind } from "./edge.js";
+import type { Edge, EdgeKind } from "./edge.js";
 import type { MemoryCommitProposal, ProposalSubject } from "./proposal.js";
 import type { GraphObjectType } from "./schema.js";
 
@@ -11,8 +11,11 @@ const edgeKinds = new Set(["about", "contains", "touches", "supersedes", "eviden
 const graphObjectTypes = new Set(["component", "flow", "claim", "edge", "source"]);
 const maxCodeAnchorsPerClaim = 3;
 
+type AcyclicRelationshipEdge = Edge & { kind: "contains" | "supersedes" };
+
 export interface ExistingSubjectLookup {
   subjectExists(type: GraphObjectType, id: string): boolean;
+  existingEdges?(): Edge[];
 }
 
 export interface ProposalValidationResult {
@@ -148,7 +151,72 @@ export function validateProposal(
     }
   }
 
+  validateRelationshipCycles(edges, existingSubjects?.existingEdges?.() ?? [], errors);
+
   return { valid: errors.length === 0, errors };
+}
+
+function validateRelationshipCycles(proposalEdges: unknown[], existingEdges: Edge[], errors: string[]): void {
+  const adjacency = new Map<string, Set<string>>();
+  for (const edge of existingEdges) addRelationshipEdge(adjacency, edge);
+
+  for (const value of proposalEdges) {
+    const edge = relationshipEdge(value);
+    if (edge === undefined) continue;
+
+    const from = relationshipNodeKey(edge.kind, edge.from_type, edge.from_id);
+    const to = relationshipNodeKey(edge.kind, edge.to_type, edge.to_id);
+    if (from === to) {
+      errors.push(`Edge ${edge.id} cannot ${relationshipVerb(edge.kind)} itself.`);
+    } else if (hasPath(adjacency, to, from)) {
+      errors.push(`Edge ${edge.id} creates a ${edge.kind} cycle.`);
+    }
+    addRelationshipEdge(adjacency, edge);
+  }
+}
+
+function relationshipEdge(value: unknown): AcyclicRelationshipEdge | undefined {
+  if (!isRecord(value)) return undefined;
+  const kind = value.kind;
+  const fromType = value.from_type;
+  const toType = value.to_type;
+  if (kind !== "contains" && kind !== "supersedes") return undefined;
+  if (fromType !== toType) return undefined;
+  if (kind === "contains" && fromType !== "component" && fromType !== "flow") return undefined;
+  if (kind === "supersedes" && fromType !== "component" && fromType !== "flow" && fromType !== "claim") return undefined;
+  if (!isNonEmptyString(value.id) || !isNonEmptyString(value.from_id) || !isNonEmptyString(value.to_id)) return undefined;
+  return value as unknown as AcyclicRelationshipEdge;
+}
+
+function addRelationshipEdge(adjacency: Map<string, Set<string>>, edge: Edge): void {
+  const relationship = relationshipEdge(edge);
+  if (relationship === undefined) return;
+  const from = relationshipNodeKey(relationship.kind, relationship.from_type, relationship.from_id);
+  const to = relationshipNodeKey(relationship.kind, relationship.to_type, relationship.to_id);
+  const targets = adjacency.get(from) ?? new Set<string>();
+  targets.add(to);
+  adjacency.set(from, targets);
+}
+
+function hasPath(adjacency: Map<string, Set<string>>, start: string, target: string): boolean {
+  const pending = [start];
+  const visited = new Set<string>();
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (current === undefined || visited.has(current)) continue;
+    if (current === target) return true;
+    visited.add(current);
+    pending.push(...(adjacency.get(current) ?? []));
+  }
+  return false;
+}
+
+function relationshipNodeKey(kind: "contains" | "supersedes", type: GraphObjectType, id: string): string {
+  return `${kind}:${type}:${id}`;
+}
+
+function relationshipVerb(kind: "contains" | "supersedes"): string {
+  return kind === "contains" ? "contain" : "supersede";
 }
 
 function validateEvidenceMetadata(edge: Record<string, unknown>, errors: string[]): void {
