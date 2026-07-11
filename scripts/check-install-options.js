@@ -66,6 +66,15 @@ assert.match(copilotHooks.output, /Automatic memory updates: enabled\./);
 assert.ok(existsSync(join(copilotHooks.copilotHome, "hooks", "greplica.json")));
 assert.equal(readConfig(copilotHooks.greplicaHome).session.autoMemoryUpdates, true);
 
+const clineGuidanceOnly = installInTempRepo("cline-guidance", ["--hooks", "enabled", "--auto-memory", "enabled"], "cline");
+assert.match(clineGuidanceOnly.output, /Installed Greplica for Cline\./);
+assert.match(clineGuidanceOnly.output, /Hooks: installed for beforeModel\./);
+assert.match(clineGuidanceOnly.output, /Automatic memory updates: disabled\./);
+assert.ok(existsSync(join(clineGuidanceOnly.repo, ".clinerules", "greplica.md")));
+assert.ok(existsSync(join(clineGuidanceOnly.repo, ".cline", "skills", "greplica-bootstrap", "SKILL.md")));
+assert.ok(existsSync(join(clineGuidanceOnly.repo, ".cline", "plugins", "greplica.ts")));
+assert.equal(readConfig(clineGuidanceOnly.greplicaHome).session.autoMemoryUpdates, false);
+
 const invalid = spawnSync(
   process.execPath,
   [
@@ -120,6 +129,7 @@ assert.ok(notInstalled.stderr.includes(installPlatformUsage), "not installed err
 assert.match(notInstalled.stderr, /openhands/);
 assert.match(notInstalled.stderr, /factory-droid/);
 assert.match(notInstalled.stderr, /antigravity/);
+assert.match(notInstalled.stderr, /cline/);
 
 console.log("Install option checks passed.");
 

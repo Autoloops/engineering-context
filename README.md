@@ -6,7 +6,7 @@
 
 <p>
   <a href="https://www.npmjs.com/package/greplica"><img alt="npm package" src="https://img.shields.io/npm/v/greplica?color=111111"></a>
-  <img alt="Agents" src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code-2563eb">
+  <img alt="Agents" src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20Cline-2563eb">
   <img alt="Storage" src="https://img.shields.io/badge/storage-local%20SQLite-475569">
   <img alt="Embeddings" src="https://img.shields.io/badge/embeddings-local%20%7C%20OpenAI-16a34a">
   <a href="https://discord.gg/q2R6AYXh9"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2"></a>
@@ -118,7 +118,7 @@ Current showcase rows:
 ## Commands
 
 ```bash
-greplica install --platform codex|claude|copilot|opencode|openhands|factory-droid|antigravity --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]
+greplica install --platform codex|claude|copilot|opencode|cline|openhands|factory-droid|antigravity --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]
 greplica config
 greplica doctor [--check-embeddings]
 greplica graph read

@@ -143,7 +143,7 @@ const cliCommands = [
   {
     key: "transcriptBundle",
     path: ["transcript", "bundle"],
-    usage: "transcript bundle --platform codex|claude|copilot|opencode --file <path> [--file <path>...] --out <bundle.md>",
+    usage: "transcript bundle --platform codex|claude|copilot|opencode|cline --file <path> [--file <path>...] --out <bundle.md>",
     handler: runTranscriptBundle,
     showInTopLevelHelp: true,
   },
@@ -756,7 +756,7 @@ function parseTranscriptBundleArgs(args: string[]): TranscriptBundleOptions {
 }
 
 function parseTranscriptBundlePlatform(value: string): InstallPlatform {
-  if (value === "codex" || value === "claude" || value === "copilot" || value === "opencode") return value;
+  if (value === "codex" || value === "claude" || value === "copilot" || value === "opencode" || value === "cline") return value;
   throw new Error(`Invalid --platform ${value}.\n${usage("transcriptBundle")}`);
 }
 
@@ -798,7 +798,9 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
   console.log(`Database: ${result.databasePath}`);
   console.log("");
   console.log("Next steps:");
-  console.log("- Restart your coding agent if the new skills or hooks do not appear immediately.");
+  if (result.skills.length > 0 || result.hooks !== undefined) {
+    console.log("- Restart your coding agent if the new skills or hooks do not appear immediately.");
+  }
   if (result.hooks !== undefined) {
     console.log("- Accept or trust the installed hooks if your agent asks.");
   } else {

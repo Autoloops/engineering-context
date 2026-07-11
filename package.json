@@ -20,6 +20,7 @@
     "build": "tsc -p tsconfig.build.json",
     "prepare": "npm run build",
     "typecheck": "tsc --noEmit",
+    "smoke:cline": "npm run build && node scripts/smoke-cline-install.mjs",
     "smoke:openhands": "npm run build && node scripts/smoke-openhands-install.mjs",
     "smoke:copilot": "npm run build && node scripts/smoke-copilot-install.mjs",
     "smoke:opencode": "npm run build && node scripts/smoke-opencode-install.mjs",
@@ -55,6 +56,7 @@
   "files": [
     "dist/apps",
     "dist/libs",
+    "libs/install/platforms/assets",
     "scripts/check-node-version.js",
     "skills",
     "README.md"
