@@ -24,6 +24,7 @@
     "smoke:copilot": "npm run build && node scripts/smoke-copilot-install.mjs",
     "smoke:opencode": "npm run build && node scripts/smoke-opencode-install.mjs",
     "test": "npm run build && node scripts/check-transcript-bundle.js && node scripts/check-repo-context.js && node scripts/check-install-options.js && node scripts/check-graph-view.js && node scripts/check-proposal-validate.js && node scripts/check-bm25-tokenizer.js && node scripts/check-anchor-drift.js",
+    "test:graph-view-offline-browser": "npm run build && node scripts/check-graph-view-offline-browser.js",
     "test:transcript-bundle": "npm run build && node scripts/check-transcript-bundle.js",
     "test:repo-context": "npm run build && node scripts/check-repo-context.js",
     "eval:bootstrap-current": "npm run build && node dist/evals/cases/bootstrap-current-repo-at-8038fe8/run.js",
@@ -59,6 +60,8 @@
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
     "better-sqlite3": "^12.11.1",
+    "chart.js": "4.4.7",
+    "chartjs-plugin-datalabels": "2.2.0",
     "tree-sitter-wasms": "^0.1.13",
     "web-tree-sitter": "^0.24.7"
   },

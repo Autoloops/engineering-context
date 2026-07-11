@@ -1,8 +1,30 @@
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import type { Claim } from "../claim.js";
 import type { Edge } from "../edge.js";
 import type { GraphReadResult } from "../service.js";
 import type { Component, Flow, Source } from "../schema.js";
 import type { ClaimProvenanceRecord } from "../../storage/sqlite/repository.js";
+
+const require = createRequire(import.meta.url);
+
+// Inlined rather than loaded from a CDN so generated graph HTML remains a
+// self-contained artifact that renders with no network access. Versions are
+// pinned exactly in package.json, so the bundle contents are known at
+// publish time; the closing-tag check guards against a future version
+// introducing a literal "</script" that would truncate the embedding tag.
+// The dist file is resolved relative to the package's main entry (rather
+// than via a direct subpath) because chart.js's "exports" map does not
+// expose "./dist/chart.umd.js" as an importable subpath.
+function readVendorScript(packageName: string, distFileName: string): string {
+  const packageDir = dirname(require.resolve(packageName));
+  const contents = readFileSync(join(packageDir, distFileName), "utf8");
+  if (/<\/script/i.test(contents)) {
+    throw new Error(`vendor script ${packageName}/${distFileName} contains a literal "</script" and cannot be inlined safely`);
+  }
+  return contents;
+}
 
 export interface GraphViewComponentRow {
   id: string;
@@ -414,6 +436,8 @@ function renderHtml(data: GraphViewData, title: string): string {
 
   const defaultClaimsMeta = `${data.claims.length} active claims · session from evidenced_by source, otherwise from code`;
   const graphDataJson = jsonForScriptTag(data);
+  const chartJsSource = readVendorScript("chart.js", "chart.umd.js");
+  const chartDataLabelsSource = readVendorScript("chartjs-plugin-datalabels", "chartjs-plugin-datalabels.min.js");
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -862,8 +886,8 @@ ${timelineEvents}
     </main>
   </div>
   <script id="graph-data" type="application/json">${graphDataJson}</script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  <script>${chartJsSource}</script>
+  <script>${chartDataLabelsSource}</script>
   <script>
     if (window.Chart && window.ChartDataLabels) {
       Chart.register(ChartDataLabels);
