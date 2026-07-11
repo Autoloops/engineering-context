@@ -7,10 +7,11 @@
 // string checks in check-graph-view.js prove the HTML has no external
 // references, but not that the inlined code actually executes correctly.
 //
-// This is intentionally NOT wired into `npm test`: it depends on a system
-// Chrome/Chromium install, which isn't guaranteed on every dev machine or
-// CI runner. It skips (exit 0) when no browser binary is found. Run it
-// directly with: node scripts/check-graph-view-offline-browser.js
+// Runs as part of `npm test`, but depends on a system Chrome/Chromium/Edge
+// install, which isn't guaranteed on every dev machine or CI runner — so it
+// skips (exit 0, with a log line) rather than failing when no browser binary
+// is found. It can also be run on its own with:
+// node scripts/check-graph-view-offline-browser.js
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
