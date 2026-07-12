@@ -4,6 +4,7 @@ import type { Claim, ClaimKind } from "./claim.js";
 import type { Edge } from "./edge.js";
 import type { GraphReadResult } from "./service.js";
 import type { Component, Flow, Source } from "./schema.js";
+import { buildGraphHtmlExport } from "./html-export.js";
 
 export interface ExportedGraphFile {
   path: string;
@@ -34,6 +35,10 @@ export function buildGraphFolderExport(graph: GraphReadResult): ExportedGraphFil
     {
       path: "index.md",
       content: renderRootIndex(graph, components, flows),
+    },
+    {
+      path: "index.html",
+      content: buildGraphHtmlExport(graph),
     },
     {
       path: "sources.md",
