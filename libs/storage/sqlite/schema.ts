@@ -116,6 +116,13 @@ CREATE TABLE IF NOT EXISTS agent_worker_locks (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS git_watch_state (
+  repo_id TEXT PRIMARY KEY REFERENCES repos(id) ON DELETE CASCADE,
+  last_head TEXT NOT NULL,
+  last_full_audit_at TEXT,
+  updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS graph_scopes_repo_idx ON graph_scopes(repo_id);
 CREATE INDEX IF NOT EXISTS memory_commits_scope_idx ON memory_commits(scope_id);
 CREATE INDEX IF NOT EXISTS graph_memberships_scope_idx ON graph_memberships(scope_id);

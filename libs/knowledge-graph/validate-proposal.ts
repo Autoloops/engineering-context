@@ -3,16 +3,17 @@ import type { EdgeKind } from "./edge.js";
 import type { MemoryCommitProposal, ProposalSubject } from "./proposal.js";
 import type { GraphObjectType } from "./schema.js";
 
-const claimKinds = new Set(["fact", "requirement", "decision", "task", "question", "risk"]);
+const claimKinds = new Set(["fact", "requirement", "decision", "insight", "task", "question", "risk"]);
 const claimTruths = new Set(["code_verified", "source_verified", "unknown"]);
 const claimIntents = new Set(["intended", "accidental", "unknown"]);
-const sourceKinds = new Set(["session"]);
-const edgeKinds = new Set(["about", "contains", "touches", "supersedes", "evidenced_by"]);
+const sourceKinds = new Set(["session", "git_history"]);
+const edgeKinds = new Set(["about", "contains", "touches", "supersedes", "evidenced_by", "needs_review"]);
 const graphObjectTypes = new Set(["component", "flow", "claim", "edge", "source"]);
 const maxCodeAnchorsPerClaim = 3;
 
 export interface ExistingSubjectLookup {
   subjectExists(type: GraphObjectType, id: string): boolean;
+  claimNeedsReview?(id: string): boolean;
 }
 
 export interface ProposalValidationResult {
@@ -134,7 +135,13 @@ export function validateProposal(
       graphObjectTypes.has(fromType) &&
       graphObjectTypes.has(toType) &&
       edgeKinds.has(kind) &&
-      !isAllowedEdge({ from_type: fromType, to_type: toType, kind })
+      !isAllowedEdge({
+        from_id: String(edge.from_id),
+        from_type: fromType,
+        to_id: String(edge.to_id),
+        to_type: toType,
+        kind,
+      })
     ) {
       errors.push(`Edge ${stringId(edge.id)} has invalid direction for ${kind}.`);
     }
@@ -143,23 +150,45 @@ export function validateProposal(
       errors.push(`Edge ${stringId(edge.id)} metadata must be an object when present.`);
     }
 
-    if (kind === "evidenced_by") {
+    if (kind === "evidenced_by" || kind === "needs_review") {
       validateEvidenceMetadata(edge, errors);
+    }
+
+    if (kind !== "needs_review" && kind !== "supersedes") {
+      validateReviewedClaimReference(edge, existingSubjects, errors);
     }
   }
 
   return { valid: errors.length === 0, errors };
 }
 
+function validateReviewedClaimReference(
+  edge: Record<string, unknown>,
+  existingSubjects: ExistingSubjectLookup | undefined,
+  errors: string[],
+): void {
+  if (existingSubjects?.claimNeedsReview === undefined) return;
+  const references = [
+    edge.from_type === "claim" && typeof edge.from_id === "string" ? edge.from_id : undefined,
+    edge.to_type === "claim" && typeof edge.to_id === "string" ? edge.to_id : undefined,
+  ].filter((id): id is string => id !== undefined);
+  for (const claimId of new Set(references)) {
+    if (existingSubjects.claimNeedsReview(claimId)) {
+      errors.push(`Claim ${claimId} needs review before it can be referenced by new graph relationships.`);
+    }
+  }
+}
+
 function validateEvidenceMetadata(edge: Record<string, unknown>, errors: string[]): void {
+  const kind = String(edge.kind);
   if (!isRecord(edge.metadata)) {
-    errors.push(`Edge ${stringId(edge.id)} evidenced_by edges require metadata.reason.`);
+    errors.push(`Edge ${stringId(edge.id)} ${kind} edges require metadata.reason.`);
     return;
   }
 
   const reason = edge.metadata.reason;
   if (!isNonEmptyString(reason)) {
-    errors.push(`Edge ${stringId(edge.id)} evidenced_by metadata.reason must be a non-empty string.`);
+    errors.push(`Edge ${stringId(edge.id)} ${kind} metadata.reason must be a non-empty string.`);
   }
 }
 

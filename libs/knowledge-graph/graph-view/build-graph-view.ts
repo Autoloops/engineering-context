@@ -49,8 +49,10 @@ export interface GraphViewClaimRow {
   text: string;
   kind: string;
   session: string;
-  source: "code" | "session";
+  source: "code" | "session" | "git_history";
   freshness: "active" | "superseded";
+  review: "current" | "needs_review";
+  reviewReasons: string[];
   componentIds: string[];
   flowIds: string[];
   createdAt: string | null;
@@ -72,6 +74,7 @@ export interface GraphViewData {
     flows: number;
     claims: number;
     superseded: number;
+    needsReview: number;
   };
   components: GraphViewComponentRow[];
   flows: GraphViewFlowRow[];
@@ -87,11 +90,12 @@ export interface BuildGraphViewOptions {
   repoName?: string;
 }
 
-const CLAIM_KIND_ORDER = ["fact", "decision", "requirement", "task", "risk", "question"];
+const CLAIM_KIND_ORDER = ["fact", "decision", "insight", "requirement", "task", "risk", "question"];
 
 const CLAIM_KIND_COLORS: Record<string, string> = {
   fact: "#4e79a7",
   decision: "#59a14f",
+  insight: "#af7aa1",
   requirement: "#f28e2b",
   task: "#b07aa1",
   risk: "#e15759",
@@ -105,6 +109,7 @@ export function buildGraphViewData(
 ): GraphViewData {
   const provenanceByClaimId = new Map(provenance.map((row) => [row.claim_id, row]));
   const sourceById = new Map(graph.sources.map((source) => [source.id, source]));
+  const reviewReasonsByClaimId = needsReviewReasonsByClaimId(graph.edges);
   const topLevelComponents = selectTopLevelComponents(graph.components, graph.edges);
   const components = topLevelComponents.map((component) => ({
     id: component.id,
@@ -138,8 +143,10 @@ export function buildGraphViewData(
       text: claim.text,
       kind: claim.kind,
       session,
-      source: isFromSession(session) ? "session" : "code",
+      source: sourceKindForClaim(claim.id, graph.edges, sourceById),
       freshness,
+      review: reviewReasonsByClaimId.has(claim.id) ? "needs_review" : "current",
+      reviewReasons: reviewReasonsByClaimId.get(claim.id) ?? [],
       componentIds: componentIdsForClaim(claim.id, graph.edges),
       flowIds: flowIdsForClaim(claim.id, graph.edges),
       createdAt: record?.created_at ?? null,
@@ -163,6 +170,7 @@ export function buildGraphViewData(
       flows: flows.length,
       claims: claims.length,
       superseded: superseded.length,
+      needsReview: claims.filter((claim) => claim.review === "needs_review").length,
     },
     components,
     flows,
@@ -289,6 +297,30 @@ function sessionLabelForClaim(claimId: string, edges: Edge[], sourceById: Map<st
   return labels.length > 0 ? labels.join("; ") : "from code";
 }
 
+function sourceKindForClaim(
+  claimId: string,
+  edges: Edge[],
+  sourceById: Map<string, Source>,
+): GraphViewClaimRow["source"] {
+  const sourceKinds = edges
+    .filter((edge) => edge.kind === "evidenced_by" && edge.from_id === claimId)
+    .map((edge) => sourceById.get(edge.to_id)?.kind);
+  if (sourceKinds.includes("git_history")) return "git_history";
+  return sourceKinds.includes("session") ? "session" : "code";
+}
+
+function needsReviewReasonsByClaimId(edges: Edge[]): Map<string, string[]> {
+  const reasons = new Map<string, string[]>();
+  for (const edge of edges) {
+    if (edge.kind !== "needs_review" || edge.from_type !== "claim") continue;
+    const reason = typeof edge.metadata?.reason === "string" ? edge.metadata.reason : "anchor_stale";
+    const existing = reasons.get(edge.from_id) ?? [];
+    if (!existing.includes(reason)) existing.push(reason);
+    reasons.set(edge.from_id, existing);
+  }
+  return reasons;
+}
+
 function isFromSession(session: string): boolean {
   return session !== "from code";
 }
@@ -385,7 +417,10 @@ function kindColor(kind: string): string {
 
 function renderClaimRow(claim: GraphViewClaimRow): string {
   const badge = `<span class="kind-badge" style="background:${kindColor(claim.kind)}">${escapeHtml(claim.kind)}</span>`;
-  return `          <tr data-id="${escapeHtml(claim.id)}" data-kind="${escapeHtml(claim.kind)}" data-source="${escapeHtml(claim.source)}" data-freshness="${escapeHtml(claim.freshness)}" data-memory-commit-id="${escapeHtml(claim.memoryCommitId ?? "")}"><td class="claim-text">${escapeHtml(claim.text)}<div class="claim-id"><code>${escapeHtml(claim.id)}</code></div></td><td class="session">${escapeHtml(claim.session)}</td><td class="kind-cell">${badge}</td><td class="created">${escapeHtml(formatDateTime(claim.createdAt))}</td></tr>`;
+  const warning = claim.review === "needs_review"
+    ? `<span class="review-warning" title="${escapeHtml(claim.reviewReasons.join(", "))}" aria-label="Needs review">&#9888;</span>`
+    : "";
+  return `          <tr data-id="${escapeHtml(claim.id)}" data-kind="${escapeHtml(claim.kind)}" data-source="${escapeHtml(claim.source)}" data-freshness="${escapeHtml(claim.freshness)}" data-review="${escapeHtml(claim.review)}" data-memory-commit-id="${escapeHtml(claim.memoryCommitId ?? "")}"><td class="claim-text">${warning}${escapeHtml(claim.text)}<div class="claim-id"><code>${escapeHtml(claim.id)}</code></div></td><td class="session">${escapeHtml(claim.session)}</td><td class="kind-cell">${badge}</td><td class="created">${escapeHtml(formatDateTime(claim.createdAt))}</td></tr>`;
 }
 
 function renderHtml(data: GraphViewData, title: string): string {
@@ -434,7 +469,7 @@ function renderHtml(data: GraphViewData, title: string): string {
     })
     .join("\n");
 
-  const defaultClaimsMeta = `${data.claims.length} active claims · session from evidenced_by source, otherwise from code`;
+  const defaultClaimsMeta = `${data.claims.length} active claims · ${data.counts.needsReview} need review`;
   const graphDataJson = jsonForScriptTag(data);
   const chartJsSource = readVendorScript("chart.js", "chart.umd.js");
   const chartDataLabelsSource = readVendorScript("chartjs-plugin-datalabels", "chartjs-plugin-datalabels.min.js");
@@ -612,6 +647,11 @@ function renderHtml(data: GraphViewData, title: string): string {
       font-weight: 600;
       color: #fff;
       text-transform: capitalize;
+    }
+    .review-warning {
+      color: #b45309;
+      cursor: help;
+      margin-right: 0.45rem;
     }
     td.created {
       white-space: nowrap;
@@ -806,6 +846,7 @@ function renderHtml(data: GraphViewData, title: string): string {
       <a href="#components" data-view="components">Components</a>
       <a href="#flows" data-view="flows">Flows</a>
       <a href="#claims" data-view="claims">Claims</a>
+      <a href="#claims?review=needs_review" data-view="claims" class="nav-nested">Claims - Needs review</a>
       <a href="#claims-timeline" data-view="claims-timeline" class="nav-nested">Claims - Timeline</a>
       <a href="#claims-overview" data-view="claims-overview" class="nav-nested">Claims - Overview</a>
     </nav>
@@ -902,7 +943,7 @@ ${timelineEvents}
 
     const CLAIM_KIND_ORDER = ${JSON.stringify(CLAIM_KIND_ORDER)};
     const CLAIM_KIND_COLORS = ${JSON.stringify(CLAIM_KIND_COLORS)};
-    const SOURCE_COLORS = { code: "#4e79a7", session: "#f28e2b" };
+    const SOURCE_COLORS = { code: "#4e79a7", session: "#f28e2b", git_history: "#59a14f" };
     const FRESHNESS_COLORS = { active: "#59a14f", superseded: "#bab0ac" };
 
     const allClaims = graphData.claims.concat(graphData.supersededClaims);
@@ -1083,13 +1124,16 @@ ${timelineEvents}
 
       let codeCount = 0;
       let sessionCount = 0;
+      let gitHistoryCount = 0;
       for (const claim of graphData.claims) {
         if (claim.source === "session") sessionCount += 1;
+        else if (claim.source === "git_history") gitHistoryCount += 1;
         else codeCount += 1;
       }
       renderOverviewChart("chart-source", "legend-source", [
         { label: "from code", count: codeCount, color: SOURCE_COLORS.code, href: "#claims?source=code" },
         { label: "from session", count: sessionCount, color: SOURCE_COLORS.session, href: "#claims?source=session" },
+        { label: "from git history", count: gitHistoryCount, color: SOURCE_COLORS.git_history, href: "#claims?source=git_history" },
       ]);
 
       renderOverviewChart("chart-freshness", "legend-freshness", [
@@ -1107,7 +1151,7 @@ ${timelineEvents}
     }
 
     function filterFromParams(params) {
-      for (const type of ["component", "flow", "kind", "source", "freshness", "commit"]) {
+      for (const type of ["component", "flow", "kind", "source", "freshness", "review", "commit"]) {
         const value = params.get(type);
         if (value) return { type, value };
       }
@@ -1136,9 +1180,12 @@ ${timelineEvents}
         case "kind":
           return "of type " + filter.value;
         case "source":
-          return filter.value === "session" ? "from session" : "from code";
+          if (filter.value === "session") return "from session";
+          return filter.value === "git_history" ? "from git history" : "from code";
         case "freshness":
           return filter.value === "superseded" ? "superseded" : "active";
+        case "review":
+          return filter.value === "needs_review" ? "needing review" : "current";
         case "commit": {
           const event = graphData.claimsTimeline.events.find((item) => item.memoryCommitId === filter.value);
           if (event && event.createdAt) return "from commit on " + formatDateTimeClient(event.createdAt);
@@ -1156,6 +1203,7 @@ ${timelineEvents}
       if (freshness !== "active") return false;
       if (filter.type === "kind") return row.dataset.kind === filter.value;
       if (filter.type === "source") return row.dataset.source === filter.value;
+      if (filter.type === "review") return row.dataset.review === filter.value;
       if (filter.type === "commit") return row.dataset.memoryCommitId === filter.value;
       if (filter.type === "component") {
         return (componentIdsByClaim.get(row.dataset.id) || []).includes(filter.value);

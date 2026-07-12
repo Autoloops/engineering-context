@@ -79,6 +79,13 @@ export interface ClaimProvenanceRecord {
   memory_commit_id: string;
 }
 
+export interface GitWatchStateRecord {
+  repo_id: string;
+  last_head: string;
+  last_full_audit_at: string | null;
+  updated_at: string;
+}
+
 export class SqliteRepository {
   constructor(private readonly db: Database.Database) {}
 
@@ -234,6 +241,35 @@ export class SqliteRepository {
            AND gs.kind IN ('main', 'working')`,
       )
       .all(repoId) as ClaimProvenanceRecord[];
+  }
+
+  getGitWatchState(repoId: string): GitWatchStateRecord | undefined {
+    return this.db.prepare("SELECT * FROM git_watch_state WHERE repo_id = ?").get(repoId) as GitWatchStateRecord | undefined;
+  }
+
+  upsertGitWatchState(input: GitWatchStateRecord): void {
+    this.db
+      .prepare(
+        `INSERT INTO git_watch_state (repo_id, last_head, last_full_audit_at, updated_at)
+         VALUES (@repo_id, @last_head, @last_full_audit_at, @updated_at)
+         ON CONFLICT(repo_id) DO UPDATE SET
+           last_head = excluded.last_head,
+           last_full_audit_at = excluded.last_full_audit_at,
+           updated_at = excluded.updated_at`,
+      )
+      .run(input);
+  }
+
+  claimNeedsReview(repoId: string, claimId: string): boolean {
+    const row = this.db
+      .prepare(
+        `SELECT id FROM edges
+         WHERE repo_id = ? AND kind = 'needs_review'
+           AND from_type = 'claim' AND from_id = ?
+         LIMIT 1`,
+      )
+      .get(repoId, claimId);
+    return row !== undefined;
   }
 
   // Baseline anchor fingerprints stored when each claim was written, keyed by
