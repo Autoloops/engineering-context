@@ -1,0 +1,1 @@
+Some users are seeing Google sync/auth errors around startup, disabled sync, and certain browsers, but the failures are inconsistent. Can you investigate the extension startup path, cloud-sync lifecycle, identity API timing, settings state, and browser differences enough to plan the safest fix and rollout?

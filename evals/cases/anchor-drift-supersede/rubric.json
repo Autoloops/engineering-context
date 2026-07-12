@@ -1,0 +1,47 @@
+{
+  "case_id": "anchor-drift-supersede",
+  "base_commit": "cd363e28ca71bf265f654a7b22cf2cfa5282b520",
+  "score": {
+    "pass_threshold": 80,
+    "supersede_recall_points": 45,
+    "correction_quality_points": 45,
+    "leave_fresh_points": 10,
+    "false_supersede_penalty": 30
+  },
+  "stale_claims": [
+    {
+      "id": "claim.default_embedding_model",
+      "patched_fact": "The default local embedding model is now all-MiniLM-L6-v2 with 384 dimensions (was all-mpnet-base-v2 with 768)."
+    },
+    {
+      "id": "claim.minimum_selected_claims",
+      "patched_fact": "Ranking now selects at least 5 claims (minimumSelectedClaims = 5, was 3)."
+    }
+  ],
+  "fresh_claims": [
+    "claim.default_database_path",
+    "claim.database_enables_foreign_keys"
+  ],
+  "judge": {
+    "instructions": [
+      "Classify whether the candidate update proposal correctly re-verifies each stale claim after the session patch.",
+      "Do not compute a numeric score. The eval runner computes all scores locally.",
+      "The session patch changed only libs/knowledge-graph/graph-context/config.ts. Use patch_summary and each stale claim's patched_fact as the only truth about the new code.",
+      "For each stale claim, decide whether the candidate proposal contains a replacement claim that states the patched fact. Match by meaning, not by claim id or exact wording.",
+      "Set correction_present true when any candidate claim supersedes or restates that stale claim's topic, even if the value is wrong.",
+      "Set correction_correct true only when the replacement claim states the new patched value accurately (e.g. all-MiniLM-L6-v2 / 384, or minimumSelectedClaims 5). A replacement that repeats the old value is not correct.",
+      "Judge only the two stale claims listed. Do not reward or penalize claims about storage or unrelated topics here; the runner checks those structurally."
+    ],
+    "patch_summary": "config.ts: graphContextConfig.embedding.model all-mpnet-base-v2 -> all-MiniLM-L6-v2 and dimensions 768 -> 384; rankingConfig.minimumSelectedClaims 3 -> 5.",
+    "corrections": [
+      {
+        "stale_claim_id": "claim.default_embedding_model",
+        "expected_correction": "A replacement claim states the default local embedding is now all-MiniLM-L6-v2 with 384 dimensions."
+      },
+      {
+        "stale_claim_id": "claim.minimum_selected_claims",
+        "expected_correction": "A replacement claim states minimumSelectedClaims is now 5."
+      }
+    ]
+  }
+}

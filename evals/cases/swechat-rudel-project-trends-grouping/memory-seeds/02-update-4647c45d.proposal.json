@@ -1,0 +1,245 @@
+{
+  "title": "Update working memory from session",
+  "summary": "Durable context learned during the current coding session.",
+  "creates": {
+    "components": [],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.project_identity_raw_clickhouse_fields",
+        "kind": "fact",
+        "text": "ClickHouse session storage keeps project identity as separate raw fields: project_path, git_remote, package_name, and package_type; base session and session analytics schemas do not define a stored repository fallback column.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.clickhouse_storage",
+          "flow.session_ingest"
+        ],
+        "code_anchors": [
+          {
+            "file": "packages/ch-schema/src/db/schema/base-sessions.ts"
+          },
+          {
+            "file": "packages/ch-schema/src/db/schema/session-analytics.ts"
+          }
+        ]
+      },
+      {
+        "id": "claim.developer_detail_project_name_helper",
+        "kind": "fact",
+        "text": "DeveloperDetailPage has a read-side project-name resolver that displays the last segment of git_remote with the full remote as tooltip, then package_name, then the last segment of project_path; the page uses it for the projects chart, project filter labels, and session history project cells.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.web_dashboard",
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/web/src/pages/dashboard/DeveloperDetailPage.tsx",
+            "symbol": "resolveProjectName"
+          },
+          {
+            "file": "apps/web/src/pages/dashboard/DeveloperDetailPage.tsx",
+            "symbol": "DeveloperDetailPage"
+          }
+        ]
+      },
+      {
+        "id": "claim.developer_project_identity_contract_gap",
+        "kind": "risk",
+        "text": "DeveloperSessionSchema and DeveloperProjectSchema still expose project_path but not git_remote or package_name, so the developer detail frontend cannot receive the raw project identity fields through the shared API contract yet.",
+        "truth": "code_verified",
+        "intent": "accidental",
+        "about": [
+          "component.api_contract",
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "packages/api-routes/src/schemas/analytics.ts",
+            "symbol": "DeveloperSessionSchema"
+          },
+          {
+            "file": "packages/api-routes/src/schemas/analytics.ts",
+            "symbol": "DeveloperProjectSchema"
+          }
+        ]
+      },
+      {
+        "id": "claim.developer_service_project_identity_gap",
+        "kind": "risk",
+        "text": "getDeveloperSessions and getDeveloperProjects still select and group by project_path without selecting git_remote or package_name, and they return a service-local project_name derived from project_path via extractProjectName.",
+        "truth": "code_verified",
+        "intent": "accidental",
+        "about": [
+          "component.api_http",
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/api/src/services/developer.service.ts",
+            "symbol": "getDeveloperSessions"
+          },
+          {
+            "file": "apps/api/src/services/developer.service.ts",
+            "symbol": "getDeveloperProjects"
+          }
+        ]
+      },
+      {
+        "id": "claim.project_identity_fallback_read_side_decision",
+        "kind": "decision",
+        "text": "Project identity fallback should be computed on the read path or in the frontend from git_remote, package_name, and project_path rather than during ingest.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.session_ingest",
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/web/src/pages/dashboard/DeveloperDetailPage.tsx",
+            "symbol": "resolveProjectName"
+          },
+          {
+            "file": "packages/ch-schema/src/db/schema/base-sessions.ts"
+          }
+        ]
+      },
+      {
+        "id": "claim.repository_not_canonical_project_identity",
+        "kind": "decision",
+        "text": "For developer project-name resolution, repository should not be treated as the canonical display source because it represents a precomputed fallback; future work should preserve git_remote, package metadata, and project_path as separate canonical inputs.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.clickhouse_storage",
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "packages/ch-schema/src/db/schema/base-sessions.ts"
+          },
+          {
+            "file": "packages/ch-schema/src/db/schema/session-analytics.ts"
+          }
+        ]
+      },
+      {
+        "id": "claim.project_path_preserved_for_developer_filters",
+        "kind": "decision",
+        "text": "project_path remains part of the developer project identity model for filtering and grouping, but it should be the final display-name fallback after git_remote and package_name because it is a user-local filesystem path.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.api_http",
+          "component.web_dashboard",
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/api/src/services/developer.service.ts",
+            "symbol": "getDeveloperProjects"
+          },
+          {
+            "file": "apps/web/src/pages/dashboard/DeveloperDetailPage.tsx",
+            "symbol": "resolveProjectName"
+          }
+        ]
+      },
+      {
+        "id": "claim.finish_developer_project_identity_api_read_path",
+        "kind": "task",
+        "text": "Finish the developer project-identity read path by adding git_remote and package_name to DeveloperSessionSchema and DeveloperProjectSchema, selecting those fields in getDeveloperSessions, and aggregating them with any(...) in getDeveloperProjects.",
+        "truth": "unknown",
+        "intent": "intended",
+        "about": [
+          "component.api_contract",
+          "component.api_http",
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "packages/api-routes/src/schemas/analytics.ts",
+            "symbol": "DeveloperSessionSchema"
+          },
+          {
+            "file": "apps/api/src/services/developer.service.ts",
+            "symbol": "getDeveloperSessions"
+          },
+          {
+            "file": "apps/api/src/services/developer.service.ts",
+            "symbol": "getDeveloperProjects"
+          }
+        ]
+      },
+      {
+        "id": "claim.remove_developer_service_project_path_display_name",
+        "kind": "task",
+        "text": "After raw project identity fields are exposed for developer analytics, remove the service-local extractProjectName/project_name path fallback from developer.service.ts because display-name resolution belongs in the read/frontend fallback chain.",
+        "truth": "unknown",
+        "intent": "intended",
+        "about": [
+          "component.api_http",
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/api/src/services/developer.service.ts"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.4647c45d_0862_41eb_8eb4_f920ae54f1b4",
+        "kind": "session",
+        "ref": "claude-code-session:4647c45d-0862-41eb-8eb4-f920ae54f1b4",
+        "title": "Claude Code session: Developer name resolution and analytics cleanup"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.project_identity_fallback_read_side_decision",
+        "to": "source.claude_code_session.4647c45d_0862_41eb_8eb4_f920ae54f1b4",
+        "metadata": {
+          "reason": "The user explicitly corrected the initial approach, saying git_remote, project_path, and the package-derived project name should remain separate fields and fallback should happen on read or in the frontend, not during ingest."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.repository_not_canonical_project_identity",
+        "to": "source.claude_code_session.4647c45d_0862_41eb_8eb4_f920ae54f1b4",
+        "metadata": {
+          "reason": "The session reconsidered the existing repository column and identified it as a precomputed fallback that conflicted with the user's requested separate raw-field model."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.project_path_preserved_for_developer_filters",
+        "to": "source.claude_code_session.4647c45d_0862_41eb_8eb4_f920ae54f1b4",
+        "metadata": {
+          "reason": "The user asked whether project_path still exists, and the session clarified that project_path remains as the raw filesystem path but should not be the preferred human display label."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.finish_developer_project_identity_api_read_path",
+        "to": "source.claude_code_session.4647c45d_0862_41eb_8eb4_f920ae54f1b4",
+        "metadata": {
+          "reason": "The updated plan created during the session lists the remaining read-side work to expose git_remote and package_name in the shared schemas and developer service queries."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.remove_developer_service_project_path_display_name",
+        "to": "source.claude_code_session.4647c45d_0862_41eb_8eb4_f920ae54f1b4",
+        "metadata": {
+          "reason": "The updated session plan calls out extractProjectName/project_name as a service-local display fallback that should be removed once raw project identity fields are exposed."
+        }
+      }
+    ]
+  }
+}

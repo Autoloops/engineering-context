@@ -1,0 +1,11 @@
+{
+  "title": "Update working memory from session 8016a255",
+  "summary": "No durable working-memory changes were recoverable from the metadata-only historical transcript.",
+  "creates": {
+    "components": [],
+    "flows": [],
+    "claims": [],
+    "sources": [],
+    "edges": []
+  }
+}

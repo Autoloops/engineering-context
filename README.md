@@ -118,7 +118,7 @@ Current showcase rows:
 ## Commands
 
 ```bash
-greplica install --platform codex|claude|copilot|opencode|openhands|factory-droid|antigravity --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]
+greplica install --platform codex|claude|copilot|cursor|opencode|openhands|factory-droid|antigravity --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]
 greplica config
 greplica doctor [--check-embeddings]
 greplica graph read
@@ -139,6 +139,8 @@ greplica proposal apply <proposal.json>
 - `greplica install` prepares repo state, local storage, and agent integration; normal repo commands require install first.
 
 For **OpenHands**, install is repo-local: skills are written to `.agents/skills/` and the `UserPromptSubmit`/`Stop` hooks to `.openhands/hooks.json` (Claude/Codex/Copilot install to the agent's home config instead). GitHub Copilot CLI installs personal skills under `~/.copilot/skills` (or `$COPILOT_HOME/skills`) and user hooks under `~/.copilot/hooks/greplica.json`. The hooks inject `graph context` guidance and trigger background working-memory updates; OpenHands must trust the repo hooks for the background save to run.
+
+For **Cursor**, skills are written to `~/.cursor/skills` and the `beforeSubmitPrompt`/`stop` hooks to `~/.cursor/hooks.json` (both overridable via `$CURSOR_HOME`). `greplica-bootstrap` and `greplica graph context` guidance is delivered through an always-applied project rule at `.cursor/rules/greplica.mdc` rather than the hook, because Cursor's `beforeSubmitPrompt` hook cannot inject prompt context; the hooks track sessions and trigger `greplica-update-working-memory`. A user-authored `greplica.mdc` is never overwritten (install falls back to `greplica-N.mdc`). Reload Cursor if the new rule does not appear immediately. Background working-memory updates run the Cursor CLI (`cursor-agent`), so that must be installed and authenticated for automatic saves; session tracking and guidance work without it.
 
 ## License
 

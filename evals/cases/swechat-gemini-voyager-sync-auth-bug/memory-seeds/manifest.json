@@ -1,0 +1,8 @@
+{
+  "apply_order": [
+    "00-bootstrap.proposal.json",
+    "01-update-96b73801.proposal.json",
+    "02-update-72a86ca0.proposal.json",
+    "03-update-1ead0508.proposal.json"
+  ]
+}

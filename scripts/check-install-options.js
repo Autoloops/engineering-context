@@ -66,6 +66,16 @@ assert.match(copilotHooks.output, /Automatic memory updates: enabled\./);
 assert.ok(existsSync(join(copilotHooks.copilotHome, "hooks", "greplica.json")));
 assert.equal(readConfig(copilotHooks.greplicaHome).session.autoMemoryUpdates, true);
 
+const cursorHooks = installInTempRepo("cursor-hooks", ["--hooks", "enabled", "--auto-memory", "enabled"], "cursor");
+assert.match(cursorHooks.output, /Installed Greplica for Cursor\./);
+assert.match(cursorHooks.output, /Hooks: installed for beforeSubmitPrompt, stop\./);
+assert.match(cursorHooks.output, /Project rules: .*\.cursor\/rules\/greplica\.mdc/);
+assert.match(cursorHooks.output, /Automatic memory updates: enabled\./);
+assert.doesNotMatch(cursorHooks.output, /automatic memory updates are not supported yet/);
+assert.ok(existsSync(join(cursorHooks.cursorHome, "hooks.json")));
+assert.ok(existsSync(join(cursorHooks.repo, ".cursor", "rules", "greplica.mdc")));
+assert.equal(readConfig(cursorHooks.greplicaHome).session.autoMemoryUpdates, true);
+
 const invalid = spawnSync(
   process.execPath,
   [
@@ -128,6 +138,7 @@ function installInTempRepo(name, flags, platform = "codex") {
   const greplicaHome = join(tmp, name, "greplica-home");
   const codexHome = join(tmp, name, "codex-home");
   const copilotHome = join(tmp, name, "copilot-home");
+  const cursorHome = join(tmp, name, "cursor-home");
   const xdgConfigHome = join(tmp, name, "xdg-config-home");
   mkdirSync(repo, { recursive: true });
   execFileSync("git", ["init", "--quiet"], { cwd: repo, encoding: "utf8" });
@@ -137,6 +148,7 @@ function installInTempRepo(name, flags, platform = "codex") {
     GREPLICA_HOME: greplicaHome,
     CODEX_HOME: codexHome,
     COPILOT_HOME: copilotHome,
+    CURSOR_HOME: cursorHome,
     XDG_CONFIG_HOME: xdgConfigHome,
     GREPLICA_INSTALL_SKIP_PREWARM: "1",
   };
@@ -154,7 +166,7 @@ function installInTempRepo(name, flags, platform = "codex") {
     encoding: "utf8",
     env,
   });
-  return { repo, greplicaHome, codexHome, copilotHome, xdgConfigHome, output, env };
+  return { repo, greplicaHome, codexHome, copilotHome, cursorHome, xdgConfigHome, output, env };
 }
 
 function readConfig(greplicaHome) {

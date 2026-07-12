@@ -150,7 +150,7 @@ const cliCommands = [
   {
     key: "hookIngest",
     path: ["hook", "ingest"],
-    usage: "hook ingest --platform codex|claude|copilot|opencode|openhands|factory-droid",
+    usage: "hook ingest --platform codex|claude|copilot|cursor|opencode|openhands|factory-droid",
     handler: runHookIngest,
   },
   {
@@ -316,6 +316,13 @@ async function runProposalValidateCommand(args: string[]): Promise<void> {
   const result = await service.validateProposal(repo, proposal);
   if (result.valid) {
     console.log("Proposal is valid.");
+    for (const [claimId, matches] of Object.entries(result.duplicate_warnings)) {
+      for (const match of matches) {
+        console.log(
+          `Warning: claim "${claimId}" is similar to existing claim "${match.claim_id}" (similarity: ${match.similarity.toFixed(4)}). Consider using supersedes instead.`,
+        );
+      }
+    }
     return;
   }
   console.log("Proposal is invalid:");
@@ -520,7 +527,7 @@ function parseHookIngestPlatform(args: string[]): InstallPlatform {
 }
 
 function parseHookPlatform(value: string | undefined): InstallPlatform {
-  if (value === "codex" || value === "claude" || value === "copilot" || value === "opencode" || value === "openhands" || value === "factory-droid") return value;
+  if (value === "codex" || value === "claude" || value === "copilot" || value === "cursor" || value === "opencode" || value === "openhands" || value === "factory-droid") return value;
   throw new Error(usage("hookIngest"));
 }
 
@@ -791,6 +798,10 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
     console.log("Hooks: not installed for this platform.");
   } else {
     console.log("Hooks: not installed.");
+  }
+  if (result.rules !== undefined) {
+    console.log(`Project rules: ${result.rules.configFiles.join(", ")}`);
+    console.log("- note: reload your editor if the new project rule does not appear immediately.");
   }
   console.log(`Automatic memory updates: ${result.session.autoMemoryUpdates ? "enabled" : "disabled"}.`);
   console.log(`Embedding: ${result.embedding}.`);

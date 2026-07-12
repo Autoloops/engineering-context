@@ -1,0 +1,133 @@
+{
+  "title": "Update working memory from Telegram channel docs refresh",
+  "summary": "Durable context learned during the historical session about Telegram allowlist documentation, shared channel access-control docs, Slack docs, and config-template drift.",
+  "creates": {
+    "components": [],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.telegram_channel_manual_config_allowlist_strings",
+        "kind": "fact",
+        "text": "Manual Telegram channel configuration uses the `allowlist` field with string entries for numeric user IDs or usernames; `allowed_users` is not the Moltis manual config field, and DM access checks both the peer ID and username.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.channels",
+          "component.config"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/telegram/src/config.rs",
+            "symbol": "TelegramAccountConfig"
+          },
+          {
+            "file": "crates/telegram/src/access.rs",
+            "symbol": "check_access"
+          },
+          {
+            "file": "docs/src/telegram.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.channel_docs_centralize_access_control_model",
+        "kind": "fact",
+        "text": "The channel overview documentation centralizes the shared access-control model for external channels: DM policy, group policy, mention mode, string allowlist matching, and OTP self-approval, while noting that group allowlist field names vary by channel.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.docs",
+          "component.channels"
+        ],
+        "code_anchors": [
+          {
+            "file": "docs/src/channels.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.config_template_channel_examples_refreshed",
+        "kind": "fact",
+        "text": "The default config template's channel examples now show Telegram with `allowlist` strings plus access, group, OTP, reply, and streaming fields, and include a Slack bot section with Socket Mode, Events API, access-control, streaming, and thread-reply fields.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.config",
+          "component.channels"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/config/src/template.rs",
+            "symbol": "default_config_template"
+          }
+        ]
+      },
+      {
+        "id": "claim.channel_docs_refresh_source_of_truth_rationale",
+        "kind": "decision",
+        "text": "The channel documentation refresh was driven by OpenClaw-to-Moltis user feedback showing obsolete Telegram docs with `allowed_users = [123456789]`; future channel docs should be checked against the channel config/access source code when documenting fields, types, migration notes, or allowlist behavior.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.docs",
+          "component.channels",
+          "component.config"
+        ],
+        "code_anchors": [
+          {
+            "file": "docs/src/configuration.md"
+          },
+          {
+            "file": "docs/src/telegram.md"
+          },
+          {
+            "file": "crates/telegram/src/config.rs",
+            "symbol": "TelegramAccountConfig"
+          }
+        ]
+      },
+      {
+        "id": "claim.slack_docs_placeholder_tokens_must_be_obviously_fake",
+        "kind": "requirement",
+        "text": "Slack documentation examples should use obviously fake placeholder tokens rather than realistic Slack token-looking values that can trigger GitHub secret scanning.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.docs",
+          "component.channels"
+        ],
+        "code_anchors": [
+          {
+            "file": "docs/src/slack.md"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.c30a760b_775f_4ceb_bb2d_970393abc9df",
+        "kind": "session",
+        "ref": "claude-code-session:c30a760b-775f-4ceb-bb2d-970393abc9df",
+        "title": "Claude Code session: Telegram bot config feedback"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.channel_docs_refresh_source_of_truth_rationale",
+        "to": "source.claude_code_session.c30a760b_775f_4ceb_bb2d_970393abc9df",
+        "metadata": {
+          "reason": "Transcript lines 17-51 describe the user report from an OpenClaw migration and the obsolete Telegram example; lines 71-79 show the agent choosing to fix docs and template from source-code findings."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.slack_docs_placeholder_tokens_must_be_obviously_fake",
+        "to": "source.claude_code_session.c30a760b_775f_4ceb_bb2d_970393abc9df",
+        "metadata": {
+          "reason": "Transcript lines 160-164 record that GitHub secret scanning flagged Slack token examples and the session amended the docs to use clearly fake placeholders before pushing."
+        }
+      }
+    ]
+  }
+}

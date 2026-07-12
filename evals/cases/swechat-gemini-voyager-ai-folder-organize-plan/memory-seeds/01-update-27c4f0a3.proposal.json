@@ -1,0 +1,240 @@
+{
+  "title": "Update working memory from folder manual ordering session",
+  "summary": "Durable context from the historical session that implemented persisted manual ordering for Gemini Voyager folders and folder conversations, plus one unresolved Timeline storage-access report.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.folder_manager",
+        "name": "Folder manager",
+        "code_anchor": "src/pages/content/folder/manager.ts"
+      },
+      {
+        "id": "component.timeline_manager",
+        "name": "Timeline manager",
+        "code_anchor": "src/pages/content/timeline/manager.ts"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.folder_manual_ordering",
+        "name": "Folder manual ordering",
+        "touches": [
+          "component.folder_model",
+          "component.folder_manager"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.folder_manual_ordering_migrates_sort_indices",
+        "kind": "fact",
+        "text": "Folder data integrity now migrates missing manual-order indexes on load: folders without sortIndex are indexed in their current name-collated sibling order, and folder conversations without sortIndex are indexed in their current lastOpenedAt/addedAt time order.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_manager",
+          "component.folder_model",
+          "flow.folder_manual_ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.ensureSortIndices"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_manual_ordering_sort_precedence",
+        "kind": "fact",
+        "text": "Folder sidebar sorting keeps pinned folders ahead of unpinned folders and starred conversations ahead of normal conversations; within those groups it sorts by sortIndex when both items have one, then falls back to folder name collation or conversation lastOpenedAt/addedAt time.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_manager",
+          "component.folder_model",
+          "flow.folder_manual_ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.sortFolders"
+          },
+          {
+            "file": "src/pages/content/folder/conversationSort.ts",
+            "symbol": "sortConversationsByPriority"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_manual_ordering_drop_targets",
+        "kind": "fact",
+        "text": "Manual ordering uses different drop targets for folders and conversations: folders use reorder gap elements between folder items, while conversations use top/bottom half detection on the conversation element itself and mark the target with above/below indicator classes.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_manager",
+          "flow.folder_manual_ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.createReorderGap"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.setupConversationReorderZone"
+          },
+          {
+            "file": "public/contentStyle.css"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_manual_ordering_reassigns_sibling_indexes",
+        "kind": "fact",
+        "text": "When a folder or folder conversation is reordered or moved at a specific position, FolderManager inserts it into the sorted same-group sibling list, reassigns sortIndex values for the affected siblings, saves folder data, and refreshes the folder UI.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_manager",
+          "component.folder_model",
+          "flow.folder_manual_ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.reorderFolder"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.reorderOrMoveConversations"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_manual_ordering_keeps_click_time_as_migration_fallback",
+        "kind": "decision",
+        "text": "The session intentionally accepted that migrating every existing conversation to sortIndex effectively cancels click-driven lastOpenedAt reordering after migration; lastOpenedAt remains useful as the initial migration and fallback signal so later clicks do not disturb a user's manual order.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_manager",
+          "flow.folder_manual_ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.ensureSortIndices"
+          },
+          {
+            "file": "src/pages/content/folder/conversationSort.ts",
+            "symbol": "sortConversationsByPriority"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.markConversationAsRecentlyOpened"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_manual_ordering_rejected_conversation_gap_targets",
+        "kind": "decision",
+        "text": "The session rejected using thin gap elements between conversations as the conversation reorder target because they were too small to hit reliably; conversation reordering should use direct conversation-element top/bottom hit testing instead.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_manager",
+          "flow.folder_manual_ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.setupConversationReorderZone"
+          },
+          {
+            "file": "public/contentStyle.css"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_manual_ordering_drop_semantics",
+        "kind": "requirement",
+        "text": "Folder drag/drop semantics must preserve the distinction accepted in the session: dropping onto a folder moves the item into that folder, while dropping on a folder gap or a conversation's above/below half performs manual reordering.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_manager",
+          "flow.folder_manual_ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.createReorderGap"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.setupConversationReorderZone"
+          }
+        ]
+      },
+      {
+        "id": "claim.timeline_reapply_position_extension_context_task",
+        "kind": "task",
+        "text": "Investigate TimelineManager.reapplyPosition reporting `[Timeline] reapplyPosition storage access failed: Error: Extension context invalidated.`; it was reported during the folder manual-ordering session but was not part of the accepted folder-ordering fix.",
+        "truth": "unknown",
+        "intent": "intended",
+        "about": [
+          "component.timeline_manager"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/timeline/manager.ts",
+            "symbol": "TimelineManager.reapplyPosition"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.27c4f0a3_a92c_42db_9d92_c81d0ed03ce4",
+        "kind": "session",
+        "ref": "claude-code-session:27c4f0a3-a92c-42db-9d92-c81d0ed03ce4",
+        "title": "Claude Code session 27c4f0a3 folder manual ordering"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.folder_manual_ordering_keeps_click_time_as_migration_fallback",
+        "to": "source.claude_code_session.27c4f0a3_a92c_42db_9d92_c81d0ed03ce4",
+        "metadata": {
+          "reason": "The user asked whether last-opened ordering had been cancelled, and the accepted answer explained that migrating all conversations to sortIndex intentionally makes lastOpenedAt only the initial migration or fallback signal so manual ordering is not disrupted."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.folder_manual_ordering_rejected_conversation_gap_targets",
+        "to": "source.claude_code_session.27c4f0a3_a92c_42db_9d92_c81d0ed03ce4",
+        "metadata": {
+          "reason": "After the user reported that dragging a conversation onto another conversation had no effect, the session changed from 2px conversation gaps to direct conversation-element top/bottom hit testing."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.folder_manual_ordering_drop_semantics",
+        "to": "source.claude_code_session.27c4f0a3_a92c_42db_9d92_c81d0ed03ce4",
+        "metadata": {
+          "reason": "The implementation summary explicitly distinguished dropping onto a folder, which preserves move-into-folder behavior, from dropping on reorder gaps or conversation halves, which performs reordering."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.timeline_reapply_position_extension_context_task",
+        "to": "source.claude_code_session.27c4f0a3_a92c_42db_9d92_c81d0ed03ce4",
+        "metadata": {
+          "reason": "The user reported the Timeline reapplyPosition extension-context-invalidated storage error in the same session, and the subsequent accepted work focused on conversation drag reordering rather than resolving that Timeline error."
+        }
+      }
+    ]
+  }
+}

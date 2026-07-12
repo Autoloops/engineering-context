@@ -1,0 +1,49 @@
+{
+  "case_id": "swechat-gemini-voyager-ai-folder-organize-plan",
+  "dataset": {
+    "name": "SALT-NLP/SWE-chat",
+    "held_out_session_id": "416e7eec-d1f4-43f0-a0a0-236a60299cde",
+    "held_out_created_at": "2026-03-10T22:50:31.199424Z",
+    "prior_sessions": [
+      {
+        "session_id": "27c4f0a3-a92c-42db-9d92-c81d0ed03ce4",
+        "created_at": "2026-03-06T17:26:03.309330Z",
+        "checkpoint_id": "Nagi-ovo/gemini-voyager#7bf952569a2f",
+        "title": "Folder manual ordering"
+      },
+      {
+        "session_id": "f1e0b56b-726f-4988-902d-d5a848ed8a19",
+        "created_at": "2026-03-06T18:19:20.047052Z",
+        "checkpoint_id": "Nagi-ovo/gemini-voyager#b61d10362795",
+        "title": "Drag/drop browser edge case"
+      },
+      {
+        "session_id": "56286605-a571-4f52-92dd-069c28fe5fc5",
+        "created_at": "2026-03-06T21:49:41.427037Z",
+        "checkpoint_id": "Nagi-ovo/gemini-voyager#308c8cbfca43",
+        "title": "Changelog badge notification mode"
+      }
+    ],
+    "checkpoint_id": "Nagi-ovo/gemini-voyager#124b0c3bde3a",
+    "base_commit_source": "Held-out public commit 6ecae98a078334670c70ec5a68ba3d8d9b898b5c adds AI-powered folder organization/import; eval base is its parent."
+  },
+  "repo": {
+    "full_name": "Nagi-ovo/gemini-voyager",
+    "url": "https://github.com/Nagi-ovo/gemini-voyager.git",
+    "base_commit": "c2bbeaf6f80cafefa64df7169e48c6f94292caf0"
+  },
+  "task": {
+    "prompt_path": "prompt.md",
+    "judge_path": "judge.md",
+    "expected_relevant_areas": [
+      "folder manager",
+      "sidebar conversation scraping",
+      "prompt generation",
+      "folder import/merge flow",
+      "extension localization"
+    ]
+  },
+  "memory": {
+    "manifest_path": "memory-seeds/manifest.json"
+  }
+}

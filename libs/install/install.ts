@@ -5,7 +5,7 @@ import { greplicaConfigPath, updateEmbeddingConfig, writeGreplicaConfig, type Em
 import { graphContextConfigFromGreplicaConfig } from "../knowledge-graph/graph-context/config.js";
 import { createLocalKnowledgeGraphService } from "../knowledge-graph/service.js";
 import type { RepoRef } from "../knowledge-graph/service.js";
-import { installPlatform, type HookInstallResult } from "./platforms/index.js";
+import { installPlatform, type HookInstallResult, type RuleInstallResult } from "./platforms/index.js";
 import {
   type InstallEmbedding,
   type InstallPlatform,
@@ -23,6 +23,7 @@ export interface InstallResult {
   platform: InstallPlatform;
   skills: string[];
   hooks?: HookInstallResult;
+  rules?: RuleInstallResult;
   hooksRequested: boolean;
   embedding: InstallEmbedding;
   session: SessionConfig;
@@ -41,12 +42,16 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
     repoRoot: options.repo.repo_root ?? process.cwd(),
     hooks: options.hooks,
   });
-  if (platformInstall.hooks === undefined && embedding.config.session.autoMemoryUpdates) {
+  const supportsAutoMemoryUpdates = platformInstall.hooks !== undefined && platformInstall.supportsAutoMemoryUpdates !== false;
+  if (!supportsAutoMemoryUpdates && embedding.config.session.autoMemoryUpdates) {
     embedding.config.session.autoMemoryUpdates = false;
     writeGreplicaConfig(embedding.config);
   }
 
   const notes: string[] = [];
+  if (options.autoMemoryUpdates && !supportsAutoMemoryUpdates && platformInstall.hooks !== undefined) {
+    notes.push(`${platformDisplayName(options.platform)} automatic memory updates are not supported yet; installed hooks still record session activity.`);
+  }
   if (options.embedding === "local") {
     if (startLocalEmbeddingPrewarm()) {
       notes.push("Local embedding model prewarm was queued in the background; if another prewarm is already running, this one will skip. The first query may still download the model if prewarm has not finished.");
@@ -59,6 +64,7 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
     platform: options.platform,
     skills: platformInstall.skills,
     hooks: platformInstall.hooks,
+    rules: platformInstall.rules,
     hooksRequested: options.hooks,
     embedding: options.embedding,
     session: embedding.config.session,
@@ -75,6 +81,7 @@ export function platformDisplayName(platform: InstallPlatform): string {
   if (platform === "openhands") return "OpenHands";
   if (platform === "factory-droid") return "Factory Droid";
   if (platform === "antigravity") return "Antigravity";
+  if (platform === "cursor") return "Cursor";
   return "Claude Code";
 }
 

@@ -1,0 +1,139 @@
+{
+  "title": "Update working memory from STT onboarding auth session",
+  "summary": "Durable context from the STT onboarding 401 fix, including the local onboarding auth bypass scope and rejected broader approaches.",
+  "creates": {
+    "components": [],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.stt_onboarding_upload_uses_authenticated_sessions_endpoint",
+        "kind": "fact",
+        "text": "The onboarding and settings STT test path uses transcribeAudio() to POST recorded audio to /api/sessions/{session_key}/upload with transcribe=true, and the web router exposes that route as the session_upload HTTP endpoint, so STT testing goes through HTTP auth middleware rather than only WebSocket RPC.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.web_ui",
+          "flow.auth_gate"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/web/src/assets/js/voice-utils.js",
+            "symbol": "transcribeAudio"
+          },
+          {
+            "file": "crates/web/src/lib.rs",
+            "symbol": "web_routes"
+          }
+        ]
+      },
+      {
+        "id": "claim.local_stt_onboarding_auth_bypass_requires_explicit_not_onboarded",
+        "kind": "fact",
+        "text": "In auth_gate's Unauthorized branch, a local request on an onboarding-bypass path receives Loopback identity only when onboarding wizard_status explicitly reports onboarded=false; if wizard_status fails or omits onboarded, the middleware defaults to onboarded=true and continues normal unauthorized handling.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.auth_gate"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/gateway/src/auth_middleware.rs",
+            "symbol": "auth_gate"
+          }
+        ]
+      },
+      {
+        "id": "claim.onboarding_auth_bypass_path_allowlist",
+        "kind": "fact",
+        "text": "The local onboarding auth bypass is limited to /api/sessions/, /api/bootstrap, /api/gon, /api/tailscale/, and /ws/ paths; privileged APIs such as /api/config remain outside the bypass and must still authenticate even during onboarding.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.auth_gate"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/gateway/src/auth_middleware.rs",
+            "symbol": "is_onboarding_bypass_path"
+          },
+          {
+            "file": "crates/gateway/tests/auth_middleware.rs",
+            "symbol": "local_privileged_api_during_onboarding_requires_auth"
+          }
+        ]
+      },
+      {
+        "id": "claim.noop_onboarding_not_marked_onboarded_for_auth_bypass",
+        "kind": "decision",
+        "text": "The session rejected making NoopOnboardingService::wizard_status return onboarded=true for the auth bypass because the web UI onboarding redirect logic also treats a missing onboarded field as not onboarded; the safe auth-specific default belongs in auth_gate instead.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.auth_gate",
+          "component.onboarding",
+          "component.web_ui"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/service-traits/src/lib.rs",
+            "symbol": "NoopOnboardingService"
+          },
+          {
+            "file": "crates/web/src/templates.rs",
+            "symbol": "onboarding_completed"
+          },
+          {
+            "file": "crates/gateway/src/auth_middleware.rs",
+            "symbol": "auth_gate"
+          }
+        ]
+      },
+      {
+        "id": "claim.broad_local_onboarding_bypass_rejected",
+        "kind": "decision",
+        "text": "The session rejected a broad local onboarding bypass for every /api/* or /ws/* unauthorized request after review; the accepted contract is a narrow allowlist for wizard-required paths so privileged endpoints stay protected.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.auth_gate"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/gateway/src/auth_middleware.rs",
+            "symbol": "is_onboarding_bypass_path"
+          },
+          {
+            "file": "crates/gateway/tests/auth_middleware.rs",
+            "symbol": "local_privileged_api_during_onboarding_requires_auth"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.ffe9ecd3_e9a2_4c9c_bcfb_25cb69f3d29f",
+        "kind": "session",
+        "ref": "claude-code-session:ffe9ecd3-e9a2-4c9c-bcfb-25cb69f3d29f",
+        "title": "STT onboarding auth fix session"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.noop_onboarding_not_marked_onboarded_for_auth_bypass",
+        "to": "source.claude_code_session.ffe9ecd3_e9a2_4c9c_bcfb_25cb69f3d29f",
+        "metadata": {
+          "reason": "The transcript records the initial plan to add onboarded=true to NoopOnboardingService, the resulting chat_ui onboarding test failure, and the accepted fix of reverting the noop change while defaulting auth_gate's missing onboarded value to true."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.broad_local_onboarding_bypass_rejected",
+        "to": "source.claude_code_session.ffe9ecd3_e9a2_4c9c_bcfb_25cb69f3d29f",
+        "metadata": {
+          "reason": "The transcript records PR review feedback that the original /api/* and /ws/* local onboarding bypass was too broad and the follow-up change narrowed it to wizard-required paths with a privileged-endpoint regression test."
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,156 @@
+{
+  "title": "Update working memory from drag/drop edge-case session",
+  "summary": "Durable context learned from the historical session about folder drag/drop browser behavior and duplicate conversation repair.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.ai_studio_folder_manager",
+        "name": "AI Studio Folder Manager",
+        "code_anchor": "src/pages/content/folder/aistudio.ts"
+      }
+    ],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.folder_drag_operations_are_move_only",
+        "kind": "fact",
+        "text": "Gemini folder/sidebar drag surfaces and AI Studio folder/prompt drag surfaces constrain their HTML5 drag operation to move by setting effectAllowed on dragstart and dropEffect on dragover drop targets.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_sidebar_manager",
+          "component.ai_studio_folder_manager",
+          "flow.folder_manual_ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager"
+          },
+          {
+            "file": "src/pages/content/folder/aistudio.ts",
+            "symbol": "AIStudioFolderManager"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_drag_move_only_prevents_browser_edge_gestures",
+        "kind": "requirement",
+        "text": "Preserve move-only effectAllowed/dropEffect values for in-page folder and conversation drags; the session chose this to keep Chrome/Edge split-screen or tab-tiling edge gestures from treating these drags as link, copy, or tab drags.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_sidebar_manager",
+          "component.ai_studio_folder_manager",
+          "flow.folder_manual_ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager"
+          },
+          {
+            "file": "src/pages/content/folder/aistudio.ts",
+            "symbol": "AIStudioFolderManager"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_manager_deduplicates_dragged_conversation_ids",
+        "kind": "fact",
+        "text": "FolderManager prevents duplicate selected conversation entries from multiplying during reorder or move operations by deduplicating getSelectedConversationsData results by conversationId and deduplicating conversationIds at the start of reorderOrMoveConversations.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_sidebar_manager",
+          "flow.folder_manual_ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_integrity_repairs_duplicate_conversations",
+        "kind": "fact",
+        "text": "FolderManager.ensureDataIntegrity repairs existing per-folder duplicate conversation references by filtering each folderContents list to a single entry per conversationId before ensuring sortIndex values.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_sidebar_manager",
+          "component.folder_model"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager"
+          }
+        ]
+      },
+      {
+        "id": "claim.sidebar_drag_without_source_folder_keeps_previous_membership",
+        "kind": "fact",
+        "text": "FolderManager only removes a conversation from its previous folder when the drag payload includes sourceFolderId; native/sidebar conversation drags omit sourceFolderId, so dropping the same sidebar conversation into another folder can leave it listed in both folders.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_sidebar_manager",
+          "component.folder_model",
+          "flow.folder_manual_ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager"
+          }
+        ]
+      },
+      {
+        "id": "claim.duplicate_conversation_drag_symptom_not_edge_specific",
+        "kind": "risk",
+        "text": "Do not treat folder UI stacking after dragging as Edge-specific by default; the session identified duplicate conversation membership as the underlying data state, which can also reproduce in Chrome when the same conversation exists in multiple folders.",
+        "truth": "source_verified",
+        "intent": "unknown",
+        "about": [
+          "component.folder_sidebar_manager",
+          "component.folder_model",
+          "flow.folder_manual_ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.f1e0b56b_726f_4988_902d_d5a848ed8a19",
+        "kind": "session",
+        "ref": "claude-code-session:f1e0b56b-726f-4988-902d-d5a848ed8a19",
+        "title": "Claude Code session f1e0b56b-726f-4988-902d-d5a848ed8a19: Drag/drop browser edge case"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.folder_drag_move_only_prevents_browser_edge_gestures",
+        "to": "source.claude_code_session.f1e0b56b_726f_4988_902d_d5a848ed8a19",
+        "metadata": {
+          "reason": "The user reported Chrome split-screen triggering during conversation drags, and the session explained that forcing move-only drag effects was chosen to avoid browser link/copy/tab drag gestures near window edges."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.duplicate_conversation_drag_symptom_not_edge_specific",
+        "to": "source.claude_code_session.f1e0b56b_726f_4988_902d_d5a848ed8a19",
+        "metadata": {
+          "reason": "When asked why the UI stacking appeared only in Edge, the session clarified that the bug depends on duplicate conversation membership and can also occur in Chrome with the same data state."
+        }
+      }
+    ]
+  }
+}

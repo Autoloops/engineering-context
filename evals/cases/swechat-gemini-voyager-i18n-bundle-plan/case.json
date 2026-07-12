@@ -1,0 +1,49 @@
+{
+  "case_id": "swechat-gemini-voyager-i18n-bundle-plan",
+  "dataset": {
+    "name": "SALT-NLP/SWE-chat",
+    "held_out_session_id": "18a6ae04-fe81-437d-9c64-e6f5a1839da2",
+    "held_out_created_at": "2026-03-12T22:10:11.587494Z",
+    "prior_sessions": [
+      {
+        "session_id": "72a86ca0-ec56-45a9-9f97-c841875b5e96",
+        "created_at": "2026-03-04T23:19:46.826213Z",
+        "checkpoint_id": "Nagi-ovo/gemini-voyager#44875e8c",
+        "title": "macOS shortcut and locale text updates"
+      },
+      {
+        "session_id": "08d58754-fbae-4586-9dac-5302894dfcb8",
+        "created_at": "2026-03-10T21:48:01.987572Z",
+        "checkpoint_id": "Nagi-ovo/gemini-voyager#3b86f05dd10f",
+        "title": "Safari update prompt and popup settings UI"
+      },
+      {
+        "session_id": "80905f1f-50ff-4956-b859-08edfc46cb5f",
+        "created_at": "2026-03-11T02:23:59.216910Z",
+        "checkpoint_id": "Nagi-ovo/gemini-voyager#dcecaba8614c",
+        "title": "Changelog and release text updates"
+      }
+    ],
+    "checkpoint_id": "Nagi-ovo/gemini-voyager#29bdd688f8c7",
+    "base_commit_source": "Held-out public commit c5634a1efdf4fc8ee9b396ca56f7e2c7dd9cf23f strips i18n description fields from production bundle; eval base is its parent."
+  },
+  "repo": {
+    "full_name": "Nagi-ovo/gemini-voyager",
+    "url": "https://github.com/Nagi-ovo/gemini-voyager.git",
+    "base_commit": "787ca28c56647a5aff2a04ef2a5ef9821c155581"
+  },
+  "task": {
+    "prompt_path": "prompt.md",
+    "judge_path": "judge.md",
+    "expected_relevant_areas": [
+      "locale message JSON",
+      "extension build pipeline",
+      "Vite/custom plugins",
+      "runtime i18n access",
+      "Chrome extension manifest/locales"
+    ]
+  },
+  "memory": {
+    "manifest_path": "memory-seeds/manifest.json"
+  }
+}

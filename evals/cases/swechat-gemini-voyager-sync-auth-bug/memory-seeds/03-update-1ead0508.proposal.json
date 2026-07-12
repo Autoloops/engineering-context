@@ -1,0 +1,103 @@
+{
+  "title": "Update working memory from Edge disabled sync auth session",
+  "summary": "Durable context learned while fixing Google Drive sync startup auth checks for disabled sync mode on Edge.",
+  "creates": {
+    "components": [],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.drive_sync_auth_mode_gated_load_state",
+        "kind": "fact",
+        "text": "Drive sync uses `chrome.identity.getAuthToken` when available, persists access tokens with expiry in extension local storage, and falls back to `chrome.identity.launchWebAuthFlow` for interactive auth when needed; constructor-driven `loadState()` now performs its non-interactive auth-status lookup only when the stored sync mode is not `disabled`, leaving disabled mode unauthenticated without touching identity APIs.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.google_drive_sync"
+        ],
+        "supersedes": [
+          "claim.drive_sync_auth"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/services/GoogleDriveSyncService.ts",
+            "symbol": "GoogleDriveSyncService.loadState"
+          },
+          {
+            "file": "src/core/services/GoogleDriveSyncService.ts",
+            "symbol": "GoogleDriveSyncService.getAuthToken"
+          },
+          {
+            "file": "src/core/services/GoogleDriveSyncService.ts",
+            "symbol": "GoogleDriveSyncService.saveToken"
+          }
+        ]
+      },
+      {
+        "id": "claim.drive_sync_disabled_mode_avoids_edge_identity_probe",
+        "kind": "requirement",
+        "text": "When Google Drive sync mode is `disabled`, startup state loading must not call `chrome.identity.getAuthToken`; issue #538 established that Microsoft Edge may expose that function but throw an unsupported-API error when it is invoked.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.google_drive_sync",
+          "flow.google_drive_cloud_sync"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/services/GoogleDriveSyncService.ts",
+            "symbol": "GoogleDriveSyncService.loadState"
+          }
+        ]
+      },
+      {
+        "id": "claim.drive_sync_enabled_modes_still_check_auth_on_load",
+        "kind": "fact",
+        "text": "For non-disabled sync modes, `GoogleDriveSyncService.loadState()` still calls `getAuthToken(false)` and sets `state.isAuthenticated` from the returned token, so enabled sync modes keep the startup auth-status check.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.google_drive_sync"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/services/GoogleDriveSyncService.ts",
+            "symbol": "GoogleDriveSyncService.loadState"
+          }
+        ]
+      },
+      {
+        "id": "claim.drive_sync_token_persistence_test_requires_enabled_mode",
+        "kind": "fact",
+        "text": "The Google Drive sync token-persistence test explicitly mocks local storage with `gvSyncMode: 'auto'` because the default disabled mode no longer exercises the startup `getAuthToken(false)` path.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.google_drive_sync"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/services/__tests__/GoogleDriveSyncService.test.ts"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.1ead0508_b496_4b80_b08e_4288c5417a99",
+        "kind": "session",
+        "ref": "claude-code-session:1ead0508-b496-4b80-b08e-4288c5417a99",
+        "title": "Investigate sync service issue"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.drive_sync_disabled_mode_avoids_edge_identity_probe",
+        "to": "source.claude_code_session.1ead0508_b496_4b80_b08e_4288c5417a99",
+        "metadata": {
+          "reason": "The historical session identified issue #538 as an Edge-specific failure where disabled sync still triggered `getAuthToken(false)` during `loadState()`, and the accepted fix was to skip that auth check when the mode is `disabled`."
+        }
+      }
+    ]
+  }
+}

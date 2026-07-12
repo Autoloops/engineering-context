@@ -1,0 +1,1 @@
+Voyager update notifications need to balance interruption, discoverability, localization, settings, hidden trigger states, and version/dismissal persistence. Can you investigate the changelog surfaces, floating prompt-manager trigger, settings/storage model, and prior release-notification behavior enough to plan a less intrusive but reliable update UX?

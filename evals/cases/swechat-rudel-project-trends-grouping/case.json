@@ -1,0 +1,48 @@
+{
+  "case_id": "swechat-rudel-project-trends-grouping",
+  "dataset": {
+    "name": "SALT-NLP/SWE-chat",
+    "held_out_session_id": "76edf8dd-e033-44a5-933e-4aa869612237",
+    "held_out_created_at": "2026-03-11T12:53:22.564570Z",
+    "prior_sessions": [
+      {
+        "session_id": "7d3888e9-0d88-4ac6-ab51-881a2b0c5747",
+        "created_at": "2026-02-24T04:01:59.338771Z",
+        "checkpoint_id": "obsessiondb/rudel#43c21a4b5044",
+        "title": "Full code review and analytics service context"
+      },
+      {
+        "session_id": "4647c45d-0862-41eb-8eb4-f920ae54f1b4",
+        "created_at": "2026-03-03T16:29:10.556731Z",
+        "checkpoint_id": "obsessiondb/rudel#8d7e14f97e93",
+        "title": "Developer name resolution and analytics cleanup"
+      },
+      {
+        "session_id": "af88448f-2eec-4dc1-84ab-1531eb6a97af",
+        "created_at": "2026-03-09T16:21:52.264690Z",
+        "checkpoint_id": "obsessiondb/rudel#45907daadc7c",
+        "title": "Analyze slow overview queries and chart improvements"
+      }
+    ],
+    "checkpoint_id": "obsessiondb/rudel#d029ed2ba9f2",
+    "base_commit_source": "Held-out public commit ee786bf3d78d00a7f922b83576b0cba37e5cc58c fixes grouping by project_name; eval base is its parent."
+  },
+  "repo": {
+    "full_name": "obsessiondb/rudel",
+    "url": "https://github.com/obsessiondb/rudel.git",
+    "base_commit": "15dd493e88ab2aa0cc70adc11d43d1f140a3b1b0"
+  },
+  "task": {
+    "prompt_path": "prompt.md",
+    "judge_path": "judge.md",
+    "expected_relevant_areas": [
+      "apps/api/src/services/project.service.ts",
+      "apps/api/src/services/overview.service.ts",
+      "apps/web/src/components/charts/ProjectTrendChart.tsx",
+      "packages/api-routes/src/schemas/analytics.ts"
+    ]
+  },
+  "memory": {
+    "manifest_path": "memory-seeds/manifest.json"
+  }
+}

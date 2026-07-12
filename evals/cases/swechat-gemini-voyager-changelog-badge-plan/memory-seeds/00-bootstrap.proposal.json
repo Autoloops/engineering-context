@@ -1,0 +1,420 @@
+{
+  "title": "Bootstrap Gemini Voyager repository memory",
+  "summary": "Shallow orientation for the Gemini Voyager browser extension: public runtime surfaces, storage and sync boundaries, account scoping, data safety, and development commands.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.repository",
+        "name": "Repository",
+        "code_anchor": "README.md",
+        "contains": [
+          "component.extension_manifest",
+          "component.build_and_tooling",
+          "component.runtime_content_entry",
+          "component.background_worker",
+          "component.storage_boundaries",
+          "component.google_drive_sync",
+          "component.account_isolation",
+          "component.data_backup"
+        ]
+      },
+      {
+        "id": "component.extension_manifest",
+        "name": "Extension Manifest",
+        "code_anchor": "manifest.json"
+      },
+      {
+        "id": "component.build_and_tooling",
+        "name": "Build And Tooling",
+        "code_anchor": "package.json"
+      },
+      {
+        "id": "component.runtime_content_entry",
+        "name": "Runtime Content Entrypoint",
+        "code_anchor": "src/pages/content/index.tsx"
+      },
+      {
+        "id": "component.background_worker",
+        "name": "Background Service Worker",
+        "code_anchor": "src/pages/background/index.ts"
+      },
+      {
+        "id": "component.storage_boundaries",
+        "name": "Storage Boundaries",
+        "code_anchor": "src/core/types/common.ts",
+        "contains": [
+          "component.storage_service",
+          "component.folder_model",
+          "component.sync_model"
+        ]
+      },
+      {
+        "id": "component.storage_service",
+        "name": "Storage Service",
+        "code_anchor": "src/core/services/StorageService.ts"
+      },
+      {
+        "id": "component.folder_model",
+        "name": "Folder Model",
+        "code_anchor": "src/core/types/folder.ts"
+      },
+      {
+        "id": "component.sync_model",
+        "name": "Sync Model",
+        "code_anchor": "src/core/types/sync.ts"
+      },
+      {
+        "id": "component.google_drive_sync",
+        "name": "Google Drive Sync",
+        "code_anchor": "src/core/services/GoogleDriveSyncService.ts"
+      },
+      {
+        "id": "component.account_isolation",
+        "name": "Account Isolation",
+        "code_anchor": "src/core/services/AccountIsolationService.ts"
+      },
+      {
+        "id": "component.data_backup",
+        "name": "Data Backup",
+        "code_anchor": "src/core/services/DataBackupService.ts"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.extension_runtime_initialization",
+        "name": "Extension Runtime Initialization",
+        "touches": [
+          "component.extension_manifest",
+          "component.runtime_content_entry",
+          "component.background_worker"
+        ]
+      },
+      {
+        "id": "flow.storage_and_recovery",
+        "name": "Storage And Recovery",
+        "touches": [
+          "component.storage_boundaries",
+          "component.storage_service",
+          "component.data_backup"
+        ]
+      },
+      {
+        "id": "flow.google_drive_sync",
+        "name": "Google Drive Sync",
+        "touches": [
+          "component.google_drive_sync",
+          "component.sync_model",
+          "component.folder_model",
+          "component.account_isolation",
+          "component.background_worker"
+        ]
+      },
+      {
+        "id": "flow.development_verification",
+        "name": "Development Verification",
+        "touches": [
+          "component.repository",
+          "component.build_and_tooling"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.repo_identity",
+        "kind": "fact",
+        "text": "Gemini Voyager is a GPL-3.0 browser extension for improving Google Gemini and AI Studio with organization, prompt, export, timeline, sync, and rendering workflows.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "README.md"
+          },
+          {
+            "file": "package.json"
+          }
+        ],
+        "about": "component.repository"
+      },
+      {
+        "id": "claim.public_extension_surfaces",
+        "kind": "fact",
+        "text": "The Manifest V3 public surfaces are a popup, options page, module background service worker, and one content script injected with contentStyle.css on Gemini, Gemini Enterprise, and AI Studio hosts.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "manifest.json"
+          }
+        ],
+        "about": "component.extension_manifest"
+      },
+      {
+        "id": "claim.manifest_drive_permissions",
+        "kind": "fact",
+        "text": "Google Drive sync is exposed through manifest identity permission, Drive file OAuth scope, Google API host permissions, and Google account hosts.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "manifest.json"
+          }
+        ],
+        "about": "component.extension_manifest"
+      },
+      {
+        "id": "claim.tooling_commands",
+        "kind": "fact",
+        "text": "Development uses Bun scripts for Chrome, Firefox, and Safari dev/build targets, with Vitest, TypeScript typecheck, ESLint, Prettier, and VitePress docs commands defined in package.json.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "package.json"
+          },
+          {
+            "file": "README.md"
+          }
+        ],
+        "about": "component.build_and_tooling"
+      },
+      {
+        "id": "claim.platform_build_split",
+        "kind": "fact",
+        "text": "The Vite build is split by platform: Chrome writes dist_chrome, Firefox writes dist_firefox with mermaid-legacy alias and Gecko background adjustments, and Safari writes dist_safari with Safari 14 target and a build-time update-check flag.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "vite.config.chrome.ts"
+          },
+          {
+            "file": "vite.config.firefox.ts",
+            "symbol": "appendFirefoxChangelogResources"
+          },
+          {
+            "file": "vite.config.safari.ts"
+          }
+        ],
+        "about": "component.build_and_tooling"
+      },
+      {
+        "id": "claim.content_entry_routing",
+        "kind": "fact",
+        "text": "The content entrypoint is the feature router: it initializes only Prompt Manager for custom websites and Gemini Enterprise, starts Gemini-specific feature modules on gemini.google.com, and starts AI Studio folder/formula support on AI Studio hosts.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "src/pages/content/index.tsx",
+            "symbol": "initializeFeatures"
+          }
+        ],
+        "about": "flow.extension_runtime_initialization"
+      },
+      {
+        "id": "claim.content_startup_load_control",
+        "kind": "fact",
+        "text": "Content initialization staggers heavy and light feature startup and adds a randomized delay for background tabs to reduce simultaneous load when many Gemini tabs are restored.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "src/pages/content/index.tsx",
+            "symbol": "getInitializationDelay"
+          },
+          {
+            "file": "src/pages/content/index.tsx",
+            "symbol": "initializeFeatures"
+          }
+        ],
+        "about": "flow.extension_runtime_initialization"
+      },
+      {
+        "id": "claim.background_worker_boundaries",
+        "kind": "fact",
+        "text": "The background worker registers custom-site content scripts based on granted permissions, registers the page-world fetch interceptor for supported Gemini hosts, and serializes starred-message and fork-node read-modify-write operations.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "src/pages/background/index.ts",
+            "symbol": "syncCustomContentScripts"
+          },
+          {
+            "file": "src/pages/background/index.ts",
+            "symbol": "registerFetchInterceptor"
+          },
+          {
+            "file": "src/pages/background/index.ts",
+            "symbol": "StarredMessagesManager"
+          }
+        ],
+        "about": "component.background_worker"
+      },
+      {
+        "id": "claim.storage_keys_centralized",
+        "kind": "fact",
+        "text": "Extension storage key strings are centralized in StorageKeys, including folder, timeline, prompt, account-isolation, changelog, fork, visual-effect, and UI settings keys.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "src/core/types/common.ts",
+            "symbol": "StorageKeys"
+          }
+        ],
+        "about": "component.storage_boundaries"
+      },
+      {
+        "id": "claim.storage_service_contract",
+        "kind": "fact",
+        "text": "StorageService exposes an IStorageService Result-based contract with sync, local, and localStorage fallback implementations, and exports singleton sync storage for folders plus local storage for prompts.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "src/core/services/StorageService.ts",
+            "symbol": "IStorageService"
+          },
+          {
+            "file": "src/core/services/StorageService.ts",
+            "symbol": "StorageFactory"
+          },
+          {
+            "file": "src/core/services/StorageService.ts",
+            "symbol": "storageService"
+          }
+        ],
+        "about": "flow.storage_and_recovery"
+      },
+      {
+        "id": "claim.folder_model_contract",
+        "kind": "fact",
+        "text": "FolderData models folders separately from folderContents, where folders form parent-child hierarchy records and folderContents maps folder ids to conversation references.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "src/core/types/folder.ts",
+            "symbol": "FolderData"
+          },
+          {
+            "file": "src/core/types/folder.ts",
+            "symbol": "Folder"
+          },
+          {
+            "file": "src/core/types/folder.ts",
+            "symbol": "ConversationReference"
+          }
+        ],
+        "about": "component.folder_model"
+      },
+      {
+        "id": "claim.backup_recovery_contract",
+        "kind": "fact",
+        "text": "DataBackupService stores primary, emergency, and beforeUnload localStorage backups with metadata, validates backup age and data shape, and recovers in primary > emergency > beforeUnload order.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "src/core/services/DataBackupService.ts",
+            "symbol": "DataBackupService"
+          }
+        ],
+        "about": "flow.storage_and_recovery"
+      },
+      {
+        "id": "claim.account_isolation_scope",
+        "kind": "fact",
+        "text": "Account isolation detects Gemini versus AI Studio from page URLs, resolves account scope from route user ids and normalized email hashes, stores profile aliases locally, and falls back from platform-specific flags to a legacy global flag.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "src/core/services/AccountIsolationService.ts",
+            "symbol": "detectAccountPlatformFromUrl"
+          },
+          {
+            "file": "src/core/services/AccountIsolationService.ts",
+            "symbol": "AccountIsolationService"
+          },
+          {
+            "file": "src/core/services/AccountIsolationService.ts",
+            "symbol": "buildScopedStorageKey"
+          }
+        ],
+        "about": "component.account_isolation"
+      },
+      {
+        "id": "claim.drive_sync_file_contract",
+        "kind": "fact",
+        "text": "GoogleDriveSyncService uses Chrome Identity and Drive REST APIs to upload and download separate Drive JSON files for Gemini folders, AI Studio folders, prompts, starred messages, and fork nodes, with account-scoped filenames when a sync account scope is provided.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "src/core/services/GoogleDriveSyncService.ts",
+            "symbol": "GoogleDriveSyncService"
+          },
+          {
+            "file": "src/core/types/sync.ts",
+            "symbol": "SyncAccountScope"
+          },
+          {
+            "file": "src/core/types/sync.ts",
+            "symbol": "SyncPlatform"
+          }
+        ],
+        "about": "flow.google_drive_sync"
+      },
+      {
+        "id": "claim.sync_payload_formats",
+        "kind": "fact",
+        "text": "The sync model defines versioned payload formats for folders, prompts, starred messages, forks, and an aggregate sync data shape, alongside disabled/manual/auto sync modes and platform identifiers for Gemini and AI Studio.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "src/core/types/sync.ts",
+            "symbol": "FolderExportPayload"
+          },
+          {
+            "file": "src/core/types/sync.ts",
+            "symbol": "SyncData"
+          },
+          {
+            "file": "src/core/types/sync.ts",
+            "symbol": "SyncMode"
+          }
+        ],
+        "about": "component.sync_model"
+      },
+      {
+        "id": "claim.cloud_sync_user_contract",
+        "kind": "fact",
+        "text": "User-facing cloud sync is documented as Google Drive storage for folders and prompt library data, with sign-in, Upload to Cloud, Download & Merge, quick sidebar sync buttons, and a recommendation to keep local file backups too.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "docs/en/guide/cloud-sync.md"
+          }
+        ],
+        "about": "flow.google_drive_sync"
+      },
+      {
+        "id": "claim_contribution_constraints",
+        "kind": "requirement",
+        "text": "Contributing guidance requires Bun 1.0+, prioritizes PRs with tests, calls out Firefox testing as required, asks contributors to run lint, format, typecheck, build, and test before submitting, and requires screenshots or recordings for UI changes.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": ".github/CONTRIBUTING.md"
+          }
+        ],
+        "about": "flow.development_verification"
+      }
+    ]
+  }
+}

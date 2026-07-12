@@ -1,0 +1,49 @@
+{
+  "case_id": "swechat-gemini-voyager-sync-auth-bug",
+  "dataset": {
+    "name": "SALT-NLP/SWE-chat",
+    "held_out_session_id": "327f1292-9603-4e47-8b53-e1778317b947",
+    "held_out_created_at": "2026-03-26T14:11:20.305054Z",
+    "prior_sessions": [
+      {
+        "session_id": "96b73801-7be5-496d-80df-f989afd548bd",
+        "created_at": "2026-02-26T22:34:19.087300Z",
+        "checkpoint_id": "Nagi-ovo/gemini-voyager#20c71c24513e",
+        "title": "Chrome store popup and extension UX updates"
+      },
+      {
+        "session_id": "72a86ca0-ec56-45a9-9f97-c841875b5e96",
+        "created_at": "2026-03-04T23:19:46.826213Z",
+        "checkpoint_id": "Nagi-ovo/gemini-voyager#cec7c36b3395",
+        "title": "Popup and localized release UI changes"
+      },
+      {
+        "session_id": "1ead0508-b496-4b80-b08e-4288c5417a99",
+        "created_at": "2026-03-26T14:11:18.878035Z",
+        "checkpoint_id": "Nagi-ovo/gemini-voyager#3e715f8184f4",
+        "title": "Investigate sync service issue"
+      }
+    ],
+    "checkpoint_id": "Nagi-ovo/gemini-voyager#3e715f8184f4",
+    "base_commit_source": "Held-out public commit 83a8c08e762eb8361d5896501de776190cba6619 fixes cloud sync startup auth behavior; eval base is its parent."
+  },
+  "repo": {
+    "full_name": "Nagi-ovo/gemini-voyager",
+    "url": "https://github.com/Nagi-ovo/gemini-voyager.git",
+    "base_commit": "e898c443edcaacbbdb5ecfe95a665f39b1f7262e"
+  },
+  "task": {
+    "prompt_path": "prompt.md",
+    "judge_path": "judge.md",
+    "expected_relevant_areas": [
+      "src/core/services",
+      "src/core/types",
+      "src/pages/content",
+      "src/pages/popup",
+      "manifest.json"
+    ]
+  },
+  "memory": {
+    "manifest_path": "memory-seeds/manifest.json"
+  }
+}
