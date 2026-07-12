@@ -5,7 +5,8 @@ export type EdgeKind =
   | "contains"
   | "touches"
   | "supersedes"
-  | "evidenced_by";
+  | "evidenced_by"
+  | "needs_review";
 
 export type EdgeMetadata = Record<string, unknown>;
 
@@ -19,7 +20,9 @@ export interface Edge {
   metadata?: EdgeMetadata;
 }
 
-export function isAllowedEdge(edge: Pick<Edge, "from_type" | "to_type" | "kind">): boolean {
+export function isAllowedEdge(
+  edge: Pick<Edge, "from_id" | "from_type" | "to_id" | "to_type" | "kind">,
+): boolean {
   switch (edge.kind) {
     case "about":
       return edge.from_type === "claim" && (edge.to_type === "component" || edge.to_type === "flow");
@@ -41,5 +44,8 @@ export function isAllowedEdge(edge: Pick<Edge, "from_type" | "to_type" | "kind">
 
     case "evidenced_by":
       return edge.from_type === "claim" && edge.to_type === "source";
+
+    case "needs_review":
+      return edge.from_type === "claim" && edge.to_type === "claim" && edge.from_id === edge.to_id;
   }
 }

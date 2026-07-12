@@ -333,6 +333,8 @@ function claimKindTitle(kind: ClaimKind): string {
       return "Decisions";
     case "fact":
       return "Facts";
+    case "insight":
+      return "Insights";
     case "question":
       return "Questions";
     case "requirement":

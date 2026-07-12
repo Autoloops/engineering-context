@@ -4,6 +4,7 @@ export type ClaimKind =
   | "fact"
   | "requirement"
   | "decision"
+  | "insight"
   | "task"
   | "question"
   | "risk";

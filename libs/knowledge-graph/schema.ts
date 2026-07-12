@@ -30,7 +30,7 @@ export interface Flow {
   name: string;
 }
 
-export type SourceKind = "session";
+export type SourceKind = "session" | "git_history";
 
 export interface Source {
   id: SourceId;
