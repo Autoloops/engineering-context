@@ -50,7 +50,7 @@ export function buildTranscriptBundle(input: TranscriptBundleInput): TranscriptB
     const rawTranscript = installer.loadTranscript ? installer.loadTranscript(file) : readFileSync(file, "utf8");
     const filteredMarkdown = installer.transcriptToMarkdown(rawTranscript);
     const metadata = parseFilteredTranscriptMetadata(filteredMarkdown);
-    const sessionId = metadata.session_id;
+    const sessionId = metadata.session_id ?? installer.sessionIdFromTranscriptPath?.(file);
     const sessionRef = sessionId === undefined ? undefined : installer.sessionSourceRef(sessionId);
     const entry: TranscriptBundleEntry = {
       file,

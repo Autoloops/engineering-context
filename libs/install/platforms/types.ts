@@ -44,4 +44,6 @@ export interface PlatformInstaller {
   transcriptPathFromHook?(hook: HookInput): string | undefined;
   // Override when the transcript is not a single readable file. Default: readFileSync(path).
   loadTranscript?(transcriptPath: string): string;
+  // Optional fallback when the filtered transcript omits session metadata.
+  sessionIdFromTranscriptPath?(transcriptPath: string): string | undefined;
 }

@@ -143,7 +143,7 @@ const cliCommands = [
   {
     key: "transcriptBundle",
     path: ["transcript", "bundle"],
-    usage: "transcript bundle --platform codex|claude|copilot|opencode --file <path> [--file <path>...] --out <bundle.md>",
+    usage: "transcript bundle --platform codex|claude|copilot|opencode|openhands|factory-droid --file <path> [--file <path>...] --out <bundle.md>",
     handler: runTranscriptBundle,
     showInTopLevelHelp: true,
   },
@@ -763,7 +763,7 @@ function parseTranscriptBundleArgs(args: string[]): TranscriptBundleOptions {
 }
 
 function parseTranscriptBundlePlatform(value: string): InstallPlatform {
-  if (value === "codex" || value === "claude" || value === "copilot" || value === "opencode") return value;
+  if (value === "codex" || value === "claude" || value === "copilot" || value === "opencode" || value === "openhands" || value === "factory-droid") return value;
   throw new Error(`Invalid --platform ${value}.\n${usage("transcriptBundle")}`);
 }
 
