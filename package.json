@@ -10,7 +10,8 @@
     "url": "git+ssh://git@github.com/Autoloops/greplica.git"
   },
   "bin": {
-    "greplica": "dist/apps/cli/main.js"
+    "greplica": "dist/apps/cli/main.js",
+    "greplica-mcp": "dist/apps/mcp-server/main.js"
   },
   "engines": {
     "node": ">=22.0.0 <27.0.0"
@@ -24,6 +25,7 @@
     "smoke:copilot": "npm run build && node scripts/smoke-copilot-install.mjs",
     "smoke:opencode": "npm run build && node scripts/smoke-opencode-install.mjs",
     "smoke:cursor": "npm run build && node scripts/smoke-cursor-install.mjs",
+    "smoke:mcp-server": "npm run build && node scripts/smoke-mcp-server.mjs",
     "test": "npm run build && node scripts/check-transcript-bundle.js && node scripts/check-repo-context.js && node scripts/check-install-options.js && node scripts/check-graph-view.js && node scripts/check-graph-view-offline-browser.js && node scripts/check-source-memberships.js && node scripts/check-proposal-validate.js && node scripts/check-bm25-tokenizer.js && node scripts/check-anchor-drift.js && node scripts/check-find-similar-claims.js && node scripts/check-apply-proposal-dedupe.js && node scripts/check-opencode-sqlite-transcript.js",
     "test:transcript-bundle": "npm run build && node scripts/check-transcript-bundle.js",
     "test:repo-context": "npm run build && node scripts/check-repo-context.js",
@@ -65,11 +67,13 @@
   ],
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "better-sqlite3": "^12.11.1",
     "chart.js": "4.4.7",
     "chartjs-plugin-datalabels": "2.2.0",
     "tree-sitter-wasms": "^0.1.13",
-    "web-tree-sitter": "^0.24.7"
+    "web-tree-sitter": "^0.24.7",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
