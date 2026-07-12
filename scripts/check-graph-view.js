@@ -113,7 +113,10 @@ async function checkRichGraphIsSelfContained() {
       normalizeProposal({
         title: "Seed rich graph — batch 1",
         creates: {
-          sources: [{ id: "source.pairing", kind: "session", ref: "session-abc", title: "Pairing session with Jane" }],
+          sources: [
+            { id: "source.pairing", kind: "session", ref: "session-abc", title: "Pairing session with Jane" },
+            { id: "source.git", kind: "git_history", ref: "git:abc123", title: "abc123 add auth" },
+          ],
           components: [
             { id: "component.auth", name: "Auth Service", code_anchor: "libs/auth/service.ts:1-40", contains: "component.auth.token" },
             { id: "component.auth.token", name: "Token Store", code_anchor: "libs/auth/token-store.ts:1-20" },
@@ -170,7 +173,25 @@ async function checkRichGraphIsSelfContained() {
               intent: "intended",
               about: "component.auth",
             },
+            {
+              id: "claim.git_insight",
+              kind: "insight",
+              text: "Auth and token storage change together",
+              truth: "source_verified",
+              intent: "intended",
+              evidenced_by: "source.git",
+              about: "component.auth",
+            },
           ],
+          edges: [{
+            id: "edge.git_insight_review",
+            from_id: "claim.git_insight",
+            from_type: "claim",
+            to_id: "claim.git_insight",
+            to_type: "claim",
+            kind: "needs_review",
+            metadata: { reason: "file_content_changed" },
+          }],
         },
       }),
     );
@@ -217,7 +238,11 @@ async function checkRichGraphIsSelfContained() {
     assert.match(html, /Pairing session with Jane/);
     assert.match(html, /Add token rotation with configurable interval/);
     assert.match(html, /data-freshness="superseded"/, "expected the superseded claim to be marked as such");
-    assert.match(html, /"total":6/, "expected claims timeline summary to count 6 active claims");
+    assert.match(html, /data-review="needs_review"/, "expected the stale claim to be marked for review");
+    assert.match(html, /Claims - Needs review/);
+    assert.match(html, /from git history/);
+    assert.match(html, /"needsReview":1/);
+    assert.match(html, /"total":7/, "expected claims timeline summary to count 7 active claims");
 
     // ...and, regardless of how much data or how many kinds/sources/superseded
     // claims it contains, it remains fully self-contained (this is the actual

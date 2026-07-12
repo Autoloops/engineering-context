@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import { setTimeout as sleep } from "node:timers/promises";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isatty } from "node:tty";
 import { basename, dirname, join, resolve } from "node:path";
@@ -17,6 +18,7 @@ import { graphContextConfigFromGreplicaConfig } from "../../libs/knowledge-graph
 import { createEmbedder } from "../../libs/knowledge-graph/graph-context/embedder.js";
 import { renderGraphContextMarkdown } from "../../libs/knowledge-graph/graph-context/render.js";
 import { buildGraphFolderExport } from "../../libs/knowledge-graph/folder-export.js";
+import type { MemoryCommitProposal } from "../../libs/knowledge-graph/proposal.js";
 import { buildTranscriptBundle } from "../../libs/session-transcript/bundle.js";
 import { installGreplica, platformDisplayName } from "../../libs/install/install.js";
 import { allPlatformInstallers, platformInstaller } from "../../libs/install/platforms/index.js";
@@ -29,6 +31,8 @@ import { runHookWorker, shouldRunAutoMemoryUpdates, startHookWorker } from "../.
 import { withLocalModelLock } from "../../libs/knowledge-graph/graph-context/local-model-lock.js";
 import { openDatabase } from "../../libs/storage/sqlite/db.js";
 import { SqliteRepository as SqliteKnowledgeGraphRepository } from "../../libs/storage/sqlite/repository.js";
+import { attachPullRequestMetadata, collectGitHistory, generateGitHistoryProposal } from "../../libs/git-memory/history.js";
+import { runGitWatchCheck } from "../../libs/git-memory/watch.js";
 import { detectRepoContext } from "./repo-context.js";
 
 interface CommandContext {
@@ -117,6 +121,20 @@ const cliCommands = [
     path: ["graph", "view"],
     usage: "graph view [--out <file>] [--no-open]",
     handler: runGraphViewCommand,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "gitIngest",
+    path: ["git", "ingest"],
+    usage: "git ingest [--max-commits <n>] [--max-age <days>] [--prs] [--github-token <token>] [--dry-run]",
+    handler: runGitIngestCommand,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "gitWatch",
+    path: ["git", "watch"],
+    usage: "git watch [--daemon] [--once] [--interval <seconds>] [--anchor-threshold <days>]",
+    handler: runGitWatchCommand,
     showInTopLevelHelp: true,
   },
   {
@@ -309,6 +327,72 @@ function runGraphViewCommand(args: string[]): void {
   }
 }
 
+async function runGitIngestCommand(args: string[]): Promise<void> {
+  const options = parseGitIngestArgs(args);
+  const context = createGitMemoryContext();
+  try {
+    context.service.requireRepo(context.repo);
+    const repoRoot = context.repo.repo_root ?? process.cwd();
+    let commits = collectGitHistory(repoRoot, {
+      maxCommits: options.maxCommits,
+      maxAgeDays: options.maxAgeDays,
+    });
+    if (options.prs) {
+      commits = await attachPullRequestMetadata(
+        commits,
+        context.repo.remote_url,
+        options.githubToken ?? process.env.GITHUB_TOKEN,
+      );
+    }
+    const plan = generateGitHistoryProposal(repoRoot, commits, context.service.readGraph(context.repo));
+    printGitIngestStats(plan.stats);
+    if (options.dryRun) {
+      console.log("");
+      console.log(JSON.stringify(plan.proposal, null, 2));
+      return;
+    }
+    if (!proposalHasCreates(plan.proposal)) {
+      console.log("No new git-derived memory to apply.");
+      return;
+    }
+    const result = await context.service.applyProposal(context.repo, plan.proposal);
+    console.log(`Applied git history proposal as memory commit ${result.memory_commit_id}.`);
+  } finally {
+    context.db.close();
+  }
+}
+
+async function runGitWatchCommand(args: string[]): Promise<void> {
+  const options = parseGitWatchArgs(args);
+  if (options.daemon) {
+    startGitWatchDaemon(options);
+    console.log("Started Greplica git watch daemon.");
+    return;
+  }
+
+  const context = createGitMemoryContext();
+  try {
+    do {
+      const result = await runGitWatchCheck(
+        context.repo.repo_root ?? process.cwd(),
+        context.repo,
+        context.service,
+        context.repository,
+        { anchorThresholdDays: options.anchorThresholdDays },
+      );
+      console.log(
+        result.skipped
+          ? `Git watch: ${result.head.slice(0, 12)} unchanged; no audit due.`
+          : `Git watch: audited ${result.audited_claims} claim(s), marked ${result.marked_claims} for review.`,
+      );
+      if (options.once) return;
+      await sleep(options.intervalSeconds * 1000);
+    } while (true);
+  } finally {
+    context.db.close();
+  }
+}
+
 async function runProposalValidateCommand(args: string[]): Promise<void> {
   const file = requireFile(args[0], usage("proposalValidate"));
   const { repo, service } = createCommandContext();
@@ -349,6 +433,7 @@ function printAnchorAudit(result: ClaimAnchorAuditResult): void {
   printAuditSection("Missing anchors", result.missing_anchors, (issue) => issue.claim_id);
   printAuditSection("Invalid files", result.missing_files, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
   printAuditSection("Missing symbols", result.missing_symbols, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
+  printAuditSection("Drifted anchors", result.drifted, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
   printAuditSection("Ambiguous symbols", result.ambiguous_symbols, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
   printAuditSection("Unsupported languages", result.unsupported_languages, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
 }
@@ -357,6 +442,7 @@ function anchorAuditIssueCount(result: ClaimAnchorAuditResult): number {
   return result.missing_anchors.length +
     result.missing_files.length +
     result.missing_symbols.length +
+    result.drifted.length +
     result.ambiguous_symbols.length +
     result.unsupported_languages.length;
 }
@@ -382,6 +468,19 @@ function createCommandContext(): CommandContext {
   const config = ensureGreplicaConfig();
   const service = createLocalKnowledgeGraphService(graphContextConfigFromGreplicaConfig(config));
   return { repo, env, config, service };
+}
+
+function createGitMemoryContext(): CommandContext & {
+  db: ReturnType<typeof openDatabase>;
+  repository: SqliteKnowledgeGraphRepository;
+} {
+  const repo = detectRepoContext();
+  const env = loadRepoEnv(repo.repo_root ?? process.cwd());
+  const config = ensureGreplicaConfig();
+  const db = openDatabase();
+  const repository = new SqliteKnowledgeGraphRepository(db);
+  const service = new KnowledgeGraphService(repository, graphContextConfigFromGreplicaConfig(config));
+  return { repo, env, config, service, db, repository };
 }
 
 function runHookIngest(args: string[]): void {
@@ -710,6 +809,96 @@ interface TranscriptBundleOptions {
   outputPath: string;
 }
 
+interface GitIngestOptions {
+  maxCommits: number;
+  maxAgeDays?: number;
+  prs: boolean;
+  githubToken?: string;
+  dryRun: boolean;
+}
+
+interface GitWatchCliOptions {
+  daemon: boolean;
+  once: boolean;
+  intervalSeconds: number;
+  anchorThresholdDays: number;
+}
+
+function parseGitIngestArgs(args: string[]): GitIngestOptions {
+  const options: GitIngestOptions = { maxCommits: 200, prs: false, dryRun: false };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--prs") {
+      options.prs = true;
+      continue;
+    }
+    if (arg === "--dry-run") {
+      options.dryRun = true;
+      continue;
+    }
+    if (arg === "--max-commits" || arg === "--max-age" || arg === "--github-token") {
+      const value = requireFlagValue(args, index, arg, usage("gitIngest"));
+      if (arg === "--max-commits") options.maxCommits = positiveInteger(value, arg, usage("gitIngest"));
+      if (arg === "--max-age") options.maxAgeDays = positiveInteger(value, arg, usage("gitIngest"));
+      if (arg === "--github-token") options.githubToken = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--max-commits=")) {
+      options.maxCommits = positiveInteger(arg.slice("--max-commits=".length), "--max-commits", usage("gitIngest"));
+      continue;
+    }
+    if (arg.startsWith("--max-age=")) {
+      options.maxAgeDays = positiveInteger(arg.slice("--max-age=".length), "--max-age", usage("gitIngest"));
+      continue;
+    }
+    if (arg.startsWith("--github-token=")) {
+      options.githubToken = requireInlineFlagValue(arg.slice("--github-token=".length), "--github-token", usage("gitIngest"));
+      continue;
+    }
+    throw new Error(usage("gitIngest"));
+  }
+  return options;
+}
+
+function parseGitWatchArgs(args: string[]): GitWatchCliOptions {
+  const options: GitWatchCliOptions = {
+    daemon: false,
+    once: false,
+    intervalSeconds: 30,
+    anchorThresholdDays: 7,
+  };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--daemon") {
+      options.daemon = true;
+      continue;
+    }
+    if (arg === "--once") {
+      options.once = true;
+      continue;
+    }
+    if (arg === "--interval" || arg === "--anchor-threshold") {
+      const value = requireFlagValue(args, index, arg, usage("gitWatch"));
+      if (arg === "--interval") options.intervalSeconds = positiveInteger(value, arg, usage("gitWatch"));
+      if (arg === "--anchor-threshold") options.anchorThresholdDays = positiveInteger(value, arg, usage("gitWatch"));
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--interval=")) {
+      options.intervalSeconds = positiveInteger(arg.slice("--interval=".length), "--interval", usage("gitWatch"));
+      continue;
+    }
+    if (arg.startsWith("--anchor-threshold=")) {
+      options.anchorThresholdDays = positiveInteger(arg.slice("--anchor-threshold=".length), "--anchor-threshold", usage("gitWatch"));
+      continue;
+    }
+    throw new Error(usage("gitWatch"));
+  }
+  if (options.daemon && options.once) throw new Error(`--daemon and --once cannot be combined.\n${usage("gitWatch")}`);
+  return options;
+}
+
 function parseTranscriptBundleArgs(args: string[]): TranscriptBundleOptions {
   let platform: InstallPlatform | undefined;
   let outputPath: string | undefined;
@@ -766,6 +955,17 @@ function requireFlagValue(args: string[], index: number, flag: string, usageText
   return value;
 }
 
+function requireInlineFlagValue(value: string, flag: string, usageText: string): string {
+  if (value.trim().length === 0) throw new Error(`Missing value for ${flag}.\n${usageText}`);
+  return value;
+}
+
+function positiveInteger(value: string, flag: string, usageText: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) throw new Error(`${flag} must be a positive integer.\n${usageText}`);
+  return parsed;
+}
+
 function parseInstallPlatform(value: string): InstallPlatform {
   if ((installPlatforms as readonly string[]).includes(value)) return value as InstallPlatform;
   throw new Error(`Invalid --platform ${value}.\n${usage("install")}`);
@@ -815,6 +1015,45 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
     console.log(`- Optional later: greplica install --platform ${result.platform} --embedding local`);
   }
   for (const note of result.notes) console.log(`- ${note}`);
+}
+
+function printGitIngestStats(stats: {
+  commits_analyzed: number;
+  claims: number;
+  components: number;
+  flows: number;
+  sources: number;
+  edges: number;
+}): void {
+  console.log(`Commits analyzed: ${stats.commits_analyzed}`);
+  console.log(`Claims to create: ${stats.claims}`);
+  console.log(`Components to create: ${stats.components}`);
+  console.log(`Flows to create: ${stats.flows}`);
+  console.log(`Sources to create: ${stats.sources}`);
+  console.log(`Edges to create: ${stats.edges}`);
+}
+
+function proposalHasCreates(proposal: MemoryCommitProposal): boolean {
+  return Object.values(proposal.creates).some((items) => Array.isArray(items) && items.length > 0);
+}
+
+function startGitWatchDaemon(options: GitWatchCliOptions): void {
+  const script = process.argv[1];
+  if (script === undefined) throw new Error("Cannot start git watch daemon without a CLI script path.");
+  const child = spawn(
+    process.execPath,
+    [
+      script,
+      "git",
+      "watch",
+      "--interval",
+      String(options.intervalSeconds),
+      "--anchor-threshold",
+      String(options.anchorThresholdDays),
+    ],
+    { detached: true, stdio: "ignore", env: process.env },
+  );
+  child.unref();
 }
 
 function cliName(): string {

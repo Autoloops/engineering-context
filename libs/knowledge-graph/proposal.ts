@@ -208,6 +208,8 @@ function defaultToType(kind: EdgeKind): GraphObjectType {
       return "component";
     case "evidenced_by":
       return "source";
+    case "needs_review":
+      return "claim";
   }
 }
 
