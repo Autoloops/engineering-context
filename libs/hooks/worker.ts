@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ClaimedMemoryUpdateAttempt } from "./types.js";
@@ -67,14 +67,14 @@ async function maybeUpdateWorkingMemory(attempt: ClaimedMemoryUpdateAttempt): Pr
   if (cwd === null || transcriptPath === null) return;
 
   const runner = platformInstaller(attempt.session.platform);
-  // Not every platform's transcript path is a plain file on disk (OpenCode, for one, can
-  // point at a row inside its own sqlite database). Let the platform decide what "exists"
-  // means for its own transcript path shape, falling back to a normal file check otherwise.
-  const transcriptExists = runner.transcriptExists ?? existsSync;
-  if (!transcriptExists(transcriptPath)) return;
-
   const sessionRef = runner.sessionSourceRef(attempt.session.session_id);
-  const transcript = runner.loadTranscript ? runner.loadTranscript(transcriptPath) : readFileSync(transcriptPath, "utf8");
+  let transcript: string;
+  try {
+    transcript = runner.loadTranscript ? runner.loadTranscript(transcriptPath) : readFileSync(transcriptPath, "utf8");
+  } catch {
+    return;
+  }
+  if (transcript.trim().length === 0) return;
   const transcriptMarkdown = runner.transcriptToMarkdown(transcript);
   if (transcriptMarkdown.trim().length === 0) return;
 

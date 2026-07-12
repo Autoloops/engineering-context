@@ -65,10 +65,6 @@ export const opencodeInstaller: PlatformInstaller = {
     return loadOpenCodeTranscript(transcriptPath);
   },
 
-  transcriptExists(transcriptPath: string): boolean {
-    return transcriptPath.startsWith("sqlite:") ? sqliteSessionExists(transcriptPath) : existsSync(transcriptPath);
-  },
-
   transcriptToMarkdown(transcript: string): string {
     return opencodeTranscriptToMarkdown(transcript);
   },
@@ -115,30 +111,12 @@ interface SqlitePointer {
 }
 
 function parseSqlitePointer(pointer: string): SqlitePointer | undefined {
-  const [dbPath, sessionId] = pointer.slice("sqlite:".length).split("#");
+  const separator = pointer.lastIndexOf("#");
+  if (!pointer.startsWith("sqlite:") || separator <= "sqlite:".length) return undefined;
+  const dbPath = pointer.slice("sqlite:".length, separator);
+  const sessionId = pointer.slice(separator + 1);
   if (!dbPath || !sessionId) return undefined;
   return { dbPath, sessionId };
-}
-
-// A sqlite-backed session only counts as present once the database file exists on disk
-// and actually holds at least one message row for this session id. A stale or unrelated
-// pointer should be treated the same way a missing file would be for the file-based layout.
-function sqliteSessionExists(pointer: string): boolean {
-  const parsed = parseSqlitePointer(pointer);
-  if (parsed === undefined || !existsSync(parsed.dbPath)) return false;
-
-  // Opening the database can itself throw (e.g. a partially written or corrupt db file),
-  // so it needs to be inside the try, not just the query that follows it.
-  let db: Database.Database | undefined;
-  try {
-    db = new Database(parsed.dbPath, { readonly: true, fileMustExist: true });
-    const row = db.prepare("SELECT 1 FROM messages WHERE session_id = ? LIMIT 1").get(parsed.sessionId);
-    return row !== undefined;
-  } catch {
-    return false;
-  } finally {
-    db?.close();
-  }
 }
 
 function loadFromSqlite(pointer: string): string {
@@ -149,10 +127,18 @@ function loadFromSqlite(pointer: string): string {
   try {
     db = new Database(parsed.dbPath, { readonly: true, fileMustExist: true });
     const rows = db.prepare(
-      `SELECT session_id, role, content, created_at
-       FROM messages
-       WHERE session_id = ?
-       ORDER BY created_at ASC`,
+      `SELECT
+         message.session_id AS session_id,
+         json_extract(message.data, '$.role') AS role,
+         json_extract(part.data, '$.text') AS content,
+         part.time_created AS created_at
+       FROM message
+       INNER JOIN part ON part.message_id = message.id
+       WHERE message.session_id = ?
+         AND json_extract(message.data, '$.role') IN ('user', 'assistant')
+         AND json_extract(part.data, '$.type') = 'text'
+         AND json_type(part.data, '$.text') = 'text'
+       ORDER BY message.time_created, message.id, part.time_created, part.id`,
     ).all(parsed.sessionId) as Array<{
       session_id: string;
       role: string;

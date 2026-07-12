@@ -1,61 +1,182 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import Database from "better-sqlite3";
 
 const root = new URL("..", import.meta.url);
+const repoRoot = resolve(root.pathname);
+const cli = resolve(repoRoot, "dist/apps/cli/main.js");
+const dir = mkdtempSync(join(tmpdir(), "greplica-opencode-sqlite-test-"));
+const workspace = join(dir, "repo");
+const greplicaHome = join(dir, "greplica-home");
+const xdgConfigHome = join(dir, "xdg-config");
+const xdgDataHome = join(dir, "xdg#data");
+const dbPath = join(xdgDataHome, "opencode", "opencode.db");
+const fakeBin = join(dir, "bin");
+const runnerMarker = join(dir, "opencode-runner.json");
+const sessionId = "session-abc";
+
+const env = {
+  ...process.env,
+  GREPLICA_HOME: greplicaHome,
+  GREPLICA_INSTALL_SKIP_PREWARM: "1",
+  OPENCODE_TEST_MARKER: runnerMarker,
+  PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+  XDG_CONFIG_HOME: xdgConfigHome,
+  XDG_DATA_HOME: xdgDataHome,
+};
+
+process.env.XDG_DATA_HOME = xdgDataHome;
 const { opencodeInstaller } = await import(new URL("dist/libs/install/platforms/opencode.js", root));
 
-const dir = mkdtempSync(join(tmpdir(), "greplica-opencode-sqlite-test-"));
-const dbPath = join(dir, "opencode.db");
+try {
+  seedSqliteDatabase();
+  checkSqliteProjection();
+  checkFailureCases();
+  checkFileLayout();
+  checkWorkerEndToEnd();
+  console.log("check-opencode-sqlite-transcript: ok");
+} finally {
+  rmSync(dir, { recursive: true, force: true });
+}
 
-const db = new Database(dbPath);
-db.exec(`
-  CREATE TABLE messages (
-    session_id TEXT NOT NULL,
-    role TEXT NOT NULL,
-    content TEXT NOT NULL,
-    created_at TEXT NOT NULL
-  );
+function seedSqliteDatabase() {
+  mkdirSync(dirname(dbPath), { recursive: true });
+  const db = new Database(dbPath);
+  db.exec(`
+    CREATE TABLE session (
+      id TEXT PRIMARY KEY,
+      directory TEXT NOT NULL
+    );
+    CREATE TABLE message (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      time_created INTEGER NOT NULL,
+      time_updated INTEGER NOT NULL,
+      data TEXT NOT NULL
+    );
+    CREATE TABLE part (
+      id TEXT PRIMARY KEY,
+      message_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      time_created INTEGER NOT NULL,
+      time_updated INTEGER NOT NULL,
+      data TEXT NOT NULL
+    );
+  `);
+  db.prepare("INSERT INTO session (id, directory) VALUES (?, ?)").run(sessionId, workspace);
+
+  const insertMessage = db.prepare("INSERT INTO message VALUES (?, ?, ?, ?, ?)");
+  insertMessage.run("message-user", sessionId, 1000, 1000, JSON.stringify({ role: "user" }));
+  insertMessage.run("message-agent", sessionId, 2000, 2000, JSON.stringify({ role: "assistant" }));
+
+  const insertPart = db.prepare("INSERT INTO part VALUES (?, ?, ?, ?, ?, ?)");
+  insertPart.run("part-user-text", "message-user", sessionId, 1001, 1001, JSON.stringify({ type: "text", text: "first user message" }));
+  insertPart.run("part-tool", "message-agent", sessionId, 2001, 2001, JSON.stringify({ type: "tool", text: "excluded tool payload" }));
+  insertPart.run("part-reasoning", "message-agent", sessionId, 2002, 2002, JSON.stringify({ type: "reasoning", text: "excluded reasoning" }));
+  insertPart.run("part-agent-text-a", "message-agent", sessionId, 2003, 2003, JSON.stringify({ type: "text", text: "second agent message" }));
+  insertPart.run("part-agent-text-b", "message-agent", sessionId, 2004, 2004, JSON.stringify({ type: "text", text: "third agent message" }));
+  db.close();
+}
+
+function checkSqliteProjection() {
+  const pointer = `sqlite:${dbPath}#${sessionId}`;
+  const transcript = opencodeInstaller.loadTranscript(pointer);
+  const events = transcript.split("\n").map((line) => JSON.parse(line));
+  assert.deepEqual(events.map(({ role, content }) => [role, content]), [
+    ["user", "first user message"],
+    ["assistant", "second agent message"],
+    ["assistant", "third agent message"],
+  ]);
+
+  const markdown = opencodeInstaller.transcriptToMarkdown(transcript);
+  assert.match(markdown, /### human[\s\S]*first user message/);
+  assert.match(markdown, /### agent[\s\S]*second agent message[\s\S]*third agent message/);
+  assert.doesNotMatch(markdown, /excluded tool payload|excluded reasoning/);
+}
+
+function checkFailureCases() {
+  assert.equal(opencodeInstaller.loadTranscript(`sqlite:${dbPath}#missing-session`), "");
+  assert.equal(opencodeInstaller.loadTranscript(`sqlite:${join(dir, "missing.db")}#${sessionId}`), "");
+  assert.equal(opencodeInstaller.loadTranscript("sqlite:missing-separator"), "");
+
+  const corruptDbPath = join(dir, "corrupt.db");
+  writeFileSync(corruptDbPath, "not a sqlite database");
+  assert.equal(opencodeInstaller.loadTranscript(`sqlite:${corruptDbPath}#${sessionId}`), "");
+}
+
+function checkFileLayout() {
+  const fileSessionId = "file-session";
+  const sessionFile = join(xdgDataHome, "opencode", "storage", "session", `${fileSessionId}.json`);
+  const messageDir = join(xdgDataHome, "opencode", "storage", "message", fileSessionId);
+  mkdirSync(messageDir, { recursive: true });
+  mkdirSync(dirname(sessionFile), { recursive: true });
+  writeFileSync(sessionFile, JSON.stringify({ id: fileSessionId, directory: workspace }));
+  writeFileSync(join(messageDir, "message.json"), JSON.stringify({ role: "user", content: "file layout message" }));
+  const markdown = opencodeInstaller.transcriptToMarkdown(opencodeInstaller.loadTranscript(sessionFile));
+  assert.match(markdown, /file layout message/);
+}
+
+function checkWorkerEndToEnd() {
+  mkdirSync(fakeBin, { recursive: true });
+  const fakeOpenCode = join(fakeBin, "opencode");
+  writeFileSync(fakeOpenCode, `#!/usr/bin/env node
+import { writeFileSync } from "node:fs";
+writeFileSync(process.env.OPENCODE_TEST_MARKER, JSON.stringify(process.argv.slice(2)));
+process.stdout.write('{"type":"done"}\\n');
 `);
-db.prepare("INSERT INTO messages (session_id, role, content, created_at) VALUES (?, ?, ?, ?)")
-  .run("session-abc", "user", "please fix the flaky retry logic", "2026-07-01T00:00:00.000Z");
-db.prepare("INSERT INTO messages (session_id, role, content, created_at) VALUES (?, ?, ?, ?)")
-  .run("session-abc", "assistant", "done, added a bounded backoff", "2026-07-01T00:00:05.000Z");
-db.close();
+  chmodSync(fakeOpenCode, 0o755);
 
-const pointer = `sqlite:${dbPath}#session-abc`;
+  runOrThrow(["git", "init", "-q", workspace]);
+  runOrThrow([
+    process.execPath,
+    cli,
+    "install",
+    "--platform",
+    "opencode",
+    "--embedding",
+    "local",
+    "--auto-memory",
+    "disabled",
+  ], workspace);
 
-// A pointer to a real database file with a matching session id is recognized as present.
-assert.equal(opencodeInstaller.transcriptExists(pointer), true);
+  const configPath = join(greplicaHome, "config.json");
+  const config = JSON.parse(readFileSync(configPath, "utf8"));
+  config.session.stopThreshold = 1;
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
 
-// A session id absent from an otherwise valid database is not treated as present.
-assert.equal(opencodeInstaller.transcriptExists(`sqlite:${dbPath}#no-such-session`), false);
+  const hookInput = JSON.stringify({
+    hook_event_name: "Stop",
+    session_id: sessionId,
+    cwd: workspace,
+  });
+  runOrThrow([process.execPath, cli, "hook", "ingest", "--platform", "opencode"], workspace, hookInput);
+  assert.equal(existsSync(runnerMarker), false, "disabled automatic updates should not spawn a worker");
+  runOrThrow([process.execPath, cli, "hook", "worker"], workspace);
 
-// A pointer to a database file that was never created is not treated as present.
-assert.equal(opencodeInstaller.transcriptExists(`sqlite:${join(dir, "missing.db")}#session-abc`), false);
+  const args = JSON.parse(readFileSync(runnerMarker, "utf8"));
+  const prompt = args[args.indexOf("-p") + 1];
+  assert.equal(typeof prompt, "string");
+  assert.match(prompt, /first user message/);
+  assert.match(prompt, /second agent message/);
+  assert.match(prompt, /third agent message/);
+  assert.doesNotMatch(prompt, /excluded tool payload|excluded reasoning/);
+}
 
-// Plain filesystem paths (the file-based OpenCode layout) still use a normal existence check.
-const fileTranscript = join(dir, "session.json");
-assert.equal(opencodeInstaller.transcriptExists(fileTranscript), false);
-writeFileSync(fileTranscript, "{}");
-assert.equal(opencodeInstaller.transcriptExists(fileTranscript), true);
-
-// Once a sqlite pointer is recognized as present, it still loads and projects to non-empty
-// markdown through the existing loadTranscript / transcriptToMarkdown pipeline.
-const transcript = opencodeInstaller.loadTranscript(pointer);
-const markdown = opencodeInstaller.transcriptToMarkdown(transcript);
-assert.ok(markdown.trim().length > 0);
-
-// A file that exists at the expected path but isn't a valid sqlite database (e.g. truncated
-// or corrupted mid-write) must fail closed rather than throw and take down the worker.
-const corruptDbPath = join(dir, "corrupt.db");
-writeFileSync(corruptDbPath, "not a sqlite database");
-const corruptPointer = `sqlite:${corruptDbPath}#session-abc`;
-assert.equal(opencodeInstaller.transcriptExists(corruptPointer), false);
-assert.equal(opencodeInstaller.loadTranscript(corruptPointer), "");
-
-rmSync(dir, { recursive: true, force: true });
-
-console.log("check-opencode-sqlite-transcript: ok");
+function runOrThrow(command, cwd = repoRoot, input) {
+  const result = spawnSync(command[0], command.slice(1), { cwd, env, input, encoding: "utf8" });
+  if (result.status !== 0) {
+    throw new Error(`Command failed (${result.status}): ${command.join(" ")}\n${result.stderr ?? ""}`);
+  }
+  return result;
+}
