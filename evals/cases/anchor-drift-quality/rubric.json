@@ -1,0 +1,52 @@
+{
+  "case_id": "anchor-drift-quality",
+  "base_commit": "ec947c7e4728c2e6ef84868cc9428d473e22326e",
+  "score": {
+    "pass_threshold": 65,
+    "dimension_weights": {
+      "detection": 0.25,
+      "correctness": 0.35,
+      "completeness": 0.15,
+      "preservation": 0.15,
+      "anchor_accuracy": 0.1,
+      "restraint": 1.0
+    },
+    "difficulty_weights": { "easy": 1, "medium": 2, "hard": 3, "trap": 1.5 }
+  },
+  "patch_summary": "One refactor-style patch to graph-context/config.ts, bm25.ts, rank.ts, validate-proposal.ts, install/paths.ts, and hooks/session-state.ts. Value changes: minimumSelectedClaims 3->5; embedding all-mpnet-base-v2/768 -> all-MiniLM-L6-v2/384; maxCodeAnchorsPerClaim 3->4; defaultTimeThresholdMinutes 40->30. Behavior: scoreBm25 no longer divides by the top score (returns raw bm25 scores); selectRankedDocuments now keeps a document only when it is within minimumSelected AND its score meets the threshold. Rename: tokenVariants -> stemVariants. Removal: indexScores deleted and inlined into rankContextDocuments. installPlatforms gains 'windsurf' (now 9 platforms).",
+  "cases": [
+    { "id": "claim.minimum_selected_claims", "category": "value", "difficulty": "easy", "action": "supersede",
+      "expected": "Replacement states the ranking config selects at least 5 claims (minimumSelectedClaims = 5).",
+      "dimensions": ["detection", "correctness"] },
+    { "id": "claim.default_embedding_model", "category": "value", "difficulty": "easy", "action": "supersede",
+      "expected": "Replacement states the default local embedding is all-MiniLM-L6-v2 with 384 dimensions (both the model name and the dimension).",
+      "dimensions": ["detection", "correctness", "completeness"] },
+    { "id": "claim.max_code_anchors", "category": "value", "difficulty": "easy", "action": "supersede",
+      "expected": "Replacement states a claim may have at most 4 code anchors (maxCodeAnchorsPerClaim = 4).",
+      "dimensions": ["detection", "correctness"] },
+    { "id": "claim.bm25_normalization", "category": "behavior", "difficulty": "medium", "action": "supersede",
+      "expected": "Replacement reflects that scoreBm25 no longer min-max normalizes; it returns the raw BM25 scores and the top document is no longer forced to 1.0.",
+      "dimensions": ["detection", "correctness"] },
+    { "id": "claim.tokenize_stemming", "category": "rename", "difficulty": "hard", "action": "supersede",
+      "expected": "The stemming-suffix fact stays accurate (behavior is unchanged) and the claim is re-anchored to the renamed symbol stemVariants. The value here is fixing the broken anchor, not rewriting the text.",
+      "expected_anchor_symbol": "stemVariants",
+      "dimensions": ["detection", "anchor_accuracy", "preservation"] },
+    { "id": "claim.selection_rule", "category": "behavior", "difficulty": "medium", "action": "supersede",
+      "expected": "Replacement reflects that selectRankedDocuments now keeps a document only when it is within the minimumSelected count AND its score meets the selection threshold (both conditions), not either one.",
+      "dimensions": ["detection", "correctness"] },
+    { "id": "claim.install_platforms", "category": "enum", "difficulty": "medium", "action": "supersede",
+      "expected": "Replacement lists 9 install platforms, adding windsurf to the previous 8.",
+      "dimensions": ["detection", "correctness", "completeness"] },
+    { "id": "claim.session_update_thresholds", "category": "half_wrong", "difficulty": "hard", "action": "supersede",
+      "expected": "Replacement corrects only the time threshold to 30 minutes while PRESERVING the 7 Stop hooks and the 5-minute grace window. Dropping or changing the still-correct 7 and 5 is a preservation failure.",
+      "dimensions": ["detection", "correctness", "completeness", "preservation"] },
+    { "id": "claim.index_scores_helper", "category": "removal", "difficulty": "hard", "action": "retire",
+      "expected": "indexScores was removed (its logic was inlined into rankContextDocuments). The claim should be retired/superseded and the agent must NOT keep asserting indexScores still exists or fabricate a replacement helper.",
+      "dimensions": ["detection", "correctness"] },
+    { "id": "claim.round_score", "category": "fresh", "difficulty": "trap", "action": "leave", "dimensions": ["restraint"] },
+    { "id": "claim.cfamily_fallback", "category": "fresh", "difficulty": "trap", "action": "leave", "dimensions": ["restraint"] },
+    { "id": "claim.split_camel_case", "category": "fresh", "difficulty": "trap", "action": "leave", "dimensions": ["restraint"] },
+    { "id": "claim.default_database_path", "category": "fresh", "difficulty": "easy", "action": "leave", "dimensions": ["restraint"] },
+    { "id": "claim.bundled_skills", "category": "fresh", "difficulty": "trap", "action": "leave", "dimensions": ["restraint"] }
+  ]
+}

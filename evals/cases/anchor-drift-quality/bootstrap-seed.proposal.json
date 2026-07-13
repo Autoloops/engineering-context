@@ -1,0 +1,117 @@
+{
+  "title": "Seed memory for anchor drift quality eval",
+  "summary": "Baseline code_verified claims spanning a difficulty ladder. Ten are anchored to symbols the session patch changes in varied ways (value, behavior, signature, enum, rename, half-truth, removal) and should be repaired; four are anchored to stable code the patch leaves intact (some in files that change nearby) and should be left alone.",
+  "creates": {
+    "components": [
+      { "id": "component.retrieval", "name": "Graph context retrieval", "code_anchor": "libs/knowledge-graph/graph-context/config.ts" },
+      { "id": "component.proposal_validation", "name": "Proposal validation", "code_anchor": "libs/knowledge-graph/validate-proposal.ts" },
+      { "id": "component.install", "name": "Install platforms", "code_anchor": "libs/install/paths.ts" },
+      { "id": "component.session_hooks", "name": "Session hooks", "code_anchor": "libs/hooks/session-state.ts" },
+      { "id": "component.code_anchors", "name": "Code anchor resolver", "code_anchor": "libs/knowledge-graph/code-anchors/resolver.ts" },
+      { "id": "component.storage", "name": "SQLite storage", "code_anchor": "libs/storage/sqlite/db.ts" }
+    ],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.minimum_selected_claims",
+        "kind": "fact",
+        "text": "The retrieval ranking config selects at least 3 claims for a context packet (minimumSelectedClaims = 3).",
+        "truth": "code_verified", "intent": "intended", "about": ["component.retrieval"],
+        "code_anchors": [{ "file": "libs/knowledge-graph/graph-context/config.ts", "symbol": "rankingConfig" }]
+      },
+      {
+        "id": "claim.default_embedding_model",
+        "kind": "fact",
+        "text": "Graph context defaults to the local all-mpnet-base-v2 embedding model with 768 dimensions.",
+        "truth": "code_verified", "intent": "intended", "about": ["component.retrieval"],
+        "code_anchors": [{ "file": "libs/knowledge-graph/graph-context/config.ts", "symbol": "graphContextConfig" }]
+      },
+      {
+        "id": "claim.max_code_anchors",
+        "kind": "fact",
+        "text": "Proposal validation allows a claim at most 3 code anchors (maxCodeAnchorsPerClaim = 3).",
+        "truth": "code_verified", "intent": "intended", "about": ["component.proposal_validation"],
+        "code_anchors": [{ "file": "libs/knowledge-graph/validate-proposal.ts", "symbol": "maxCodeAnchorsPerClaim" }]
+      },
+      {
+        "id": "claim.bm25_normalization",
+        "kind": "fact",
+        "text": "scoreBm25 min-max normalizes results by dividing every document score by the top score, so the highest-ranked document scores 1.0.",
+        "truth": "code_verified", "intent": "intended", "about": ["component.retrieval"],
+        "code_anchors": [{ "file": "libs/knowledge-graph/graph-context/bm25.ts", "symbol": "scoreBm25" }]
+      },
+      {
+        "id": "claim.tokenize_stemming",
+        "kind": "fact",
+        "text": "Tokenization adds stemming variants for the suffixes -ing, -ed, -es, -s, and -ation.",
+        "truth": "code_verified", "intent": "intended", "about": ["component.retrieval"],
+        "code_anchors": [{ "file": "libs/knowledge-graph/graph-context/bm25.ts", "symbol": "tokenVariants" }]
+      },
+      {
+        "id": "claim.selection_rule",
+        "kind": "fact",
+        "text": "selectRankedDocuments keeps a document if it is within the minimumSelected count OR its score is at least the selection threshold.",
+        "truth": "code_verified", "intent": "intended", "about": ["component.retrieval"],
+        "code_anchors": [{ "file": "libs/knowledge-graph/graph-context/rank.ts", "symbol": "selectRankedDocuments" }]
+      },
+      {
+        "id": "claim.install_platforms",
+        "kind": "fact",
+        "text": "Greplica supports 8 install platforms: codex, claude, copilot, cursor, opencode, openhands, factory-droid, and antigravity.",
+        "truth": "code_verified", "intent": "intended", "about": ["component.install"],
+        "code_anchors": [{ "file": "libs/install/paths.ts", "symbol": "installPlatforms" }]
+      },
+      {
+        "id": "claim.round_score",
+        "kind": "fact",
+        "text": "roundScore rounds a ranking score to 3 decimal places.",
+        "truth": "code_verified", "intent": "intended", "about": ["component.retrieval"],
+        "code_anchors": [{ "file": "libs/knowledge-graph/graph-context/rank.ts", "symbol": "roundScore" }]
+      },
+      {
+        "id": "claim.session_update_thresholds",
+        "kind": "fact",
+        "text": "Background memory updates trigger after 7 Stop hooks or after 40 minutes of uncovered activity, with a 5-minute grace window.",
+        "truth": "code_verified", "intent": "intended", "about": ["component.session_hooks"],
+        "code_anchors": [{ "file": "libs/hooks/session-state.ts", "symbol": "defaultTimeThresholdMinutes" }]
+      },
+      {
+        "id": "claim.cfamily_fallback",
+        "kind": "fact",
+        "text": "When a file has no tree-sitter grammar, fallbackSymbolForFile locates a symbol by a C-family text search over the source.",
+        "truth": "code_verified", "intent": "intended", "about": ["component.code_anchors"],
+        "code_anchors": [{ "file": "libs/knowledge-graph/code-anchors/resolver.ts", "symbol": "fallbackSymbolForFile" }]
+      },
+      {
+        "id": "claim.index_scores_helper",
+        "kind": "fact",
+        "text": "indexScores builds a lookup Map from a document id to its score entry.",
+        "truth": "code_verified", "intent": "intended", "about": ["component.retrieval"],
+        "code_anchors": [{ "file": "libs/knowledge-graph/graph-context/rank.ts", "symbol": "indexScores" }]
+      },
+      {
+        "id": "claim.split_camel_case",
+        "kind": "fact",
+        "text": "splitCamelCase splits an identifier on camelCase, PascalCase, and letter/digit boundaries.",
+        "truth": "code_verified", "intent": "intended", "about": ["component.retrieval"],
+        "code_anchors": [{ "file": "libs/knowledge-graph/graph-context/bm25.ts", "symbol": "splitCamelCase" }]
+      },
+      {
+        "id": "claim.default_database_path",
+        "kind": "fact",
+        "text": "The SQLite graph database lives at graph.db inside the Greplica home directory.",
+        "truth": "code_verified", "intent": "intended", "about": ["component.storage"],
+        "code_anchors": [{ "file": "libs/storage/sqlite/db.ts", "symbol": "defaultDatabasePath" }]
+      },
+      {
+        "id": "claim.bundled_skills",
+        "kind": "fact",
+        "text": "Greplica bundles 3 skills: greplica-bootstrap, greplica-update-working-memory, and greplica-fast-session-bootstrap.",
+        "truth": "code_verified", "intent": "intended", "about": ["component.install"],
+        "code_anchors": [{ "file": "libs/install/paths.ts", "symbol": "skillNames" }]
+      }
+    ],
+    "sources": [],
+    "edges": []
+  }
+}
