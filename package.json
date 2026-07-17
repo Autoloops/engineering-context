@@ -20,6 +20,8 @@
     "build": "tsc -p tsconfig.build.json",
     "prepare": "npm run build",
     "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\" \"evals/**/*.ts\"",
+    "format:check": "prettier --check \"apps/**/*.ts\" \"libs/**/*.ts\" \"evals/**/*.ts\"",
     "smoke:openhands": "npm run build && node scripts/smoke-openhands-install.mjs",
     "smoke:copilot": "npm run build && node scripts/smoke-copilot-install.mjs",
     "smoke:opencode": "npm run build && node scripts/smoke-opencode-install.mjs",
@@ -74,6 +76,7 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.15.3",
+    "prettier": "^3.5.3",
     "typescript": "^5.8.3"
   }
 }
