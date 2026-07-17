@@ -50,13 +50,13 @@ greplica graph view
 
 Your past agent sessions contain repo context: decisions people made, constraints agents found, files behind workflows, gotchas, and approaches that failed. Greplica keeps the durable parts so the next agent can start with that history.
 
-| Step | What happens |
-| --- | --- |
-| Past sessions | Agents uncover repo-specific decisions, constraints, workflows, and file anchors. |
-| Greplica stores it | Greplica saves the durable parts as `components`, `flows`, `claims`. |
-| New agent asks | The agent runs `greplica graph context "<question>"` before broad exploration. |
-| Agent uses it | The agent starts with facts, target files, subsystem boundaries, prior decisions. |
-| Memory updates | Hooks or `greplica-update-working-memory` save useful new learnings after work sessions. |
+| Step               | What happens                                                                             |
+| ------------------ | ---------------------------------------------------------------------------------------- |
+| Past sessions      | Agents uncover repo-specific decisions, constraints, workflows, and file anchors.        |
+| Greplica stores it | Greplica saves the durable parts as `components`, `flows`, `claims`.                     |
+| New agent asks     | The agent runs `greplica graph context "<question>"` before broad exploration.           |
+| Agent uses it      | The agent starts with facts, target files, subsystem boundaries, prior decisions.        |
+| Memory updates     | Hooks or `greplica-update-working-memory` save useful new learnings after work sessions. |
 
 If you have old sessions, `greplica-fast-session-bootstrap` can ingest bundled transcripts during setup. That gives Greplica useful memory on day one.
 
@@ -74,11 +74,13 @@ Greplica returns a small Markdown packet the agent can act on:
 ## Best Claims
 
 ### claim.sync_auth_mode_startup
+
 The sync service checks auth mode during startup before enabling Google Drive sync.
 
 Anchor: `src/background/sync-service.ts`
 
 ### claim.edge_identity_gap
+
 Edge does not expose the same Google identity API behavior as Chrome.
 
 Anchor: `src/platform/browser-identity.ts`
@@ -107,11 +109,11 @@ In several showcased planning cases, Greplica cut token usage by 40-50%. Stronge
 
 Current showcase rows:
 
-| Case | Score | Tokens | Tokens Saved | Time Saved | Why It Helped |
-| --- | ---: | ---: | ---: | ---: | --- |
-| Gemini Voyager sync/auth hardened | `100 -> 100` | `1,925,152 -> 480,988` | `1,444,164` fewer, `75.0%` | `140.4s` | Memory surfaced sync auth, startup, browser identity, and settings constraints. |
-| IPTVnator playback layout | `64 -> 100` | `1,592,080 -> 881,541` | `710,539` fewer, `44.6%` | `65s` | Memory pointed at player, workspace, playlist, and radio layout boundaries. |
-| Marin Harbor SWE eval support | `6 -> 100` | `2,992,034 -> 2,193,023` | `799,011` fewer, `26.7%` | `80.2s` | Memory surfaced vendored Harbor, mini-swe-agent compatibility, and validation constraints. |
+| Case                              |        Score |                   Tokens |               Tokens Saved | Time Saved | Why It Helped                                                                              |
+| --------------------------------- | -----------: | -----------------------: | -------------------------: | ---------: | ------------------------------------------------------------------------------------------ |
+| Gemini Voyager sync/auth hardened | `100 -> 100` |   `1,925,152 -> 480,988` | `1,444,164` fewer, `75.0%` |   `140.4s` | Memory surfaced sync auth, startup, browser identity, and settings constraints.            |
+| IPTVnator playback layout         |  `64 -> 100` |   `1,592,080 -> 881,541` |   `710,539` fewer, `44.6%` |      `65s` | Memory pointed at player, workspace, playlist, and radio layout boundaries.                |
+| Marin Harbor SWE eval support     |   `6 -> 100` | `2,992,034 -> 2,193,023` |   `799,011` fewer, `26.7%` |    `80.2s` | Memory surfaced vendored Harbor, mini-swe-agent compatibility, and validation constraints. |
 
 ---
 
@@ -145,6 +147,12 @@ greplica transcript bundle --platform codex|claude|copilot|opencode --file <path
 For **OpenHands**, install is repo-local: skills are written to `.agents/skills/` and the `UserPromptSubmit`/`Stop` hooks to `.openhands/hooks.json` (Claude/Codex/Copilot install to the agent's home config instead). GitHub Copilot CLI installs personal skills under `~/.copilot/skills` (or `$COPILOT_HOME/skills`) and user hooks under `~/.copilot/hooks/greplica.json`. The hooks inject `graph context` guidance and trigger background working-memory updates; OpenHands must trust the repo hooks for the background save to run.
 
 For **Cursor**, skills are written to `~/.cursor/skills` and the `beforeSubmitPrompt`/`stop` hooks to `~/.cursor/hooks.json` (both overridable via `$CURSOR_HOME`). `greplica-bootstrap` and `greplica graph context` guidance is delivered through an always-applied project rule at `.cursor/rules/greplica.mdc` rather than the hook, because Cursor's `beforeSubmitPrompt` hook cannot inject prompt context; the hooks track sessions and trigger `greplica-update-working-memory`. A user-authored `greplica.mdc` is never overwritten (install falls back to `greplica-N.mdc`). Reload Cursor if the new rule does not appear immediately. Background working-memory updates run the Cursor CLI (`cursor-agent`), so that must be installed and authenticated for automatic saves; session tracking and guidance work without it.
+
+---
+
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, development workflow, and PR guidelines.
 
 ## License
 
