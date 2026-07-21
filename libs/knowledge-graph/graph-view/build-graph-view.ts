@@ -5,7 +5,7 @@ import type { Claim } from "../claim.js";
 import type { Edge } from "../edge.js";
 import type { GraphReadResult } from "../service.js";
 import type { Component, Flow, Source } from "../schema.js";
-import type { ClaimProvenanceRecord } from "../../storage/sqlite/repository.js";
+import type { ClaimProvenanceRecord } from "../repository.js";
 
 const require = createRequire(import.meta.url);
 
@@ -179,6 +179,13 @@ export function buildGraphViewHtml(
   options: BuildGraphViewOptions = {},
 ): string {
   const data = buildGraphViewData(graph, provenance, supersededClaims);
+  return buildGraphViewHtmlFromData(data, options);
+}
+
+export function buildGraphViewHtmlFromData(
+  data: GraphViewData,
+  options: BuildGraphViewOptions = {},
+): string {
   const title = options.repoName ? `Greplica graph view — ${options.repoName}` : "Greplica graph view";
   return renderHtml(data, title);
 }

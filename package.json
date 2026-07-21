@@ -24,7 +24,8 @@
     "smoke:copilot": "npm run build && node scripts/smoke-copilot-install.mjs",
     "smoke:opencode": "npm run build && node scripts/smoke-opencode-install.mjs",
     "smoke:cursor": "npm run build && node scripts/smoke-cursor-install.mjs",
-    "test": "npm run build && node scripts/check-transcript-bundle.js && node scripts/check-repo-context.js && node scripts/check-install-options.js && node scripts/check-graph-view.js && node scripts/check-graph-view-offline-browser.js && node scripts/check-source-memberships.js && node scripts/check-proposal-validate.js && node scripts/check-bm25-tokenizer.js && node scripts/check-anchor-drift.js && node scripts/check-find-similar-claims.js && node scripts/check-apply-proposal-dedupe.js && node scripts/check-opencode-sqlite-transcript.js",
+    "test": "npm run build && node scripts/check-transcript-bundle.js && node scripts/check-repo-context.js && node scripts/check-install-options.js && node scripts/check-repo-installations.js && node scripts/check-managed-cli.js && node scripts/check-graph-view.js && node scripts/check-graph-view-offline-browser.js && node scripts/check-source-memberships.js && node scripts/check-proposal-validate.js && node scripts/check-bm25-tokenizer.js && node scripts/check-anchor-drift.js && node scripts/check-find-similar-claims.js && node scripts/check-apply-proposal-dedupe.js && node scripts/check-opencode-sqlite-transcript.js",
+    "test:repo-installations": "npm run build && node scripts/check-repo-installations.js",
     "test:transcript-bundle": "npm run build && node scripts/check-transcript-bundle.js",
     "test:repo-context": "npm run build && node scripts/check-repo-context.js",
     "test:source-memberships": "npm run build && node scripts/check-source-memberships.js",
@@ -65,6 +66,7 @@
   ],
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
+    "@sinclair/typebox": "^0.34.38",
     "better-sqlite3": "^12.11.1",
     "chart.js": "4.4.7",
     "chartjs-plugin-datalabels": "2.2.0",
@@ -75,5 +77,9 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.15.3",
     "typescript": "^5.8.3"
+  },
+  "overrides": {
+    "adm-zip": "0.6.0",
+    "protobufjs": "^7.6.5"
   }
 }

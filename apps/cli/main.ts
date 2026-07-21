@@ -4,7 +4,6 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isatty } from "node:tty";
 import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { createLocalKnowledgeGraphService, KnowledgeGraphService } from "../../libs/knowledge-graph/service.js";
 import type { ClaimAnchorAuditResult, RepoRef } from "../../libs/knowledge-graph/service.js";
 import { envVarSource, loadRepoEnv, type LoadedRepoEnv } from "../../libs/env/load-local-env.js";
 import {
@@ -13,7 +12,8 @@ import {
   type EmbeddingConfig,
   type GreplicaConfig,
 } from "../../libs/config/greplica-config.js";
-import { graphContextConfigFromGreplicaConfig } from "../../libs/knowledge-graph/graph-context/config.js";
+import { createGraphMemoryProvider } from "../../libs/knowledge-graph/provider-factory.js";
+import type { GraphMemoryProvider } from "../../libs/knowledge-graph/provider.js";
 import { createEmbedder } from "../../libs/knowledge-graph/graph-context/embedder.js";
 import { renderGraphContextMarkdown } from "../../libs/knowledge-graph/graph-context/render.js";
 import { buildGraphFolderExport } from "../../libs/knowledge-graph/folder-export.js";
@@ -24,18 +24,50 @@ import { installPlatforms, installPlatformUsage } from "../../libs/install/paths
 import type { InstallEmbedding, InstallPlatform } from "../../libs/install/paths.js";
 import { hookCwd, hookEventName, hookSessionId, hookTranscriptPath, readHookInput } from "../../libs/hooks/hook-input.js";
 import { greplicaHookGuidance } from "../../libs/hooks/guidance.js";
-import { HookSessionStore } from "../../libs/hooks/session-state.js";
+import { createLocalAgentRuntimeStore, type LocalAgentRuntimeStore } from "../../libs/hooks/runtime-store.js";
 import { runHookWorker, shouldRunAutoMemoryUpdates, startHookWorker } from "../../libs/hooks/worker.js";
 import { withLocalModelLock } from "../../libs/knowledge-graph/graph-context/local-model-lock.js";
-import { openDatabase } from "../../libs/storage/sqlite/db.js";
-import { SqliteRepository as SqliteKnowledgeGraphRepository } from "../../libs/storage/sqlite/repository.js";
+import { defaultDatabasePath, openDatabase } from "../../libs/storage/sqlite/db.js";
+import { RepoInstallationStore } from "../../libs/install/repo-installation-store.js";
 import { detectRepoContext } from "./repo-context.js";
+import {
+  resolveManagedInstall,
+  runInviteAccept,
+  runInviteList,
+  runInviteRevoke,
+  runLogin,
+  runLogout,
+  runOrgCreate,
+  runOrgInvite,
+  runOrgLeave,
+  runOrgList,
+  runOrgMembers,
+  runOrgRemoveMember,
+  runOrgRole,
+  runRepoAccessDecision,
+  runRepoAccessList,
+  runRepoAccessRequest,
+  runRepoArchive,
+  runRepoConnect,
+  runRepoCreate,
+  runRepoDiscovery,
+  runRepoEnrollGithub,
+  runRepoGithubInstall,
+  runRepoGrantMemoryAdmin,
+  runRepoInviteReader,
+  runRepoLinkGithub,
+  runRepoList,
+  runRepoPublish,
+  runRepoRestore,
+  runRepoRevokeMemoryAdmin,
+  runWhoami,
+} from "./managed-cli.js";
 
 interface CommandContext {
   repo: RepoRef;
   env: LoadedRepoEnv;
   config: GreplicaConfig;
-  service: KnowledgeGraphService;
+  service: GraphMemoryProvider;
 }
 
 type CommandContextProvider = () => CommandContext;
@@ -61,10 +93,55 @@ const cliCommands = [
   {
     key: "install",
     path: ["install"],
-    usage: `install --platform ${installPlatformUsage} --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]`,
+    usage: `install --mode local|managed [--platform ${installPlatformUsage}] [--embedding local|openai] [--managed-repo <id>] [--hooks enabled|disabled] [--auto-memory enabled|disabled]`,
     handler: runInstallCommand,
     showInTopLevelHelp: true,
   },
+  {
+    key: "uninstall",
+    path: ["uninstall"],
+    usage: "uninstall",
+    handler: runUninstallCommand,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "repoStatus",
+    path: ["repo", "status"],
+    usage: "repo status",
+    handler: runRepoStatusCommand,
+    showInTopLevelHelp: true,
+  },
+  { key: "login", path: ["login"], usage: "login [--api-url <url>]", handler: runLogin, showInTopLevelHelp: true },
+  { key: "logout", path: ["logout"], usage: "logout", handler: runLogout, showInTopLevelHelp: true },
+  { key: "whoami", path: ["whoami"], usage: "whoami", handler: runWhoami, showInTopLevelHelp: true },
+  { key: "orgCreate", path: ["org", "create"], usage: "org create --name <name> [--slug <slug>]", handler: runOrgCreate, showInTopLevelHelp: true },
+  { key: "orgList", path: ["org", "list"], usage: "org list", handler: runOrgList, showInTopLevelHelp: true },
+  { key: "orgInvite", path: ["org", "invite"], usage: "org invite --org <id> --github-user <login>", handler: runOrgInvite, showInTopLevelHelp: true },
+  { key: "orgMembers", path: ["org", "members"], usage: "org members --org <id>", handler: runOrgMembers, showInTopLevelHelp: true },
+  { key: "orgRole", path: ["org", "role"], usage: "org role --org <id> --user <id> --role admin|member|guest", handler: runOrgRole, showInTopLevelHelp: true },
+  { key: "orgRemoveMember", path: ["org", "remove-member"], usage: "org remove-member --org <id> --user <id>", handler: runOrgRemoveMember, showInTopLevelHelp: true },
+  { key: "orgLeave", path: ["org", "leave"], usage: "org leave --org <id>", handler: runOrgLeave, showInTopLevelHelp: true },
+  { key: "inviteList", path: ["invite", "list"], usage: "invite list", handler: runInviteList, showInTopLevelHelp: true },
+  { key: "inviteAccept", path: ["invite", "accept"], usage: "invite accept <id>", handler: runInviteAccept, showInTopLevelHelp: true },
+  { key: "inviteRevoke", path: ["invite", "revoke"], usage: "invite revoke <id>", handler: runInviteRevoke, showInTopLevelHelp: true },
+  { key: "repoCreate", path: ["repo", "create"], usage: "repo create --org <id> --name <name>", handler: runRepoCreate, showInTopLevelHelp: true },
+  { key: "repoList", path: ["repo", "list"], usage: "repo list", handler: runRepoList, showInTopLevelHelp: true },
+  { key: "repoConnect", path: ["repo", "connect"], usage: "repo connect --managed-repo <id> [--confirm-mode-switch] [--confirm-rebind]", handler: runRepoConnect, showInTopLevelHelp: true },
+  { key: "repoRebind", path: ["repo", "rebind"], usage: "repo rebind --managed-repo <id> --confirm-rebind", handler: runRepoConnect, showInTopLevelHelp: true },
+  { key: "repoGithubInstall", path: ["repo", "github-install"], usage: "repo github-install", handler: runRepoGithubInstall, showInTopLevelHelp: true },
+  { key: "repoEnrollGithub", path: ["repo", "enroll-github"], usage: "repo enroll-github --org <id> --installation <id> --github-repo <id> [--name <name>]", handler: runRepoEnrollGithub, showInTopLevelHelp: true },
+  { key: "repoLinkGithub", path: ["repo", "link-github"], usage: "repo link-github --installation <id> --github-repo <id>", handler: runRepoLinkGithub, showInTopLevelHelp: true },
+  { key: "repoArchive", path: ["repo", "archive"], usage: "repo archive", handler: runRepoArchive, showInTopLevelHelp: true },
+  { key: "repoRestore", path: ["repo", "restore"], usage: "repo restore", handler: runRepoRestore, showInTopLevelHelp: true },
+  { key: "repoDiscovery", path: ["repo", "discovery"], usage: "repo discovery --discovery listed|unlisted", handler: runRepoDiscovery, showInTopLevelHelp: true },
+  { key: "repoInviteReader", path: ["repo", "invite-reader"], usage: "repo invite-reader --github-user <login>", handler: runRepoInviteReader, showInTopLevelHelp: true },
+  { key: "repoGrantMemoryAdmin", path: ["repo", "grant-memory-admin"], usage: "repo grant-memory-admin --user <id>", handler: runRepoGrantMemoryAdmin, showInTopLevelHelp: true },
+  { key: "repoRevokeMemoryAdmin", path: ["repo", "revoke-memory-admin"], usage: "repo revoke-memory-admin --user <id>", handler: runRepoRevokeMemoryAdmin, showInTopLevelHelp: true },
+  { key: "repoAccessRequest", path: ["repo", "request-access"], usage: "repo request-access --managed-repo <id>", handler: runRepoAccessRequest, showInTopLevelHelp: true },
+  { key: "repoAccessList", path: ["repo", "access-requests"], usage: "repo access-requests", handler: runRepoAccessList, showInTopLevelHelp: true },
+  { key: "repoAccessApprove", path: ["repo", "approve-access"], usage: "repo approve-access --request <id>", handler: (args) => runRepoAccessDecision(args, "approve"), showInTopLevelHelp: true },
+  { key: "repoAccessDeny", path: ["repo", "deny-access"], usage: "repo deny-access --request <id>", handler: (args) => runRepoAccessDecision(args, "deny"), showInTopLevelHelp: true },
+  { key: "repoPublish", path: ["repo", "publish"], usage: "repo publish --from-local", handler: runRepoPublish, showInTopLevelHelp: true },
   {
     key: "config",
     path: ["config"],
@@ -140,7 +217,7 @@ const cliCommands = [
     key: "sessionMarkMemoryCurrent",
     path: ["session", "mark-memory-current"],
     usage: "session mark-memory-current --session-ref <ref>",
-    handler: withCommandContext(runSessionMarkMemoryCurrent),
+    handler: runSessionMarkMemoryCurrent,
     showInTopLevelHelp: true,
   },
   {
@@ -244,16 +321,67 @@ function isQueryAwareHelpRequest(args: string[]): boolean {
 
 async function runInstallCommand(args: string[]): Promise<void> {
   const options = parseInstallArgs(args);
+  const repo = detectRepoContext();
+  const managed = options.mode === "managed"
+    ? await resolveManagedInstall(repo, options.managedRepoId)
+    : undefined;
+  if (managed?.pending === true) return;
+  if (options.mode === "managed" && managed?.repository === undefined) {
+    throw new Error("Managed installation did not resolve a repository.");
+  }
   const result = await installGreplica({
     ...options,
-    repo: detectRepoContext(),
+    repo,
+    managedRepoId: managed?.repository?.id,
+    managedRole: managed?.repository?.effective_role,
+    managedAccessStatus: managed?.repository?.access_status,
   });
   printInstallResult(result);
 }
 
-function runGraphReadCommand(_args: string[], getContext: CommandContextProvider): void {
-  const { repo, service } = getContext();
-  const graph = service.readGraph(repo);
+function runUninstallCommand(args: string[]): void {
+  if (args.length > 0) throw new Error(usage("uninstall"));
+  const repo = detectRepoContext();
+  const db = openDatabase();
+  try {
+    const installation = new RepoInstallationStore(db).deactivate(repo);
+    console.log(`Deactivated Greplica for ${installation.repoName}.`);
+    console.log("Local graph, sessions, and managed binding were preserved.");
+  } finally {
+    db.close();
+  }
+}
+
+function runRepoStatusCommand(args: string[]): void {
+  if (args.length > 0) throw new Error(usage("repoStatus"));
+  const repo = detectRepoContext();
+  const db = openDatabase();
+  try {
+    const installation = new RepoInstallationStore(db).find(repo);
+    if (installation === undefined) {
+      console.log("Greplica is not installed for this repository.");
+      return;
+    }
+    console.log(`Repository: ${installation.repoName}`);
+    console.log(`Key: ${installation.repoKey}`);
+    console.log(`Status: ${installation.status}`);
+    console.log(`Mode: ${installation.activeMode}`);
+    console.log(`Hooks: ${installation.hooksEnabled ? "enabled" : "disabled"}`);
+    console.log(`Automatic memory updates: ${installation.autoMemoryUpdates ? "enabled" : "disabled"}`);
+    if (installation.managedRepoId !== undefined) console.log(`Managed repository: ${installation.managedRepoId}`);
+    if (installation.managedRole !== undefined) console.log(`Managed role: ${installation.managedRole}`);
+    if (installation.managedAccessStatus !== undefined) console.log(`Managed access: ${installation.managedAccessStatus}`);
+    if (installation.managedAccessRefreshedAt !== undefined) {
+      console.log(`Managed access refreshed: ${installation.managedAccessRefreshedAt}`);
+    }
+  } finally {
+    db.close();
+  }
+}
+
+async function runGraphReadCommand(_args: string[], getContext: CommandContextProvider): Promise<void> {
+  const { service } = getContext();
+  const graph = await service.readGraph();
   console.log("Current graph view: main + working");
   printSection("Components", graph.components, (item) => `${named(item)} ${anchor(item)}`.trim());
   printSection("Flows", graph.flows, named);
@@ -266,8 +394,8 @@ async function runGraphContextCommand(args: string[], getContext: CommandContext
   const output = parseGraphContextOutput(args);
   const query = args.filter((arg) => arg !== "--debug").join(" ").trim();
   if (query.length === 0) throw new Error(usage("graphContext"));
-  const { repo, service } = getContext();
-  const result = await service.contextGraph(repo, query);
+  const { service } = getContext();
+  const result = await service.contextGraph(query);
   if (output === "debug") {
     console.log(JSON.stringify(result, null, 2));
   } else {
@@ -276,25 +404,25 @@ async function runGraphContextCommand(args: string[], getContext: CommandContext
 }
 
 async function runGraphAuditAnchorsCommand(_args: string[], getContext: CommandContextProvider): Promise<void> {
-  const { repo, service } = getContext();
-  const result = await service.auditCodeAnchors(repo);
+  const { service } = getContext();
+  const result = await service.auditCodeAnchors();
   printAnchorAudit(result);
   if (anchorAuditIssueCount(result) > 0) process.exitCode = 1;
 }
 
-function runGraphExportCommand(args: string[], getContext: CommandContextProvider): void {
+async function runGraphExportCommand(args: string[], getContext: CommandContextProvider): Promise<void> {
   const outputDir = requireFile(args[0], usage("graphExport"));
-  const { repo, service } = getContext();
-  const files = buildGraphFolderExport(service.readGraph(repo));
+  const { service } = getContext();
+  const files = buildGraphFolderExport(await service.readGraph());
   writeGraphFolderExport(outputDir, files);
   console.log(`Exported current graph view to ${outputDir}`);
   console.log(`Files: ${files.length}`);
 }
 
-function runGraphViewCommand(args: string[], getContext: CommandContextProvider): void {
+async function runGraphViewCommand(args: string[], getContext: CommandContextProvider): Promise<void> {
   const options = parseGraphViewArgs(args);
   const { repo, service } = getContext();
-  const graph = service.readGraph(repo);
+  const graph = await service.readGraph();
   if (graph.components.length === 0) {
     console.log("No components to visualise. Bootstrap memory first.");
     process.exitCode = 1;
@@ -303,7 +431,7 @@ function runGraphViewCommand(args: string[], getContext: CommandContextProvider)
 
   const outputPath = options.outputPath ?? defaultGraphViewOutputPath(repo.repo_name);
   mkdirSync(dirname(outputPath), { recursive: true });
-  const html = service.buildGraphView(repo);
+  const html = await service.buildGraphView();
   writeFileSync(outputPath, html, "utf8");
   console.log(`Wrote graph view to ${outputPath}`);
 
@@ -314,9 +442,9 @@ function runGraphViewCommand(args: string[], getContext: CommandContextProvider)
 
 async function runProposalValidateCommand(args: string[], getContext: CommandContextProvider): Promise<void> {
   const file = requireFile(args[0], usage("proposalValidate"));
-  const { repo, service } = getContext();
+  const { service } = getContext();
   const proposal = readProposal(file);
-  const result = await service.validateProposal(repo, proposal);
+  const result = await service.reviewProposal(proposal);
   if (result.valid) {
     console.log("Proposal is valid.");
     for (const [claimId, matches] of Object.entries(result.duplicate_warnings)) {
@@ -336,9 +464,8 @@ async function runProposalValidateCommand(args: string[], getContext: CommandCon
 async function runProposalApplyCommand(args: string[], getContext: CommandContextProvider): Promise<void> {
   const file = requireFile(args[0], usage("proposalApply"));
   const { repo, service } = getContext();
-  const installed = service.requireRepo(repo);
   const proposal = readProposal(file);
-  const result = await service.applyProposal(repo, proposal);
+  const result = await service.applyProposal(proposal);
   console.log("Applied proposal to working memory.");
   console.log(`Memory commit: ${result.memory_commit_id}`);
   console.log(`Scope: ${result.scope_id}`);
@@ -350,7 +477,7 @@ async function runProposalApplyCommand(args: string[], getContext: CommandContex
   console.log(`Embeddings checked: ${result.embedding_status.checked_objects}`);
   console.log(`Embeddings created: ${result.embedding_status.created}`);
   console.log(`Embeddings reused: ${result.embedding_status.reused}`);
-  markProposalApplyMemoryUpdated(installed.repo_id, proposal);
+  markProposalApplyMemoryUpdated(repo, proposal);
 }
 
 function printAnchorAudit(result: ClaimAnchorAuditResult): void {
@@ -390,7 +517,7 @@ function createCommandContext(): CommandContext {
   const repo = detectRepoContext();
   const env = loadRepoEnv(repo.repo_root ?? process.cwd());
   const config = ensureGreplicaConfig();
-  const service = createLocalKnowledgeGraphService(graphContextConfigFromGreplicaConfig(config));
+  const service = createGraphMemoryProvider(repo, config);
   return { repo, env, config, service };
 }
 
@@ -421,31 +548,24 @@ function runHookIngest(args: string[]): void {
   const cwd = hookCwd(hook) ?? process.cwd();
   const transcriptPath = runner.transcriptPathFromHook?.(hook) ?? hookTranscriptPath(hook);
   const repo = detectRepoContext(cwd);
-  const db = openDatabase();
+  const config = ensureGreplicaConfig();
+  const runtimeStore = createLocalAgentRuntimeStore(config.session);
   try {
-    const repository = new SqliteKnowledgeGraphRepository(db);
-    const service = new KnowledgeGraphService(repository);
-    let installed: ReturnType<KnowledgeGraphService["requireRepo"]>;
-    try {
-      installed = service.requireRepo(repo);
-    } catch {
-      return;
-    }
-    const sessionStore = new HookSessionStore(db);
-    const result = sessionStore.recordHook({
+    const result = runtimeStore.recordHook({
+      repo,
       platform,
-      repoId: installed.repo_id,
       sessionId: hookSessionId(hook),
       transcriptPath,
       cwd,
       eventName,
     });
-    if (shouldRunAutoMemoryUpdates(ensureGreplicaConfig())) startHookWorker();
+    if (result === undefined) return;
+    if (shouldRunAutoMemoryUpdates(result.installation)) startHookWorker();
 
     if (!result.shouldInjectGuidance) return;
     console.log(JSON.stringify(hookGuidanceOutput(platform, greplicaHookGuidance)));
   } finally {
-    db.close();
+    runtimeStore.close();
   }
 }
 
@@ -460,13 +580,13 @@ function hookGuidanceOutput(platform: InstallPlatform, additionalContext: string
   };
 }
 
-function runSessionMarkMemoryCurrent(args: string[], getContext: CommandContextProvider): void {
+function runSessionMarkMemoryCurrent(args: string[]): void {
   const sessionRef = parseRequiredOption(args, "--session-ref", usage("sessionMarkMemoryCurrent"));
-  const { repo, service } = getContext();
-  const installed = service.requireRepo(repo);
-  const db = openDatabase();
+  const repo = detectRepoContext();
+  const config = ensureGreplicaConfig();
+  const runtimeStore = createLocalAgentRuntimeStore(config.session);
   try {
-    const marked = markMemoryCurrentFromSessionRef(new HookSessionStore(db), installed.repo_id, sessionRef);
+    const marked = markMemoryCurrentFromSessionRef(runtimeStore, repo, sessionRef);
     if (marked) {
       console.log("Marked session memory current.");
       return;
@@ -474,7 +594,7 @@ function runSessionMarkMemoryCurrent(args: string[], getContext: CommandContextP
     console.log(`No tracked session matched ${sessionRef}`);
     process.exitCode = 1;
   } finally {
-    db.close();
+    runtimeStore.close();
   }
 }
 
@@ -496,27 +616,22 @@ function runTranscriptBundle(args: string[]): void {
   }
 }
 
-function markProposalApplyMemoryUpdated(repoId: string, proposal: unknown): void {
+function markProposalApplyMemoryUpdated(repo: RepoRef, proposal: unknown): void {
   const sessionRefs = sessionRefsFromProposal(proposal);
   if (sessionRefs.length === 0) return;
 
-  const db = openDatabase();
+  const runtimeStore = createLocalAgentRuntimeStore(ensureGreplicaConfig().session);
   try {
-    const sessionStore = new HookSessionStore(db);
-    for (const sessionRef of sessionRefs) markMemoryCurrentFromSessionRef(sessionStore, repoId, sessionRef);
+    for (const sessionRef of sessionRefs) markMemoryCurrentFromSessionRef(runtimeStore, repo, sessionRef);
   } finally {
-    db.close();
+    runtimeStore.close();
   }
 }
 
-function markMemoryCurrentFromSessionRef(sessionStore: HookSessionStore, repoId: string, sessionRef: string): boolean {
+function markMemoryCurrentFromSessionRef(runtimeStore: LocalAgentRuntimeStore, repo: RepoRef, sessionRef: string): boolean {
   const identity = sessionIdentityFromSourceRef(sessionRef);
   if (identity === undefined) return false;
-  return sessionStore.markMemoryCurrent({
-    repoId,
-    platform: identity.platform,
-    sessionId: identity.sessionId,
-  });
+  return runtimeStore.markMemoryCurrent(repo, identity.platform, identity.sessionId);
 }
 
 function sessionIdentityFromSourceRef(ref: string): { platform: InstallPlatform; sessionId: string } | undefined {
@@ -568,24 +683,18 @@ async function runDoctor(args: string[], getContext: CommandContextProvider): Pr
   console.log(`Remote: ${context.repo.remote_url ?? "none"}`);
   console.log(`Default branch: ${context.repo.default_branch}`);
 
-  try {
-    const result = context.service.requireRepo(context.repo);
-    console.log(`Database: ${result.database_path}`);
-    console.log("Memory state: ready");
-    console.log(`Main scope: ${result.main_scope_id}`);
-    console.log(`Working scope: ${result.working_scope_id}`);
-  } catch (error: unknown) {
-    ready = false;
-    const message = error instanceof Error ? error.message : String(error);
-    console.log(message.startsWith("Greplica is not installed") ? "Memory state: not installed" : "Memory state: failed");
-    console.log(message);
-  }
+  const installation = context.service.installation;
+  console.log(`Database: ${resolve(defaultDatabasePath())}`);
+  console.log("Memory state: ready");
+  console.log(`Mode: ${installation.activeMode}`);
+  if (installation.managedRepoId !== undefined) console.log(`Managed repository: ${installation.managedRepoId}`);
+  if (installation.managedRole !== undefined) console.log(`Managed role: ${installation.managedRole}`);
 
   console.log(`Config: ${displayConfigPath()}`);
-  printEmbeddingConfig(context.config.embedding);
+  if (installation.activeMode === "local") printEmbeddingConfig(context.config.embedding);
   printSessionConfig(context.config.session);
 
-  if (context.config.embedding.provider === "openai") {
+  if (installation.activeMode === "local" && context.config.embedding.provider === "openai") {
     const source = envVarSource("OPENAI_API_KEY", context.env);
     if (source === undefined) {
       ready = false;
@@ -598,7 +707,7 @@ async function runDoctor(args: string[], getContext: CommandContextProvider): Pr
     }
   }
 
-  if (args.includes("--check-embeddings") || args.includes("--check-openai")) {
+  if (installation.activeMode === "local" && (args.includes("--check-embeddings") || args.includes("--check-openai"))) {
     ready = (await checkEmbeddings(context.config.embedding)) && ready;
   }
 
@@ -655,7 +764,8 @@ function runConfigCommand(args: string[]): void {
   console.log("- stopThreshold: run background memory update after this many Stop hooks since memory was current.");
   console.log("- timeThresholdMinutes: run after this much time if the session has activity not covered by current memory.");
   console.log("- currentGraceMinutes: skip time-based updates when memory was marked current close to last activity.");
-  console.log("- autoMemoryUpdates: run background memory updates from hooks. Guidance injection can still run when this is false.");
+  console.log("- hooks and automatic memory updates are configured per repository.");
+  console.log(`Managed API: ${config.managed.apiUrl}`);
   console.log("");
   console.log("Common embedding examples:");
   console.log("- local MPNet base: provider=local, model=all-mpnet-base-v2, dimensions=768, batchSize=16");
@@ -663,14 +773,37 @@ function runConfigCommand(args: string[]): void {
   console.log("- OpenAI small: provider=openai, model=text-embedding-3-small, dimensions=1536, batchSize=100");
 }
 
-function parseInstallArgs(args: string[]): { platform: InstallPlatform; embedding: InstallEmbedding; hooks: boolean; autoMemoryUpdates: boolean } {
+function parseInstallArgs(args: string[]): {
+  mode: "local" | "managed";
+  platform?: InstallPlatform;
+  embedding?: InstallEmbedding;
+  managedRepoId?: string;
+  hooks: boolean;
+  autoMemoryUpdates: boolean;
+  allowModeSwitch: boolean;
+  allowRebind: boolean;
+} {
+  let mode: "local" | "managed" = "local";
+  let modeSeen = false;
   let platform: InstallPlatform | undefined;
   let embedding: InstallEmbedding | undefined;
+  let managedRepoId: string | undefined;
   let hooks: boolean | undefined;
   let autoMemoryUpdates: boolean | undefined;
+  let allowModeSwitch = false;
+  let allowRebind = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+    if (arg === "--mode" || arg.startsWith("--mode=")) {
+      if (modeSeen) throw new Error(`Specify --mode only once.\n${usage("install")}`);
+      const value = arg === "--mode" ? requireFlagValue(args, index, "--mode") : arg.slice("--mode=".length);
+      if (value !== "local" && value !== "managed") throw new Error(`Invalid --mode ${value}.\n${usage("install")}`);
+      mode = value;
+      modeSeen = true;
+      if (arg === "--mode") index += 1;
+      continue;
+    }
     if (arg === "--platform") {
       if (platform !== undefined) throw new Error(`Specify --platform only once.\n${usage("install")}`);
       platform = parseInstallPlatform(requireFlagValue(args, index, "--platform"));
@@ -691,6 +824,22 @@ function parseInstallArgs(args: string[]): { platform: InstallPlatform; embeddin
     if (arg.startsWith("--embedding=")) {
       if (embedding !== undefined) throw new Error(`Specify --embedding only once.\n${usage("install")}`);
       embedding = parseInstallEmbedding(arg.slice("--embedding=".length));
+      continue;
+    }
+    if (arg === "--managed-repo" || arg.startsWith("--managed-repo=")) {
+      if (managedRepoId !== undefined) throw new Error(`Specify --managed-repo only once.\n${usage("install")}`);
+      managedRepoId = arg === "--managed-repo"
+        ? requireFlagValue(args, index, "--managed-repo")
+        : arg.slice("--managed-repo=".length);
+      if (arg === "--managed-repo") index += 1;
+      continue;
+    }
+    if (arg === "--confirm-mode-switch") {
+      allowModeSwitch = true;
+      continue;
+    }
+    if (arg === "--confirm-rebind") {
+      allowRebind = true;
       continue;
     }
     if (arg === "--hooks") {
@@ -718,15 +867,24 @@ function parseInstallArgs(args: string[]): { platform: InstallPlatform; embeddin
     throw new Error(usage("install"));
   }
 
-  if (platform === undefined || embedding === undefined) throw new Error(usage("install"));
+  if (mode === "managed" && embedding !== undefined) {
+    throw new Error(`Managed installations do not accept --embedding.\n${usage("install")}`);
+  }
+  if (mode === "local" && managedRepoId !== undefined) {
+    throw new Error(`--managed-repo requires --mode managed.\n${usage("install")}`);
+  }
   if (hooks === false && autoMemoryUpdates === true) {
     throw new Error(`--auto-memory enabled requires --hooks enabled.\n${usage("install")}`);
   }
   return {
+    mode,
     platform,
-    embedding,
+    embedding: mode === "local" ? (embedding ?? "local") : undefined,
+    managedRepoId,
     hooks: hooks ?? true,
     autoMemoryUpdates: hooks === false ? false : autoMemoryUpdates ?? true,
+    allowModeSwitch,
+    allowRebind,
   };
 }
 
@@ -810,6 +968,7 @@ function parseEnabledFlag(value: string): boolean {
 
 function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>): void {
   console.log(`Installed Greplica for ${platformDisplayName(result.platform)}.`);
+  console.log(`Mode: ${result.mode}.`);
   console.log(`Skills: ${result.skills.length} installed.`);
   if (result.hooks !== undefined) {
     console.log(`Hooks: installed for ${result.hooks.events.join(", ")}.`);
@@ -822,8 +981,13 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
     console.log(`Project rules: ${result.rules.configFiles.join(", ")}`);
     console.log("- note: reload your editor if the new project rule does not appear immediately.");
   }
-  console.log(`Automatic memory updates: ${result.session.autoMemoryUpdates ? "enabled" : "disabled"}.`);
-  console.log(`Embedding: ${result.embedding}.`);
+  if (result.mode === "managed" && result.autoMemoryUpdates && result.installation.managedRole !== "memory_admin") {
+    console.log("Automatic memory updates: enabled when memory_admin access is granted.");
+  } else {
+    console.log(`Automatic memory updates: ${result.autoMemoryUpdates ? "enabled" : "disabled"}.`);
+  }
+  if (result.embedding !== undefined) console.log(`Embedding: ${result.embedding}.`);
+  if (result.installation.managedRepoId !== undefined) console.log(`Managed repository: ${result.installation.managedRepoId}.`);
   console.log(`Config: ${result.configFile}`);
   console.log(`Database: ${result.databasePath}`);
   console.log("");
@@ -839,9 +1003,9 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
     console.log("");
   }
   console.log("- Ask the agent to use greplica-bootstrap once for repos that do not have memory yet.");
-  if (result.embedding === "local") {
+  if (result.mode === "local" && result.embedding === "local") {
     console.log(`- Optional later: greplica install --platform ${result.platform} --embedding openai`);
-  } else {
+  } else if (result.mode === "local") {
     console.log(`- Optional later: greplica install --platform ${result.platform} --embedding local`);
   }
   for (const note of result.notes) console.log(`- ${note}`);
@@ -868,7 +1032,6 @@ function printSessionConfig(config: GreplicaConfig["session"]): void {
   console.log(`Session stop threshold: ${config.stopThreshold}`);
   console.log(`Session time threshold minutes: ${config.timeThresholdMinutes}`);
   console.log(`Session current grace minutes: ${config.currentGraceMinutes}`);
-  console.log(`Session automatic memory updates: ${config.autoMemoryUpdates ? "enabled" : "disabled"}`);
 }
 
 function displayConfigPath(): string {
