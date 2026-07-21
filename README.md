@@ -48,7 +48,7 @@ greplica graph view
 
 ## Shared Managed Memory
 
-Managed mode lets contributors on different clones and forks query the same repository memory. It requires Greplica `0.1.53` or later and access to a managed Greplica server.
+Managed mode lets contributors on different clones and forks query the same repository memory. It requires Greplica `0.2.0` or later and access to a managed Greplica server.
 
 After an administrator invites your GitHub user to an organization or repository, run:
 
