@@ -424,7 +424,7 @@ async function runGraphViewCommand(args: string[], getContext: CommandContextPro
   const { repo, service } = getContext();
   const graph = await service.readGraph();
   if (graph.components.length === 0) {
-    console.log("No components to visualise. Bootstrap memory first.");
+    console.log("No components to visualize. Bootstrap memory first.");
     process.exitCode = 1;
     return;
   }
