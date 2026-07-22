@@ -153,12 +153,13 @@ export async function maybeUpdateWorkingMemory(attempt: ClaimedMemoryUpdateAttem
   }
 }
 
-function updateWorkingMemoryPrompt(
+export function updateWorkingMemoryPrompt(
   transcriptMarkdown: string,
   attempt: ClaimedMemoryUpdateAttempt,
   sessionRef: string,
   proposalPath: string,
 ): string {
+  const escapedTranscript = escapeFilteredSessionTranscript(transcriptMarkdown.trim());
   return `Run the greplica-update-working-memory skill for a completed coding-agent session. If your runtime supports slash-command skills, invoke /greplica-update-working-memory for this task.
 
 Use the filtered session transcript below as the session context. It has been projected to Markdown with session metadata and human/agent text messages only.
@@ -179,7 +180,7 @@ Session:
 - due_reason: ${attempt.reason}
 
 <filtered_session_transcript>
-${transcriptMarkdown.trim()}
+${escapedTranscript}
 </filtered_session_transcript>
 `;
 }
@@ -255,6 +256,14 @@ function pruneRetainedHookRuns(runsDir: string): void {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Neutralize literal closing tags so pasted transcript content cannot break the evidence fence. */
+function escapeFilteredSessionTranscript(transcriptMarkdown: string): string {
+  return transcriptMarkdown.replaceAll(
+    "</filtered_session_transcript>",
+    "</\u200Bfiltered_session_transcript>",
+  );
 }
 
 function safePathSegment(value: string): string {

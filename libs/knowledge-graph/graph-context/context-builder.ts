@@ -25,6 +25,8 @@ export interface BuildGraphContextOptions {
   config?: GraphContextConfig;
   repoRoot?: string;
   resolveCodeAnchors?: boolean;
+  /** Optional embedder override (tests / hermetic callers). */
+  embedder?: Embedder;
 }
 
 interface ExistingEmbedding {
@@ -44,7 +46,7 @@ export class GraphContextBuilder {
     const flowDocuments = buildFlowDocuments(graph);
     const evidenceByClaim = buildEvidenceByClaim(graph);
     const documents = [...claimDocuments, ...componentDocuments, ...flowDocuments];
-    const embedder = createEmbedder(config.embedding);
+    const embedder = options.embedder ?? createEmbedder(config.embedding);
     const embeddingStatus = await this.ensureEmbeddings(repoId, documents, embedder, config);
     if (options.warnOnCreatedEmbeddings && embeddingStatus.created > 0) {
       console.warn(`graph context created ${embeddingStatus.created} missing embedding(s); proposal apply should normally pre-create them.`);
@@ -120,14 +122,23 @@ export class GraphContextBuilder {
     };
   }
 
-  async ensureForGraph(repoId: string, graph: GraphReadResult, config: GraphContextConfig = graphContextConfig): Promise<EmbeddingStatus> {
+  async ensureForGraph(
+    repoId: string,
+    graph: GraphReadResult,
+    config: GraphContextConfig = graphContextConfig,
+    embedder?: Embedder,
+  ): Promise<EmbeddingStatus> {
     const documents = [
       ...buildClaimDocuments(graph),
       ...buildComponentDocuments(graph),
       ...buildFlowDocuments(graph),
     ];
-    const embedder = createEmbedder(config.embedding);
-    return this.ensureEmbeddings(repoId, documents, embedder, config);
+    return this.ensureEmbeddings(
+      repoId,
+      documents,
+      embedder ?? createEmbedder(config.embedding),
+      config,
+    );
   }
 
   private async ensureEmbeddings(
@@ -149,6 +160,7 @@ export class GraphContextBuilder {
     );
     const missing = documents.filter((document) => !existing.has(document.key));
     const vectors = await embedder.embedBatch(missing.map((document) => document.text));
+    assertEmbedBatchComplete(vectors, missing.length, config.embedding.dimensions);
 
     repository.insertGraphObjectEmbeddings(
       missing.map((document, index) => ({
@@ -158,7 +170,7 @@ export class GraphContextBuilder {
         provider: config.embedding.provider,
         model: config.embedding.model,
         dimensions: config.embedding.dimensions,
-        embedding: float32ArrayToBuffer(vectors[index] ?? []),
+        embedding: float32ArrayToBuffer(vectors[index]),
       })),
     );
 
@@ -221,6 +233,30 @@ export class GraphContextBuilder {
   private requireRepository(): SqliteRepository {
     if (this.repository === undefined) throw new Error("This graph context operation requires a storage repository.");
     return this.repository;
+  }
+}
+
+function assertEmbedBatchComplete(
+  vectors: number[][],
+  expectedCount: number,
+  dimensions: number,
+): void {
+  if (vectors.length !== expectedCount) {
+    throw new Error(
+      `embedBatch returned ${vectors.length} vector(s); expected ${expectedCount}.`,
+    );
+  }
+
+  for (let index = 0; index < vectors.length; index += 1) {
+    const vector = vectors[index];
+    if (vector === undefined || vector.length === 0) {
+      throw new Error(`embedBatch returned an empty vector at index ${index}.`);
+    }
+    if (vector.length !== dimensions) {
+      throw new Error(
+        `embedBatch vector at index ${index} has length ${vector.length}; expected ${dimensions}.`,
+      );
+    }
   }
 }
 
