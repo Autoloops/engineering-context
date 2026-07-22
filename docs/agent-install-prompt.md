@@ -3,12 +3,12 @@
 `````txt
 Summary of what we are doing:
 - ask whether this repository should use local or shared managed memory
-- ask a short Greplica guidance questionnaire before installing anything
+- run a short Greplica guidance questionnaire before installing anything
 - install greplica with the selected mode and hook behavior
 - create initial memory and optionally analyze previous sessions only in local mode
 - connect read-only contributors to existing team memory in managed mode
 
-Before installing, ask me this short Greplica setup questionnaire. If this agent runtime supports native multiple-choice question UI, use it. Otherwise ask the same questions as plain multiple choice and wait for my answers. Do not run npm install, greplica login, greplica install, bootstrap, or transcript search until I answer.
+Before installing, walk me through this short Greplica setup questionnaire. If this agent runtime supports native multiple-choice question UI, use it. Otherwise ask the same questions as plain multiple choice and wait for my answers. Do not run npm install, greplica login, greplica install, bootstrap, or transcript search until I answer.
 
 Question 0:
 Where should this repository's memory live?
