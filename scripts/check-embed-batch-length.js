@@ -145,6 +145,32 @@ const rowsAfterEmpty = repository.listGraphObjectEmbeddings({
 });
 assert.equal(rowsAfterEmpty.length, 0, "empty vectors must not insert embedding rows");
 
+const wrongDimensionEmbedder = {
+  async embed() {
+    return Array.from({ length: dimensions }, () => 0.1);
+  },
+  async embedBatch(texts) {
+    return texts.map(() => Array.from({ length: dimensions - 1 }, () => 0.3));
+  },
+};
+
+await assert.rejects(
+  () => builder.ensureForGraph(repoId, graph, config, wrongDimensionEmbedder),
+  (error) => {
+    assert.ok(error instanceof Error);
+    assert.match(error.message, /dimension|length|vector/i);
+    return true;
+  },
+);
+
+const rowsAfterWrongDim = repository.listGraphObjectEmbeddings({
+  repo_id: repoId,
+  provider: config.embedding.provider,
+  model: config.embedding.model,
+  dimensions: config.embedding.dimensions,
+});
+assert.equal(rowsAfterWrongDim.length, 0, "wrong-dimension vectors must not insert embedding rows");
+
 const healthyEmbedder = {
   async embed() {
     return Array.from({ length: dimensions }, () => 0.1);

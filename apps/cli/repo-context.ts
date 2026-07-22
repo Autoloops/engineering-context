@@ -39,7 +39,10 @@ function defaultBranch(repoRoot: string): string {
   const remoteHead = gitOptional(repoRoot, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]);
   if (remoteHead?.startsWith("origin/")) return remoteHead.slice("origin/".length);
 
-  const lsRemoteSymref = gitOptional(repoRoot, ["ls-remote", "--symref", "origin", "HEAD"]);
+  // Network call — keep a short timeout so install/doctor/graph cannot hang on a bad remote.
+  const lsRemoteSymref = gitOptional(repoRoot, ["ls-remote", "--symref", "origin", "HEAD"], {
+    timeoutMs: 5_000,
+  });
   const fromLsRemote = parseLsRemoteSymrefHead(lsRemoteSymref);
   if (fromLsRemote !== undefined) return fromLsRemote;
 
@@ -58,12 +61,17 @@ function repoName(remoteUrl: string, repoRoot: string): string {
   return lastPart ?? basename(repoRoot);
 }
 
-function gitOptional(cwd: string, args: string[]): string | undefined {
+function gitOptional(
+  cwd: string,
+  args: string[],
+  options: { timeoutMs?: number } = {},
+): string | undefined {
   try {
     const output = execFileSync("git", args, {
       cwd,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
+      ...(options.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
     }).trim();
     return output.length > 0 ? output : undefined;
   } catch {

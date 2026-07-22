@@ -224,6 +224,26 @@ export class SqliteRepository implements GraphReadRepository {
   }
 
   ensureScope(input: CreateScopeInput): GraphScope {
+    // One main scope per repo: reuse and rename/ref-update if default_branch changes
+    // (e.g. fabricated "main" → "unknown" or ls-remote-resolved name) instead of
+    // creating orphan kind=main rows keyed by the new branch string.
+    if (input.kind === "main") {
+      const existingMain = this.db
+        .prepare(
+          "SELECT * FROM graph_scopes WHERE repo_id = ? AND kind = 'main' ORDER BY created_at LIMIT 1",
+        )
+        .get(input.repo_id) as GraphScope | undefined;
+      if (existingMain) {
+        if (existingMain.name !== input.name || existingMain.ref !== input.ref) {
+          this.db
+            .prepare("UPDATE graph_scopes SET name = ?, ref = ? WHERE id = ?")
+            .run(input.name, input.ref, existingMain.id);
+          return { ...existingMain, name: input.name, ref: input.ref };
+        }
+        return existingMain;
+      }
+    }
+
     const existing = this.db
       .prepare("SELECT * FROM graph_scopes WHERE repo_id = ? AND kind = ? AND name = ?")
       .get(input.repo_id, input.kind, input.name) as GraphScope | undefined;
