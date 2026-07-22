@@ -144,10 +144,13 @@ Current showcase rows:
 
 ## Commands
 
+This Commands list is a curated user-facing subset; the full CLI surface is `greplica --help`.
+
 ```bash
 greplica install --mode local --platform codex|claude|copilot|cursor|opencode|openhands|factory-droid|antigravity --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]
-greplica login [--api-url https://memory.autoloops.ai]
 greplica install --mode managed [--platform codex|claude|copilot|cursor|opencode|openhands|factory-droid|antigravity] [--managed-repo <uuid>] [--hooks enabled|disabled] [--auto-memory enabled|disabled]
+greplica uninstall
+greplica login [--api-url https://memory.autoloops.ai]
 greplica logout
 greplica whoami
 greplica repo status
@@ -159,10 +162,45 @@ greplica graph context "<query>" [--debug]
 greplica graph audit anchors
 greplica graph view [--out <file>] [--no-open]
 greplica graph export <dir>
-greplica proposal validate <proposal.json>
-greplica proposal apply <proposal.json>
+greplica proposal validate <file>
+greplica proposal apply <file>
 greplica session mark-memory-current --session-ref <ref>
 greplica transcript bundle --platform codex|claude|copilot|opencode --file <path> [--file <path>...] --out <bundle.md>
+```
+
+### Managed administration
+
+Organization, invitation, and remaining repository administration commands from top-level CLI help:
+
+```bash
+greplica org create --name <name> [--slug <slug>]
+greplica org list
+greplica org invite --org <id> --github-user <login>
+greplica org members --org <id>
+greplica org role --org <id> --user <id> --role admin|member|guest
+greplica org remove-member --org <id> --user <id>
+greplica org leave --org <id>
+greplica invite list
+greplica invite accept <id>
+greplica invite revoke <id>
+greplica repo create --org <id> --name <name>
+greplica repo list
+greplica repo connect --managed-repo <id> [--confirm-mode-switch] [--confirm-rebind]
+greplica repo rebind --managed-repo <id> --confirm-rebind
+greplica repo github-install
+greplica repo enroll-github --org <id> --installation <id> --github-repo <id> [--name <name>]
+greplica repo link-github --installation <id> --github-repo <id>
+greplica repo archive
+greplica repo restore
+greplica repo discovery --discovery listed|unlisted
+greplica repo invite-reader --github-user <login>
+greplica repo grant-memory-admin --user <id>
+greplica repo revoke-memory-admin --user <id>
+greplica repo request-access --managed-repo <id>
+greplica repo access-requests
+greplica repo approve-access --request <id>
+greplica repo deny-access --request <id>
+greplica repo publish --from-local
 ```
 
 - `greplica graph context "<query>"` - returns Markdown for agent use. Add `--debug` for the full retrieval payload with ranking signals.
