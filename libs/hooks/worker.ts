@@ -140,15 +140,14 @@ export async function maybeUpdateWorkingMemory(attempt: ClaimedMemoryUpdateAttem
       rmSync(runDir, { recursive: true, force: true });
     } else if (retained) {
       // Agent close handlers may still write into runDir after spawn failure rejects.
-      // Keep the OS temp copy briefly after retaining under $GREPLICA_HOME/logs/runs.
-      const timer = setTimeout(() => {
-        try {
-          rmSync(runDir, { recursive: true, force: true });
-        } catch {
-          // Best-effort delayed cleanup.
-        }
-      }, 15_000);
-      timer.unref();
+      // Wait briefly (keeping the process alive), then remove the OS temp copy now that
+      // a copy exists under $GREPLICA_HOME/logs/runs.
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      try {
+        rmSync(runDir, { recursive: true, force: true });
+      } catch {
+        // Best-effort; leave for inspection if still locked.
+      }
     }
   }
 }
