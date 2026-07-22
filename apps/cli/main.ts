@@ -12,6 +12,7 @@ import {
   type EmbeddingConfig,
   type GreplicaConfig,
 } from "../../libs/config/greplica-config.js";
+import { resolveGreplicaHome } from "../../libs/config/greplica-home.js";
 import { createGraphMemoryProvider } from "../../libs/knowledge-graph/provider-factory.js";
 import type { GraphMemoryProvider } from "../../libs/knowledge-graph/provider.js";
 import { createEmbedder } from "../../libs/knowledge-graph/graph-context/embedder.js";
@@ -682,6 +683,10 @@ async function runDoctor(args: string[], getContext: CommandContextProvider): Pr
   console.log(`Repo root: ${context.repo.repo_root ?? ""}`);
   console.log(`Remote: ${context.repo.remote_url ?? "none"}`);
   console.log(`Default branch: ${context.repo.default_branch}`);
+
+  const greplicaHomeInfo = resolveGreplicaHome();
+  console.log(`Greplica home: ${resolve(greplicaHomeInfo.path)}`);
+  console.log(`Greplica home source: ${greplicaHomeInfo.source}`);
 
   const installation = context.service.installation;
   console.log(`Database: ${resolve(defaultDatabasePath())}`);
