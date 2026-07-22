@@ -36,9 +36,9 @@ Install Greplica for this repo using https://raw.githubusercontent.com/Autoloops
 
 Full prompt: [docs/agent-install-prompt.md](https://raw.githubusercontent.com/Autoloops/greplica/refs/heads/main/docs/agent-install-prompt.md)
 
-That prompt asks a short setup questionnaire, installs Greplica in local or managed mode, and either creates the first local context or connects to existing shared memory.
+That prompt runs a short setup questionnaire, installs Greplica in local or managed mode, and either creates the first local context or connects to existing shared memory.
 
-To visualise your current memory in browser, run:
+To visualize your current memory in a browser, run:
 
 ```bash
 greplica graph view
@@ -167,7 +167,7 @@ greplica transcript bundle --platform codex|claude|copilot|opencode --file <path
 
 - `greplica graph context "<query>"` - returns Markdown for agent use. Add `--debug` for the full retrieval payload with ranking signals.
 - `greplica graph read` - prints the current graph view: all components, flows, claims, sources, and edges in scope.
-- `greplica graph view` to visualise the current memory in a local HTML, opens in your default browser. Use `--out` to choose where the file is written; by default it goes to a temp path.
+- `greplica graph view` to visualize the current memory in a local HTML file, which opens in your default browser. Use `--out` to choose where the file is written; by default it goes to a temp path.
 - `greplica transcript bundle` - converts one or more Codex, Claude Code, GitHub Copilot CLI, or OpenCode transcripts into a sanitized Markdown bundle for `greplica-fast-session-bootstrap`.
 - `greplica embeddings prewarm` - downloads and initializes the local embedding model ahead of the first query when local embeddings are configured.
 - `greplica session mark-memory-current` - marks a tracked agent session as already reflected in working memory.
