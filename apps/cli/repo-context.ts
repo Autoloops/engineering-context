@@ -39,7 +39,17 @@ function defaultBranch(repoRoot: string): string {
   const remoteHead = gitOptional(repoRoot, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]);
   if (remoteHead?.startsWith("origin/")) return remoteHead.slice("origin/".length);
 
-  return "main";
+  const lsRemoteSymref = gitOptional(repoRoot, ["ls-remote", "--symref", "origin", "HEAD"]);
+  const fromLsRemote = parseLsRemoteSymrefHead(lsRemoteSymref);
+  if (fromLsRemote !== undefined) return fromLsRemote;
+
+  return "unknown";
+}
+
+function parseLsRemoteSymrefHead(output: string | undefined): string | undefined {
+  if (output === undefined) return undefined;
+  const match = output.match(/^ref:\s+refs\/heads\/([^\s\t]+)/m);
+  return match?.[1];
 }
 
 function repoName(remoteUrl: string, repoRoot: string): string {
