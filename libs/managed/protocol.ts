@@ -75,6 +75,21 @@ export const InvitationSchema = Type.Object({
   revoked_at: Type.Optional(Type.String({ format: "date-time" })),
 });
 
+export const RepoInviteLinkSchema = Type.Object({
+  id: Type.String({ format: "uuid" }),
+  repo_id: Type.String({ format: "uuid" }),
+  status: Type.Union([Type.Literal("active"), Type.Literal("revoked")]),
+  created_by: Type.String({ format: "uuid" }),
+  created_at: Type.String({ format: "date-time" }),
+  revoked_at: Type.Optional(Type.String({ format: "date-time" })),
+  claim_count: Type.Integer({ minimum: 0 }),
+});
+
+export const RepoInviteLinkCreatedSchema = Type.Object({
+  link: RepoInviteLinkSchema,
+  claim_url: Type.String(),
+});
+
 export const GithubSourceSchema = Type.Object({
   repository_id: Type.String(),
   owner: Type.String(),
@@ -450,6 +465,10 @@ export const routeSchemas = {
   repoArchive: route(Type.Object({}), ManagedRepositorySchema),
   repoRestore: route(Type.Object({}), ManagedRepositorySchema),
   repoInvite: route(Type.Object({ github_user: Type.String({ minLength: 1 }) }), InvitationSchema),
+  repoInviteLinkCreate: route(Type.Object({}), RepoInviteLinkCreatedSchema),
+  repoInviteLinkList: route(Type.Object({}), Type.Array(RepoInviteLinkSchema)),
+  repoInviteLinkRevoke: route(Type.Object({}), RepoInviteLinkSchema),
+  repoInviteLinkClaim: route(Type.Object({ token: Type.String({ minLength: 43, maxLength: 43 }) }), ManagedRepositorySchema),
   repoGrant: route(Type.Object({ user_id: Type.String({ format: "uuid" }), role: RepoRoleSchema }), RepoGrantSchema),
   repoRevokeGrant: route(Type.Object({ user_id: Type.String({ format: "uuid" }), role: RepoRoleSchema }), Type.Object({ revoked: Type.Boolean() })),
   accessRequestCreate: route(Type.Object({}), AccessRequestSchema),
@@ -480,6 +499,8 @@ export type ManagedUser = Static<typeof UserSchema>;
 export type ManagedOrganization = Static<typeof OrganizationSchema>;
 export type ManagedOrgMembership = Static<typeof OrgMembershipSchema>;
 export type ManagedInvitation = Static<typeof InvitationSchema>;
+export type ManagedRepoInviteLink = Static<typeof RepoInviteLinkSchema>;
+export type ManagedRepoInviteLinkCreated = Static<typeof RepoInviteLinkCreatedSchema>;
 export type ManagedRepository = Static<typeof ManagedRepositorySchema>;
 export type ManagedRepoGrant = Static<typeof RepoGrantSchema>;
 export type ManagedAccessRequest = Static<typeof AccessRequestSchema>;

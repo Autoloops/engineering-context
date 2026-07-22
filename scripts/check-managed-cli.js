@@ -12,6 +12,8 @@ const cliPath = fileURLToPath(new URL("dist/apps/cli/main.js", root));
 const temporary = mkdtempSync(join(tmpdir(), "greplica-managed-cli-"));
 const managedRepoId = "11111111-1111-4111-8111-111111111111";
 const orgId = "22222222-2222-4222-8222-222222222222";
+const inviteLinkId = "33333333-3333-4333-8333-333333333333";
+const inviteToken = "a".repeat(43);
 const now = "2026-07-21T00:00:00.000Z";
 const managedRepository = {
   id: managedRepoId,
@@ -81,6 +83,48 @@ const server = createServer(async (request, response) => {
     send(200, [managedRepository], { "x-greplica-token": "renewed-token" });
     return;
   }
+  if (request.method === "POST" && request.url === "/v1/invite-links/claim") {
+    assert.equal(body.token, inviteToken);
+    send(200, managedRepository);
+    return;
+  }
+  if (request.method === "POST" && request.url === `/v1/repos/${managedRepoId}/invite-links`) {
+    send(200, {
+      link: {
+        id: inviteLinkId,
+        repo_id: managedRepoId,
+        status: "active",
+        created_by: "10000000-0000-4000-8000-000000000000",
+        created_at: now,
+        claim_count: 0,
+      },
+      claim_url: `http://127.0.0.1:${server.address().port}/join/${inviteToken}`,
+    });
+    return;
+  }
+  if (request.method === "GET" && request.url === `/v1/repos/${managedRepoId}/invite-links`) {
+    send(200, [{
+      id: inviteLinkId,
+      repo_id: managedRepoId,
+      status: "active",
+      created_by: "10000000-0000-4000-8000-000000000000",
+      created_at: now,
+      claim_count: 1,
+    }]);
+    return;
+  }
+  if (request.method === "POST" && request.url === `/v1/repos/${managedRepoId}/invite-links/${inviteLinkId}/revoke`) {
+    send(200, {
+      id: inviteLinkId,
+      repo_id: managedRepoId,
+      status: "revoked",
+      created_by: "10000000-0000-4000-8000-000000000000",
+      created_at: now,
+      revoked_at: now,
+      claim_count: 1,
+    });
+    return;
+  }
   if (request.method === "GET" && request.url === `/v1/repos/${managedRepoId}/graph`) {
     send(200, { components: [], flows: [], claims: [], sources: [], edges: [] }, {
       "x-greplica-repo-role": managedRepository.effective_role,
@@ -115,13 +159,19 @@ try {
   const fakeBin = join(temporary, "bin");
   const managedRepo = join(temporary, "managed-repo");
   const localRepo = join(temporary, "local-repo");
+  const agentRepo = join(temporary, "agent-repo");
+  const upgradeRepo = join(temporary, "upgrade-repo");
   mkdirSync(fakeBin, { recursive: true });
   mkdirSync(managedRepo, { recursive: true });
   mkdirSync(localRepo, { recursive: true });
+  mkdirSync(agentRepo, { recursive: true });
+  mkdirSync(upgradeRepo, { recursive: true });
   writeFileSync(join(fakeBin, "open"), "#!/bin/sh\nexit 0\n");
   chmodSync(join(fakeBin, "open"), 0o755);
   await run("git", ["init", "--quiet"], managedRepo);
   await run("git", ["init", "--quiet"], localRepo);
+  await run("git", ["init", "--quiet"], agentRepo);
+  await run("git", ["init", "--quiet"], upgradeRepo);
 
   const env = {
     ...process.env,
@@ -134,7 +184,10 @@ try {
   const login = await run(process.execPath, [cliPath, "login", "--api-url", apiUrl], managedRepo, env);
   assert.match(login.stdout, /Logged in as contributor-1/);
   const credentialsPath = join(greplicaHome, "credentials.json");
+  const dbPath = join(greplicaHome, "graph.db");
+  let db;
   assert.equal(statSync(credentialsPath).mode & 0o777, 0o600);
+  assert.equal(JSON.parse(readFileSync(credentialsPath, "utf8")).apiUrl, apiUrl);
 
   const install = await run(process.execPath, [
     cliPath,
@@ -154,8 +207,31 @@ try {
   assert.match(install.stdout, /reader access records session guidance but does not schedule memory updates/);
   assert.equal(JSON.parse(readFileSync(credentialsPath, "utf8")).token, "renewed-token");
 
-  const dbPath = join(greplicaHome, "graph.db");
-  let db = new Database(dbPath);
+  const createdLink = await run(process.execPath, [cliPath, "repo", "invite-link", "create"], managedRepo, env);
+  assert.match(createdLink.stdout, /npm install --global greplica@latest/);
+  assert.match(createdLink.stdout, new RegExp(`greplica install --invite-link ${apiUrl}/join/${inviteToken} --platform codex`));
+  const listedLinks = await run(process.execPath, [cliPath, "repo", "invite-link", "list"], managedRepo, env);
+  assert.match(listedLinks.stdout, new RegExp(`${inviteLinkId}\\s+active\\s+1`));
+  assert.equal(listedLinks.stdout.includes(inviteToken), false, "list output must not expose the invite token");
+  const revokedLink = await run(process.execPath, [
+    cliPath, "repo", "invite-link", "revoke", "--link", inviteLinkId,
+  ], managedRepo, env);
+  assert.match(revokedLink.stdout, /is revoked/);
+
+  const agentInstall = await run(process.execPath, [
+    cliPath,
+    "install",
+    "--invite-link",
+    `${apiUrl}/join/${inviteToken}`,
+    "--platform",
+    "codex",
+  ], agentRepo, env);
+  assert.match(agentInstall.stdout, /Mode: managed/);
+  db = new Database(dbPath);
+  assert.equal(db.prepare("SELECT active_mode FROM repos WHERE repo_name = 'agent-repo'").get().active_mode, "managed");
+  db.close();
+
+  db = new Database(dbPath);
   let managedRow = db.prepare("SELECT * FROM repos WHERE managed_repo_id = ?").get(managedRepoId);
   const managedLocalId = managedRow.id;
   assert.equal(managedRow.active_mode, "managed");
@@ -193,13 +269,32 @@ try {
   assert.match(localInstall.stdout, /Installed Greplica for Codex/);
   db = new Database(dbPath);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM repos WHERE active_mode = 'local'").get().count, 1);
-  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM repos WHERE active_mode = 'managed'").get().count, 1);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM repos WHERE active_mode = 'managed'").get().count, 2);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM graph_scopes").get().count, 2);
   db.close();
   const requestsBeforeLocalRead = requestCount;
   const localGraph = await run(process.execPath, [cliPath, "graph", "read"], localRepo, env);
   assert.match(localGraph.stdout, /Current graph view: main \+ working/);
   assert.equal(requestCount, requestsBeforeLocalRead, "local graph commands must not call the managed API");
+
+  await run(process.execPath, [cliPath, "install", "--mode", "local", "--platform", "codex"], upgradeRepo, env);
+  const upgradedByInvite = await run(process.execPath, [
+    cliPath,
+    "install",
+    "--invite-link",
+    `${apiUrl}/join/${inviteToken}`,
+    "--platform",
+    "codex",
+  ], upgradeRepo, env);
+  assert.match(upgradedByInvite.stdout, /Mode: managed/);
+  db = new Database(dbPath);
+  assert.equal(db.prepare("SELECT active_mode FROM repos WHERE repo_name = 'upgrade-repo'").get().active_mode, "managed");
+  db.close();
+
+  const insecureInvite = await runFailure(process.execPath, [
+    cliPath, "install", "--invite-link", `http://memory.example.com/join/${inviteToken}`, "--platform", "codex",
+  ], agentRepo, env);
+  assert.match(insecureInvite.stderr, /must use HTTPS/);
 
   managedRepository.effective_role = "memory_admin";
   const connected = await run(process.execPath, [
@@ -231,6 +326,28 @@ try {
   assert.equal(managedRow.auto_memory_updates, 1);
   db.close();
 
+  const environmentTokenSwitch = await runFailure(process.execPath, [
+    cliPath,
+    "install",
+    "--invite-link",
+    `http://127.0.0.1:1/join/${inviteToken}`,
+    "--platform",
+    "codex",
+  ], agentRepo, { ...env, GREPLICA_MANAGED_TOKEN: "environment-token" });
+  assert.match(environmentTokenSwitch.stderr, /Cannot switch invite-link origins/);
+  assert.equal(existsSync(credentialsPath), true, "a rejected environment-token switch must not alter credentials");
+
+  const crossOrigin = await runFailure(process.execPath, [
+    cliPath,
+    "install",
+    "--invite-link",
+    `http://127.0.0.1:1/join/${inviteToken}`,
+    "--platform",
+    "codex",
+  ], agentRepo, env);
+  assert.match(crossOrigin.stderr, /fetch failed|connect/i);
+  assert.equal(existsSync(credentialsPath), false, "switching invite origins must discard credentials before network access");
+
   await run(process.execPath, [cliPath, "logout"], managedRepo, env);
   assert.equal(existsSync(credentialsPath), false);
   console.log("Managed CLI checks passed.");
@@ -251,6 +368,24 @@ function run(command, args, cwd, env = process.env, input = "") {
     child.once("close", (code) => {
       if (code === 0) resolve({ stdout, stderr });
       else reject(new Error(`${command} ${args.join(" ")} failed (${code})\n${stderr}`));
+    });
+    child.stdin.end(input);
+  });
+}
+
+function runFailure(command, args, cwd, env = process.env, input = "") {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (code !== 0) resolve({ stdout, stderr, code });
+      else reject(new Error(`${command} ${args.join(" ")} unexpectedly succeeded`));
     });
     child.stdin.end(input);
   });

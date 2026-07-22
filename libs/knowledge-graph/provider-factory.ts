@@ -23,11 +23,12 @@ export function createGraphMemoryProvider(repo: RepoRef, config: GreplicaConfig)
   }
 
   db.close();
-  const credentials = readManagedCredentials();
-  const token = managedToken(credentials);
+  const apiUrl = managedApiUrl(config);
+  const credentials = readManagedCredentials(apiUrl);
+  const token = managedToken(apiUrl, credentials);
   if (token === undefined) throw new Error("Managed Greplica is not authenticated. Run 'greplica login'.");
   return new ManagedGraphMemoryClient(installation, repo, {
-    apiUrl: managedApiUrl(config),
+    apiUrl,
     token,
     credentials,
   });

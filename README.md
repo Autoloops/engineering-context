@@ -61,6 +61,20 @@ greplica repo status
 greplica graph context "What should I know before changing this subsystem?"
 ```
 
+An organization admin can instead create one reusable, repository-scoped reader link from a folder already connected to the memory:
+
+```bash
+greplica repo invite-link create
+```
+
+Give the printed link or command to an agent. It logs in when needed, claims access, installs Greplica, and upgrades local memory to the invited managed memory:
+
+```bash
+greplica install --invite-link <invite-url> --platform codex
+```
+
+The link works for multiple GitHub users until an admin revokes it. Greplica never creates a new managed-memory namespace through this link. When ordinary managed discovery finds no access or invite, creation requires the user to type `create managed memory`; an agent must ask rather than supply that confirmation itself.
+
 Replace `codex` with your agent platform. Login uses GitHub's browser device flow; do not share GitHub credentials or Greplica tokens. Interactive install can accept a matching invitation and automatically map a public fork to its upstream namespace. The GitHub App therefore does not need access to each contributor fork.
 
 Organization admins and members inherit read access to every organization repository. Guests can read only explicitly granted repositories. Repository writes always require an explicit `memory_admin` grant; ordinary contributors remain read-only. Managed graph data stays on the server, while local SQLite stores only the repository binding, role cache, hook policy, and runtime session metadata.
@@ -148,6 +162,9 @@ Current showcase rows:
 greplica install --mode local --platform codex|claude|copilot|cursor|opencode|openhands|factory-droid|antigravity --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]
 greplica login [--api-url https://memory.autoloops.ai]
 greplica install --mode managed [--platform codex|claude|copilot|cursor|opencode|openhands|factory-droid|antigravity] [--managed-repo <uuid>] [--hooks enabled|disabled] [--auto-memory enabled|disabled]
+greplica install --invite-link <url> --platform codex|claude|copilot|cursor|opencode|openhands|factory-droid|antigravity
+greplica repo invite-link create|list
+greplica repo invite-link revoke --link <uuid>
 greplica logout
 greplica whoami
 greplica repo status

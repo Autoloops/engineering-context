@@ -7,6 +7,7 @@ import {
 } from "../../libs/config/managed-credentials.js";
 import {
   ensureGreplicaConfig,
+  managedApiUrl,
   updateManagedApiUrl,
   type GreplicaConfig,
 } from "../../libs/config/greplica-config.js";
@@ -42,7 +43,7 @@ export async function runLogin(args: string[]): Promise<void> {
       interval = poll.interval;
       continue;
     }
-    const previous = readManagedCredentials();
+    const previous = readManagedCredentials(managedApiUrl(config));
     if (previous !== undefined && previous.user.id !== poll.user.id) invalidateRoleCache();
     client.setAuthenticatedUser(poll);
     console.log(`Logged in as ${poll.user.github_login}.`);
@@ -212,6 +213,30 @@ export async function runRepoInviteReader(args: string[]): Promise<void> {
   console.log(`Reader invitation ${invite.id} targets ${invite.target_github_login}.`);
 }
 
+export async function runRepoInviteLinkCreate(args: string[]): Promise<void> {
+  requireNoArgs(args, "Usage: greplica repo invite-link create");
+  const created = await controlClient().createRepoInviteLink(repoBinding().managedRepoId);
+  console.log(`Invite link ${created.link.id}: ${created.claim_url}`);
+  console.log("Give an agent these commands:");
+  console.log("npm install --global greplica@latest");
+  console.log(`greplica install --invite-link ${created.claim_url} --platform codex`);
+}
+
+export async function runRepoInviteLinkList(args: string[]): Promise<void> {
+  requireNoArgs(args, "Usage: greplica repo invite-link list");
+  for (const link of await controlClient().listRepoInviteLinks(repoBinding().managedRepoId)) {
+    console.log(`${link.id}\t${link.status}\t${link.claim_count}\t${link.created_at}`);
+  }
+}
+
+export async function runRepoInviteLinkRevoke(args: string[]): Promise<void> {
+  const link = await controlClient().revokeRepoInviteLink(
+    repoBinding().managedRepoId,
+    required(args, "--link"),
+  );
+  console.log(`Invite link ${link.id} is ${link.status}.`);
+}
+
 export async function runRepoGrantMemoryAdmin(args: string[]): Promise<void> {
   const grant = await controlClient().grantRepoRole(repoBinding().managedRepoId, required(args, "--user"), "memory_admin");
   console.log(`${grant.user.github_login} is now memory_admin for this memory.`);
@@ -276,7 +301,13 @@ export async function runRepoPublish(args: string[]): Promise<void> {
 export async function resolveManagedInstall(
   repo: RepoRef,
   requestedId?: string,
+  inviteLink?: string,
 ): Promise<ManagedInstallResolution> {
+  if (inviteLink !== undefined) {
+    const token = configureInviteLinkApi(inviteLink);
+    await ensureAuthenticated();
+    return { repository: await controlClient().claimRepoInviteLink(token), pending: false };
+  }
   await ensureAuthenticated();
   const client = controlClient();
   const accessible = await client.listRepos();
@@ -295,7 +326,7 @@ export async function resolveManagedInstall(
     throw new Error("Requested managed repository is not accessible.");
   }
 
-  if (!stdin.isTTY) throw new Error("Non-interactive managed installation requires --managed-repo.");
+  if (!stdin.isTTY) throw new Error("Non-interactive managed installation requires --managed-repo or --invite-link.");
   const github = await publicGithubIdentity(repo.remote_url);
   if (github !== undefined) {
     const matches = await client.connectRepos(github.id, github.parentId);
@@ -335,6 +366,13 @@ export async function resolveManagedInstall(
     if (selected !== undefined) return { repository: selected, pending: false };
   }
 
+  console.log("No existing managed memory was selected. An administrator may still provide an invite link later.");
+  console.log("Creating a managed memory makes a new, separate shared namespace; it does not connect to a future invite.");
+  const creationConfirmation = await prompt('Type "create managed memory" only if the user explicitly wants a new memory: ');
+  if (creationConfirmation.toLowerCase() !== "create managed memory") {
+    throw new Error("Managed memory creation was not explicitly confirmed. Ask an administrator for an invite link or invitation.");
+  }
+
   const coordinates = githubCoordinates(repo.remote_url);
   if (coordinates !== undefined && await confirm(`Enroll GitHub memory for ${coordinates.owner}/${coordinates.repo}?`)) {
     const organization = await chooseOrCreateAdminOrganization(client);
@@ -353,6 +391,39 @@ export async function resolveManagedInstall(
     return { repository: await client.createGenericRepo(organization.id, name), pending: false };
   }
   throw new Error("No accessible managed memory was found. Ask an org admin for an invite or enroll a repository.");
+}
+
+function configureInviteLinkApi(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("--invite-link must be a valid Greplica HTTPS invite URL.");
+  }
+  const isLoopback = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && isLoopback)) {
+    throw new Error("--invite-link must use HTTPS; HTTP is allowed only for a loopback development server.");
+  }
+  if (url.username.length > 0 || url.password.length > 0 || url.search.length > 0 || url.hash.length > 0) {
+    throw new Error("--invite-link contains unsupported URL credentials, query parameters, or fragments.");
+  }
+  const match = /^\/join\/([A-Za-z0-9_-]{43})\/?$/.exec(url.pathname);
+  if (match === null) throw new Error("--invite-link is not a valid Greplica invite URL.");
+  const apiUrl = url.origin;
+  const config = ensureGreplicaConfig();
+  const currentApiUrl = managedApiUrl(config);
+  if (process.env.GREPLICA_MANAGED_API_URL !== undefined && currentApiUrl !== apiUrl) {
+    throw new Error(`--invite-link targets ${apiUrl}, but GREPLICA_MANAGED_API_URL is fixed to ${currentApiUrl}.`);
+  }
+  if ((process.env.GREPLICA_MANAGED_TOKEN !== undefined || process.env.GREPLICA_API_TOKEN !== undefined) &&
+      currentApiUrl !== apiUrl) {
+    throw new Error("Cannot switch invite-link origins while a managed API token is supplied through the environment.");
+  }
+  if (currentApiUrl !== apiUrl) {
+    deleteManagedCredentials();
+    updateManagedApiUrl(apiUrl);
+  }
+  return match[1];
 }
 
 function controlClient(config: GreplicaConfig = ensureGreplicaConfig()): ManagedControlClient {

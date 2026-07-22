@@ -55,6 +55,9 @@ import {
   runRepoGithubInstall,
   runRepoGrantMemoryAdmin,
   runRepoInviteReader,
+  runRepoInviteLinkCreate,
+  runRepoInviteLinkList,
+  runRepoInviteLinkRevoke,
   runRepoLinkGithub,
   runRepoList,
   runRepoPublish,
@@ -93,7 +96,7 @@ const cliCommands = [
   {
     key: "install",
     path: ["install"],
-    usage: `install --mode local|managed [--platform ${installPlatformUsage}] [--embedding local|openai] [--managed-repo <id>] [--hooks enabled|disabled] [--auto-memory enabled|disabled]`,
+    usage: `install [--mode local|managed] [--platform ${installPlatformUsage}] [--embedding local|openai] [--managed-repo <id> | --invite-link <url>] [--hooks enabled|disabled] [--auto-memory enabled|disabled]`,
     handler: runInstallCommand,
     showInTopLevelHelp: true,
   },
@@ -135,6 +138,9 @@ const cliCommands = [
   { key: "repoRestore", path: ["repo", "restore"], usage: "repo restore", handler: runRepoRestore, showInTopLevelHelp: true },
   { key: "repoDiscovery", path: ["repo", "discovery"], usage: "repo discovery --discovery listed|unlisted", handler: runRepoDiscovery, showInTopLevelHelp: true },
   { key: "repoInviteReader", path: ["repo", "invite-reader"], usage: "repo invite-reader --github-user <login>", handler: runRepoInviteReader, showInTopLevelHelp: true },
+  { key: "repoInviteLinkCreate", path: ["repo", "invite-link", "create"], usage: "repo invite-link create", handler: runRepoInviteLinkCreate, showInTopLevelHelp: true },
+  { key: "repoInviteLinkList", path: ["repo", "invite-link", "list"], usage: "repo invite-link list", handler: runRepoInviteLinkList, showInTopLevelHelp: true },
+  { key: "repoInviteLinkRevoke", path: ["repo", "invite-link", "revoke"], usage: "repo invite-link revoke --link <id>", handler: runRepoInviteLinkRevoke, showInTopLevelHelp: true },
   { key: "repoGrantMemoryAdmin", path: ["repo", "grant-memory-admin"], usage: "repo grant-memory-admin --user <id>", handler: runRepoGrantMemoryAdmin, showInTopLevelHelp: true },
   { key: "repoRevokeMemoryAdmin", path: ["repo", "revoke-memory-admin"], usage: "repo revoke-memory-admin --user <id>", handler: runRepoRevokeMemoryAdmin, showInTopLevelHelp: true },
   { key: "repoAccessRequest", path: ["repo", "request-access"], usage: "repo request-access --managed-repo <id>", handler: runRepoAccessRequest, showInTopLevelHelp: true },
@@ -323,7 +329,7 @@ async function runInstallCommand(args: string[]): Promise<void> {
   const options = parseInstallArgs(args);
   const repo = detectRepoContext();
   const managed = options.mode === "managed"
-    ? await resolveManagedInstall(repo, options.managedRepoId)
+    ? await resolveManagedInstall(repo, options.managedRepoId, options.inviteLink)
     : undefined;
   if (managed?.pending === true) return;
   if (options.mode === "managed" && managed?.repository === undefined) {
@@ -778,6 +784,7 @@ function parseInstallArgs(args: string[]): {
   platform?: InstallPlatform;
   embedding?: InstallEmbedding;
   managedRepoId?: string;
+  inviteLink?: string;
   hooks: boolean;
   autoMemoryUpdates: boolean;
   allowModeSwitch: boolean;
@@ -788,6 +795,7 @@ function parseInstallArgs(args: string[]): {
   let platform: InstallPlatform | undefined;
   let embedding: InstallEmbedding | undefined;
   let managedRepoId: string | undefined;
+  let inviteLink: string | undefined;
   let hooks: boolean | undefined;
   let autoMemoryUpdates: boolean | undefined;
   let allowModeSwitch = false;
@@ -834,6 +842,14 @@ function parseInstallArgs(args: string[]): {
       if (arg === "--managed-repo") index += 1;
       continue;
     }
+    if (arg === "--invite-link" || arg.startsWith("--invite-link=")) {
+      if (inviteLink !== undefined) throw new Error(`Specify --invite-link only once.\n${usage("install")}`);
+      inviteLink = arg === "--invite-link"
+        ? requireFlagValue(args, index, "--invite-link")
+        : arg.slice("--invite-link=".length);
+      if (arg === "--invite-link") index += 1;
+      continue;
+    }
     if (arg === "--confirm-mode-switch") {
       allowModeSwitch = true;
       continue;
@@ -867,6 +883,13 @@ function parseInstallArgs(args: string[]): {
     throw new Error(usage("install"));
   }
 
+  if (inviteLink !== undefined && modeSeen && mode === "local") {
+    throw new Error(`--invite-link cannot be used with --mode local.\n${usage("install")}`);
+  }
+  if (inviteLink !== undefined) mode = "managed";
+  if (managedRepoId !== undefined && inviteLink !== undefined) {
+    throw new Error(`--invite-link and --managed-repo are mutually exclusive.\n${usage("install")}`);
+  }
   if (mode === "managed" && embedding !== undefined) {
     throw new Error(`Managed installations do not accept --embedding.\n${usage("install")}`);
   }
@@ -881,9 +904,10 @@ function parseInstallArgs(args: string[]): {
     platform,
     embedding: mode === "local" ? (embedding ?? "local") : undefined,
     managedRepoId,
+    inviteLink,
     hooks: hooks ?? true,
     autoMemoryUpdates: hooks === false ? false : autoMemoryUpdates ?? true,
-    allowModeSwitch,
+    allowModeSwitch: allowModeSwitch || inviteLink !== undefined,
     allowRebind,
   };
 }

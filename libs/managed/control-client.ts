@@ -14,6 +14,8 @@ import type {
   ManagedOrganization,
   ManagedOrgMembership,
   ManagedRepository,
+  ManagedRepoInviteLink,
+  ManagedRepoInviteLinkCreated,
   ManagedRepoGrant,
   ManagedUser,
 } from "./protocol.js";
@@ -40,8 +42,8 @@ export class ManagedControlClient {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {
     this.apiUrl = managedApiUrl(config);
-    this.credentials = readManagedCredentials();
-    this.token = managedToken(this.credentials);
+    this.credentials = readManagedCredentials(this.apiUrl);
+    this.token = managedToken(this.apiUrl, this.credentials);
   }
 
   startDeviceLogin(): Promise<DeviceLoginStart> {
@@ -163,6 +165,28 @@ export class ManagedControlClient {
     return this.request("POST", `/v1/repos/${encodeURIComponent(repoId)}/invites`, { github_user: githubUser }, true, repoId);
   }
 
+  createRepoInviteLink(repoId: string): Promise<ManagedRepoInviteLinkCreated> {
+    return this.request("POST", `/v1/repos/${encodeURIComponent(repoId)}/invite-links`, {}, true, repoId);
+  }
+
+  listRepoInviteLinks(repoId: string): Promise<ManagedRepoInviteLink[]> {
+    return this.request("GET", `/v1/repos/${encodeURIComponent(repoId)}/invite-links`, undefined, true, repoId);
+  }
+
+  revokeRepoInviteLink(repoId: string, linkId: string): Promise<ManagedRepoInviteLink> {
+    return this.request(
+      "POST",
+      `/v1/repos/${encodeURIComponent(repoId)}/invite-links/${encodeURIComponent(linkId)}/revoke`,
+      {},
+      true,
+      repoId,
+    );
+  }
+
+  claimRepoInviteLink(token: string): Promise<ManagedRepository> {
+    return this.request("POST", "/v1/invite-links/claim", { token });
+  }
+
   grantRepoRole(repoId: string, userId: string, role: "reader" | "memory_admin"): Promise<ManagedRepoGrant> {
     return this.request("POST", `/v1/repos/${encodeURIComponent(repoId)}/grants`, { user_id: userId, role }, true, repoId);
   }
@@ -214,7 +238,8 @@ export class ManagedControlClient {
   setAuthenticatedUser(result: Extract<DeviceLoginPoll, { status: "complete" }>): void {
     this.token = result.token;
     this.credentials = {
-      version: 1,
+      version: 2,
+      apiUrl: this.apiUrl,
       token: result.token,
       user: {
         id: result.user.id,

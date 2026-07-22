@@ -71,6 +71,14 @@ greplica repo status
 greplica graph context "What should I know before working in this repository?"
 ```
 
+If I provide a managed-memory invite link, use it directly instead of the separate login and discovery commands:
+
+```bash
+greplica install --invite-link <provided-link> --platform <codex|claude|copilot|cursor|opencode|openhands|factory-droid|antigravity> <mapped-hook-and-memory-flags>
+```
+
+The invite-link command performs GitHub device login when needed, claims access to the existing memory, and upgrades an existing local installation to managed mode. Never substitute a newly created managed memory when an invite may be supplied later. If interactive discovery finds no existing access or invite and the CLI asks to create managed memory, stop and ask me whether I explicitly want a new, separate managed-memory namespace. Do not answer the `create managed memory` confirmation on my behalf.
+
 The login command uses GitHub's browser device flow. Never ask me to paste a password, GitHub token, or Greplica JWT. Let interactive managed installation accept a matching invitation, map a public fork to its upstream namespace, or ask me to select among accessible namespaces. Do not bootstrap, bundle transcripts, validate proposals, apply proposals, publish local memory, or attempt any other memory write unless `greplica repo status` shows an explicit `memory_admin` role and I separately ask for a write. After a successful managed install and context query, skip the local-only instructions below and follow the final answer rules.
 
 For local memory, bootstrap shallow memory for this repo:
