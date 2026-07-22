@@ -171,7 +171,8 @@ greplica transcript bundle --platform codex|claude|copilot|opencode --file <path
 - `greplica transcript bundle` - converts one or more Codex, Claude Code, GitHub Copilot CLI, or OpenCode transcripts into a sanitized Markdown bundle for `greplica-fast-session-bootstrap`.
 - `greplica embeddings prewarm` - downloads and initializes the local embedding model ahead of the first query when local embeddings are configured.
 - `greplica session mark-memory-current` - marks a tracked agent session as already reflected in working memory.
-- `greplica doctor` - verifies installation and diagnoses configuration failures. Not a required preflight before every command.
+- `greplica doctor` - verifies installation and diagnoses configuration failures. Not a required preflight before every command. Prints the resolved Greplica home path and source even when the repo is not detected.
+- Failed background memory updates retain capped debug copies under `$GREPLICA_HOME/logs/runs/` and append to `$GREPLICA_HOME/logs/hook-worker.jsonl`. Those paths can include agent/session output — treat them as sensitive and prune or delete when finished debugging.
 - `greplica install` prepares repo state, local storage, and agent integration; normal repo commands require install first. Local and managed mode are selected independently per repository.
 - `greplica login` authenticates managed mode through GitHub and stores the Greplica JWT separately in `~/.greplica/credentials.json`.
 
