@@ -164,7 +164,7 @@ For `code_verified` claims:
 
 - prefer one stable symbol per claim.
 - use two anchors for true cross-boundary facts.
-- three anchors is the hard maximum and should be rare.
+- three anchors are the hard maximum and should be rare.
 - a claim with four or more `code_anchors` is invalid; split it into narrower claims.
 - avoid file-only anchors for normal source files.
 - run `greplica graph audit anchors` after applying a packet when available.
