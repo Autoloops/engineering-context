@@ -53,6 +53,10 @@ try {
     },
   });
 
+  // Allow platform spawn close handlers to finish writing into the temp runDir
+  // before assertions (retention copies first; OS temp cleanup is delayed).
+  await new Promise((resolve) => setTimeout(resolve, 250));
+
   const logPath = join(greplicaHomeDir, "logs", "hook-worker.jsonl");
   assert.equal(existsSync(logPath), true, "expected hook-worker.jsonl after failure");
   const lines = readFileSync(logPath, "utf8").trim().split("\n").filter(Boolean);

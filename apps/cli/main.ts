@@ -667,6 +667,11 @@ function parseHookPlatform(value: string | undefined): InstallPlatform {
 }
 
 async function runDoctor(args: string[], getContext: CommandContextProvider): Promise<void> {
+  console.log("Greplica doctor");
+  const greplicaHomeInfo = resolveGreplicaHome();
+  console.log(`Greplica home: ${resolve(greplicaHomeInfo.path)}`);
+  console.log(`Greplica home source: ${greplicaHomeInfo.source}`);
+
   let context: CommandContext;
   try {
     context = getContext();
@@ -678,15 +683,10 @@ async function runDoctor(args: string[], getContext: CommandContextProvider): Pr
   }
 
   let ready = true;
-  console.log("Greplica doctor");
   console.log(`Repo: ${context.repo.repo_name}`);
   console.log(`Repo root: ${context.repo.repo_root ?? ""}`);
   console.log(`Remote: ${context.repo.remote_url ?? "none"}`);
   console.log(`Default branch: ${context.repo.default_branch}`);
-
-  const greplicaHomeInfo = resolveGreplicaHome();
-  console.log(`Greplica home: ${resolve(greplicaHomeInfo.path)}`);
-  console.log(`Greplica home source: ${greplicaHomeInfo.source}`);
 
   const installation = context.service.installation;
   console.log(`Database: ${resolve(defaultDatabasePath())}`);

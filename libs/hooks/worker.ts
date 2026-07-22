@@ -7,6 +7,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -22,6 +23,7 @@ import { openDatabase } from "../storage/sqlite/db.js";
 const hookWorkerLockName = "hook-memory-update-worker";
 const hookWorkerHeartbeatMs = 60 * 1000;
 const retainedHookRunLimit = 20;
+const hookWorkerLogLineLimit = 500;
 
 export function hookWorkerChildEnv(
   baseEnv: NodeJS.ProcessEnv = process.env,
@@ -111,6 +113,7 @@ export async function maybeUpdateWorkingMemory(attempt: ClaimedMemoryUpdateAttem
   );
   const proposalPath = join(runDir, "working-memory.proposal.json");
   let succeeded = false;
+  let retained = false;
 
   try {
     await runner.runWorkingMemoryUpdate({
@@ -131,10 +134,21 @@ export async function maybeUpdateWorkingMemory(attempt: ClaimedMemoryUpdateAttem
       phase: "working_memory_update",
       error: errorMessage(error),
     });
-    retainFailedHookRun(runDir, attempt);
+    retained = retainFailedHookRun(runDir, attempt);
   } finally {
     if (succeeded) {
       rmSync(runDir, { recursive: true, force: true });
+    } else if (retained) {
+      // Agent close handlers may still write into runDir after spawn failure rejects.
+      // Keep the OS temp copy briefly after retaining under $GREPLICA_HOME/logs/runs.
+      const timer = setTimeout(() => {
+        try {
+          rmSync(runDir, { recursive: true, force: true });
+        } catch {
+          // Best-effort delayed cleanup.
+        }
+      }, 15_000);
+      timer.unref();
     }
   }
 }
@@ -180,6 +194,7 @@ export function appendHookWorkerFailureLog(entry: {
     const home = resolveGreplicaHome().path;
     const logsDir = join(home, "logs");
     mkdirSync(logsDir, { recursive: true });
+    const logPath = join(logsDir, "hook-worker.jsonl");
     const line = JSON.stringify({
       timestamp: new Date().toISOString(),
       platform: entry.platform,
@@ -187,13 +202,27 @@ export function appendHookWorkerFailureLog(entry: {
       phase: entry.phase,
       error: entry.error,
     });
-    appendFileSync(join(logsDir, "hook-worker.jsonl"), `${line}\n`, "utf8");
+    appendFileSync(logPath, `${line}\n`, "utf8");
+    pruneHookWorkerFailureLog(logPath);
   } catch {
     // Logging is best-effort; never throw from the failure path.
   }
 }
 
-function retainFailedHookRun(runDir: string, attempt: ClaimedMemoryUpdateAttempt): void {
+function pruneHookWorkerFailureLog(logPath: string): void {
+  try {
+    const lines = readFileSync(logPath, "utf8").split("\n");
+    // Keep trailing empty line after the last JSON object when present.
+    const nonempty = lines.filter((line) => line.length > 0);
+    if (nonempty.length <= hookWorkerLogLineLimit) return;
+    const kept = nonempty.slice(-hookWorkerLogLineLimit);
+    writeFileSync(logPath, `${kept.join("\n")}\n`, "utf8");
+  } catch {
+    // Best-effort rotation.
+  }
+}
+
+function retainFailedHookRun(runDir: string, attempt: ClaimedMemoryUpdateAttempt): boolean {
   try {
     const home = resolveGreplicaHome().path;
     const runsDir = join(home, "logs", "runs");
@@ -201,12 +230,14 @@ function retainFailedHookRun(runDir: string, attempt: ClaimedMemoryUpdateAttempt
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     const retainedName = `${stamp}-${safePathSegment(attempt.session.platform)}-${safePathSegment(attempt.session.session_id)}`;
     const destination = join(runsDir, retainedName);
-    // Copy (do not delete runDir): agent close handlers may still write into the
-    // original temp path after spawn failure rejects the update promise.
+    // May contain agent transcript/event output — retained briefly for debugging under
+    // $GREPLICA_HOME/logs/runs (capped by pruneRetainedHookRuns). Treat as sensitive.
     cpSync(runDir, destination, { recursive: true });
     pruneRetainedHookRuns(runsDir);
+    return true;
   } catch {
     // If retention fails, leave runDir in place (skip cleanup) for inspection.
+    return false;
   }
 }
 
