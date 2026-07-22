@@ -111,7 +111,7 @@ For claim `code_anchors`:
 
 - Prefer one anchor per code-verified claim: the stable symbol that best proves the claim.
 - Use two anchors when the claim is explicitly about a cross-boundary behavior.
-- Three anchors is the hard maximum and should be rare.
+- Three anchors are the hard maximum and should be rare.
 - A claim with four or more `code_anchors` is invalid; split it into narrower claims.
 - File-only anchors are acceptable for docs, config, schemas without stable symbols, generated artifacts, or tiny files whose whole content is the relevant unit.
 - Avoid file-only anchors for normal source files.
