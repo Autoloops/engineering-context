@@ -178,6 +178,7 @@ export class KnowledgeGraphService {
       return { total_claims: graph.claims.length, groups: [] };
     }
 
+    await this.contextBuilder.ensureForGraph(initialized.repo_id, { ...graph, claims: activeClaims }, this.contextConfig);
     const storedVectors = new Map(
       this.repository
         .listGraphObjectEmbeddings({
@@ -192,23 +193,9 @@ export class KnowledgeGraphService {
 
     const activeDocuments = buildClaimDocuments({ ...graph, claims: activeClaims });
     const existingVectors: ClaimEmbeddingCandidate[] = [];
-    const missingDocs: typeof activeDocuments = [];
     for (const doc of activeDocuments) {
       const vector = storedVectors.get(doc.id);
-      if (vector === undefined) {
-        missingDocs.push(doc);
-      } else {
-        existingVectors.push({ claim_id: doc.id, vector });
-      }
-    }
-
-    if (missingDocs.length > 0) {
-      const embedder = createEmbedder(this.contextConfig.embedding);
-      const generated = await embedder.embedBatch(missingDocs.map((d) => d.text));
-      for (const [index, doc] of missingDocs.entries()) {
-        const vector = new Float32Array(generated[index]);
-        existingVectors.push({ claim_id: doc.id, vector });
-      }
+      if (vector !== undefined) existingVectors.push({ claim_id: doc.id, vector });
     }
 
     const claimText = new Map(activeClaims.map((c) => [c.id, c.text]));

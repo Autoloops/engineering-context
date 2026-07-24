@@ -174,6 +174,7 @@ greplica embeddings prewarm
 greplica graph read
 greplica graph context "<query>" [--debug]
 greplica graph audit anchors
+greplica graph audit duplicates
 greplica graph view [--out <file>] [--no-open]
 greplica graph export <dir>
 greplica proposal validate <proposal.json>
@@ -184,6 +185,7 @@ greplica transcript bundle --platform codex|claude|copilot|opencode --file <path
 
 - `greplica graph context "<query>"` - returns Markdown for agent use. Add `--debug` for the full retrieval payload with ranking signals.
 - `greplica graph read` - prints the current graph view: all components, flows, claims, sources, and edges in scope.
+- `greplica graph audit duplicates` - groups similar active claims and exits with code 1 when duplicate pairs are found.
 - `greplica graph view` to visualise the current memory in a local HTML, opens in your default browser. Use `--out` to choose where the file is written; by default it goes to a temp path.
 - `greplica transcript bundle` - converts one or more Codex, Claude Code, GitHub Copilot CLI, or OpenCode transcripts into a sanitized Markdown bundle for `greplica-fast-session-bootstrap`.
 - `greplica embeddings prewarm` - downloads and initializes the local embedding model ahead of the first query when local embeddings are configured.

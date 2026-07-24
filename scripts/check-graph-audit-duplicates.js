@@ -112,6 +112,101 @@ try {
     "duplicate audit should report every later duplicate pair without suppressing matched claims globally",
   );
   assert.equal(pairs.length, 2);
+
+  const missingRepo = {
+    repo_name: "audit-missing-embeddings",
+    default_branch: "main",
+    remote_url: "https://example.com/audit-missing-embeddings.git",
+  };
+  new RepoInstallationStore(db).activateLocal(missingRepo, { hooksEnabled: false, autoMemoryUpdates: false });
+  const missingInitialized = service.initRepo(missingRepo);
+  const missingWorking = repository.requireWorkingScope(missingInitialized.repo_id);
+  const missingMemoryCommit = repository.createMemoryCommit({
+    scope_id: missingWorking.id,
+    title: "Seed missing duplicate audit embeddings",
+  });
+
+  repository.createProposalRecords(missingWorking.id, missingMemoryCommit.id, {
+    title: "Seed missing duplicate audit embeddings",
+    creates: {
+      claims: [
+        {
+          id: "claim.audit_missing_a",
+          kind: "fact",
+          text: "Missing embedding claim A matches claim B.",
+          truth: "source_verified",
+          intent: "intended",
+        },
+        {
+          id: "claim.audit_missing_b",
+          kind: "fact",
+          text: "Missing embedding claim B matches claim A.",
+          truth: "source_verified",
+          intent: "intended",
+        },
+      ],
+    },
+  });
+
+  const ensureGeneratedClaimIds = [];
+  const persistedContextBuilder = {
+    async ensureForGraph(repoId, graph, requestedConfig) {
+      const existingClaimIds = new Set(
+        repository
+          .listGraphObjectEmbeddings({
+            repo_id: repoId,
+            provider: requestedConfig.embedding.provider,
+            model: requestedConfig.embedding.model,
+            dimensions: requestedConfig.embedding.dimensions,
+          })
+          .filter((record) => record.object_type === "claim")
+          .map((record) => record.object_id),
+      );
+      const missingClaims = graph.claims.filter((claim) => !existingClaimIds.has(claim.id));
+      ensureGeneratedClaimIds.push(missingClaims.map((claim) => claim.id));
+      repository.insertGraphObjectEmbeddings(missingClaims.map((claim, index) => ({
+        repo_id: repoId,
+        object_type: "claim",
+        object_id: claim.id,
+        provider: requestedConfig.embedding.provider,
+        model: requestedConfig.embedding.model,
+        dimensions: requestedConfig.embedding.dimensions,
+        embedding: index === 0 ? embedding(1, 0) : embedding(0.99, 0.01),
+      })));
+      return {
+        checked_objects: graph.claims.length,
+        created: missingClaims.length,
+        reused: graph.claims.length - missingClaims.length,
+      };
+    },
+  };
+  const persistedService = new KnowledgeGraphService(repository, config, persistedContextBuilder);
+  const firstMissingAudit = await persistedService.auditDuplicateClaims(missingRepo);
+  assert.equal(firstMissingAudit.groups.length, 1, "missing persisted embeddings should be used in the first audit");
+  const storedMissingClaimIds = repository
+    .listGraphObjectEmbeddings({
+      repo_id: missingInitialized.repo_id,
+      provider: config.embedding.provider,
+      model: config.embedding.model,
+      dimensions: config.embedding.dimensions,
+    })
+    .filter((record) => record.object_type === "claim")
+    .map((record) => record.object_id)
+    .sort();
+  assert.deepEqual(
+    storedMissingClaimIds,
+    ["claim.audit_missing_a", "claim.audit_missing_b"],
+    "duplicate audit should persist generated claim embeddings",
+  );
+
+  const secondMissingAudit = await persistedService.auditDuplicateClaims(missingRepo);
+  assert.equal(secondMissingAudit.groups.length, 1, "stored missing embeddings should be reused on later audits");
+  assert.deepEqual(
+    ensureGeneratedClaimIds,
+    [["claim.audit_missing_a", "claim.audit_missing_b"], []],
+    "duplicate audit should not regenerate claim embeddings that were stored by the first audit",
+  );
+
 } finally {
   db.close();
 }
