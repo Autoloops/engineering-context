@@ -434,6 +434,7 @@ async function runGraphAuditDuplicatesCommand(_args: string[], getContext: Comma
   }
   const totalDuplicates = result.groups.reduce((sum, group) => sum + group.duplicates.length, 0);
   console.log(`Total duplicate pairs found: ${totalDuplicates}`);
+  process.exitCode = 1;
   for (const group of result.groups) {
     const truncated = group.claim_text.length > 80 ? group.claim_text.slice(0, 80) + "..." : group.claim_text;
     console.log(`- "${group.claim_id}" ("${truncated}")`);

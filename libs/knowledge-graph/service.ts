@@ -211,17 +211,16 @@ export class KnowledgeGraphService {
       }
     }
 
-    const seen = new Set<string>();
     const claimText = new Map(activeClaims.map((c) => [c.id, c.text]));
+    const vectorsByClaimId = new Map(existingVectors.map((v) => [v.claim_id, v.vector]));
     const groups: DuplicateAuditGroup[] = [];
 
-    for (const claim of activeClaims) {
-      if (seen.has(claim.id)) continue;
-      const vector = existingVectors.find((v) => v.claim_id === claim.id)?.vector;
+    for (const [index, claim] of activeClaims.entries()) {
+      const vector = vectorsByClaimId.get(claim.id);
       if (vector === undefined) continue;
-      const others = existingVectors.filter((v) => v.claim_id !== claim.id && !seen.has(v.claim_id));
+      const laterClaimIds = new Set(activeClaims.slice(index + 1).map((candidate) => candidate.id));
+      const others = existingVectors.filter((v) => laterClaimIds.has(v.claim_id));
       const matches = findSimilarClaims(vector, others, this.contextConfig.dedupe.similarityThreshold)
-        .filter((m) => m.claim_id !== claim.id)
         .map((m) => ({
           claim_id: m.claim_id,
           claim_text: claimText.get(m.claim_id) ?? "",
@@ -233,8 +232,6 @@ export class KnowledgeGraphService {
           claim_text: claim.text,
           duplicates: matches,
         });
-        seen.add(claim.id);
-        for (const m of matches) seen.add(m.claim_id);
       }
     }
 
