@@ -10,12 +10,13 @@ import {
   type ManagedCredentials,
 } from "../config/managed-credentials.js";
 import type { RepoInstallation } from "../install/repo-installation-store.js";
+import type { ManagedDuplicateAudit } from "../managed/protocol.js";
 import { RepoInstallationStore } from "../install/repo-installation-store.js";
 import { openDatabase } from "../storage/sqlite/db.js";
 import { buildGraphViewHtmlFromData, type GraphViewData } from "./graph-view/build-graph-view.js";
 import { normalizeProposal } from "./proposal.js";
 import type { GraphMemoryProvider, ManagedProposalReviewResult } from "./provider.js";
-import type { ApplyProposalResult, DuplicateAuditResult, GraphReadResult, RepoRef } from "./service.js";
+import type { ApplyProposalResult, GraphReadResult, RepoRef } from "./service.js";
 import type { GraphContextResult } from "./graph-context/types.js";
 
 export interface ManagedGraphClientOptions {
@@ -101,7 +102,7 @@ export class ManagedGraphMemoryClient implements GraphMemoryProvider {
     );
   }
 
-  async auditDuplicateClaims(): Promise<DuplicateAuditResult> {
+  async auditDuplicateClaims(): Promise<ManagedDuplicateAudit> {
     return this.request("/graph/audit-duplicates", { method: "GET" });
   }
 

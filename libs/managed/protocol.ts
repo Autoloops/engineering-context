@@ -194,6 +194,21 @@ export const GraphReadSchema = Type.Object({
   edges: Type.Array(EdgeSchema),
 });
 
+export const DuplicateAuditGroupSchema = Type.Object({
+  claim_id: Type.String(),
+  claim_text: Type.String(),
+  duplicates: Type.Array(Type.Object({
+    claim_id: Type.String(),
+    claim_text: Type.String(),
+    similarity: Type.Number(),
+  })),
+});
+
+export const DuplicateAuditSchema = Type.Object({
+  total_claims: Type.Integer({ minimum: 0 }),
+  groups: Type.Array(DuplicateAuditGroupSchema),
+});
+
 export const MemoryProposalSchema = Type.Object({}, { additionalProperties: true });
 
 export const AnchorAuditIssueSchema = Type.Object({
@@ -477,6 +492,7 @@ export const routeSchemas = {
   graphRead: route(Type.Object({}), GraphReadSchema),
   graphContext: route(Type.Object({ query: Type.String({ minLength: 1 }) }), GraphContextSchema),
   graphViewData: route(Type.Object({}), GraphViewDataSchema),
+  graphAuditDuplicates: route(Type.Object({}), DuplicateAuditSchema),
   graphAnchorData: route(Type.Object({}), Type.Object({
     claims: Type.Array(ClaimSchema),
     fingerprints: Type.Record(Type.String(), Type.Record(Type.String(), Type.String())),
@@ -507,6 +523,7 @@ export type ManagedAccessRequest = Static<typeof AccessRequestSchema>;
 export type ManagedGraphRead = Static<typeof GraphReadSchema>;
 export type ManagedGraphContext = Static<typeof GraphContextSchema>;
 export type ManagedGraphViewData = Static<typeof GraphViewDataSchema>;
+export type ManagedDuplicateAudit = Static<typeof DuplicateAuditSchema>;
 export type ManagedProposalReview = Static<typeof ProposalReviewSchema>;
 
 function route<TRequest extends TSchema, TResponse extends TSchema>(request: TRequest, response: TResponse) {

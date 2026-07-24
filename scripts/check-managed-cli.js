@@ -28,6 +28,7 @@ const managedRepository = {
 };
 let deviceStarts = 0;
 let requestCount = 0;
+let duplicateAuditRequests = 0;
 let importedSnapshot;
 
 const server = createServer(async (request, response) => {
@@ -127,6 +128,14 @@ const server = createServer(async (request, response) => {
   }
   if (request.method === "GET" && request.url === `/v1/repos/${managedRepoId}/graph`) {
     send(200, { components: [], flows: [], claims: [], sources: [], edges: [] }, {
+      "x-greplica-repo-role": managedRepository.effective_role,
+      "x-greplica-access-status": "active",
+    });
+    return;
+  }
+  if (request.method === "GET" && request.url === `/v1/repos/${managedRepoId}/graph/audit-duplicates`) {
+    duplicateAuditRequests += 1;
+    send(200, { total_claims: 2, groups: [] }, {
       "x-greplica-repo-role": managedRepository.effective_role,
       "x-greplica-access-status": "active",
     });
@@ -241,6 +250,10 @@ try {
   db.close();
   const managedGraph = await run(process.execPath, [cliPath, "graph", "read"], managedRepo, env);
   assert.match(managedGraph.stdout, /Current graph view: main \+ working/);
+  const managedDuplicateAudit = await run(process.execPath, [cliPath, "graph", "audit", "duplicates"], managedRepo, env);
+  assert.match(managedDuplicateAudit.stdout, /Total active claims checked: 2/);
+  assert.match(managedDuplicateAudit.stdout, /No duplicate claim groups found/);
+  assert.equal(duplicateAuditRequests, 1, "managed duplicate audit should call the managed graph audit route");
 
   const requestsBeforeHook = requestCount;
   const hook = await run(process.execPath, [cliPath, "hook", "ingest", "--platform", "codex"], managedRepo, env, JSON.stringify({
