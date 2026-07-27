@@ -1,6 +1,6 @@
 <div align="center">
 
-<img alt="Greplica" src="docs/assets/greplica-arcade-font2.png" width="420">
+<img alt="Greplica logo" src="docs/assets/greplica-logo.png" width="420">
 
 ### Persistent, searchable engineering memory for AI coding agents
 
