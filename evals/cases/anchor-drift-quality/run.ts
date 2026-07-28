@@ -299,6 +299,9 @@ function printSummary(context: RunContext, judge: EvalResult["judge"], success: 
 
 function parseArgs(args: string[]): Args {
   const judge = valueAfter(args, "--judge");
+  if (judge === undefined) {
+    throw new Error("Anchor drift quality scoring requires --judge openai.");
+  }
   if (judge !== undefined && judge !== "openai") throw new Error("Only --judge openai is supported.");
   return { agentModel: valueAfter(args, "--agent-model"), judge, judgeModel: valueAfter(args, "--judge-model") };
 }

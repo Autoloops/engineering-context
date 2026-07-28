@@ -104,6 +104,7 @@ function anchorAccuracy(replacements: ReplacementClaim[], expectedSymbol: string
 }
 
 export function scoreQuality(rubric: QualityRubric, proposal: unknown, judge: QualityJudgeOutput): QualityScore {
+  validateJudgeOutput(rubric, judge);
   const judgeById = new Map(judge.cases.map((entry) => [entry.case_id, entry]));
   const dimensionWeights = rubric.score.dimension_weights;
 
@@ -139,6 +140,24 @@ export function scoreQuality(rubric: QualityRubric, proposal: unknown, judge: Qu
     by_category: groupedAverage(cases, (entry) => entry.category),
     by_difficulty: groupedAverage(cases, (entry) => entry.difficulty),
   };
+}
+
+function validateJudgeOutput(rubric: QualityRubric, judge: QualityJudgeOutput): void {
+  const expectedIds = rubric.cases
+    .filter((rubricCase) => rubricCase.action !== "leave")
+    .map((rubricCase) => rubricCase.id)
+    .sort();
+  const actualIds = judge.cases.map((entry) => entry.case_id).sort();
+  const uniqueIds = new Set(actualIds);
+  if (
+    uniqueIds.size !== actualIds.length ||
+    actualIds.length !== expectedIds.length ||
+    actualIds.some((id, index) => id !== expectedIds[index])
+  ) {
+    throw new Error(
+      `Judge output case IDs did not match the rubric. Expected [${expectedIds.join(", ")}], got [${actualIds.join(", ")}].`,
+    );
+  }
 }
 
 // A semantic dimension only earns credit when the claim was actually superseded:
