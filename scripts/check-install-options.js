@@ -4,12 +4,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import Database from "better-sqlite3";
 
 const root = new URL("..", import.meta.url);
 const cliPath = fileURLToPath(new URL("dist/apps/cli/main.js", root));
 const { installCommandSuggestion, installPlatformUsage } = await import(new URL("dist/libs/install/paths.js", root));
 const { greplicaHookGuidance } = await import(new URL("dist/libs/hooks/guidance.js", root));
-const { shouldRunAutoMemoryUpdates } = await import(new URL("dist/libs/hooks/worker.js", root));
 
 const tmp = mkdtempSync(join(tmpdir(), "greplica-install-options-test-"));
 
@@ -17,15 +17,13 @@ const autoSave = installInTempRepo("auto-save", ["--hooks", "enabled", "--auto-m
 assert.match(autoSave.output, /Hooks: installed for UserPromptSubmit, Stop\./);
 assert.match(autoSave.output, /Automatic memory updates: enabled\./);
 assert.ok(existsSync(join(autoSave.codexHome, "hooks.json")));
-assert.equal(readConfig(autoSave.greplicaHome).session.autoMemoryUpdates, true);
-assert.equal(shouldRunAutoMemoryUpdates(readConfig(autoSave.greplicaHome)), true);
+assert.equal(readRepoInstall(autoSave.greplicaHome).auto_memory_updates, 1);
 
 const guidanceOnly = installInTempRepo("guidance-only", ["--hooks", "enabled", "--auto-memory", "disabled"]);
 assert.match(guidanceOnly.output, /Hooks: installed for UserPromptSubmit, Stop\./);
 assert.match(guidanceOnly.output, /Automatic memory updates: disabled\./);
 assert.ok(existsSync(join(guidanceOnly.codexHome, "hooks.json")));
-assert.equal(readConfig(guidanceOnly.greplicaHome).session.autoMemoryUpdates, false);
-assert.equal(shouldRunAutoMemoryUpdates(readConfig(guidanceOnly.greplicaHome)), false);
+assert.equal(readRepoInstall(guidanceOnly.greplicaHome).auto_memory_updates, 0);
 
 const hookOutput = execFileSync(
   process.execPath,
@@ -50,21 +48,21 @@ assert.match(noHooks.output, /Automatic memory updates: disabled\./);
 assert.match(noHooks.output, /To give future agents Greplica guidance without hooks/);
 assert.ok(noHooks.output.includes(greplicaHookGuidance));
 assert.equal(existsSync(join(noHooks.codexHome, "hooks.json")), false);
-assert.equal(readConfig(noHooks.greplicaHome).session.autoMemoryUpdates, false);
+assert.equal(readRepoInstall(noHooks.greplicaHome).auto_memory_updates, 0);
 
 const opencodeHooks = installInTempRepo("opencode-hooks", ["--hooks", "enabled", "--auto-memory", "enabled"], "opencode");
 assert.match(opencodeHooks.output, /Installed Greplica for OpenCode\./);
 assert.match(opencodeHooks.output, /Hooks: installed for UserPromptSubmit, Stop\./);
 assert.match(opencodeHooks.output, /Automatic memory updates: enabled\./);
 assert.ok(existsSync(join(opencodeHooks.xdgConfigHome, "opencode", "hooks.json")));
-assert.equal(readConfig(opencodeHooks.greplicaHome).session.autoMemoryUpdates, true);
+assert.equal(readRepoInstall(opencodeHooks.greplicaHome).auto_memory_updates, 1);
 
 const copilotHooks = installInTempRepo("copilot-hooks", ["--hooks", "enabled", "--auto-memory", "enabled"], "copilot");
 assert.match(copilotHooks.output, /Installed Greplica for GitHub Copilot CLI\./);
 assert.match(copilotHooks.output, /Hooks: installed for SessionStart, Stop\./);
 assert.match(copilotHooks.output, /Automatic memory updates: enabled\./);
 assert.ok(existsSync(join(copilotHooks.copilotHome, "hooks", "greplica.json")));
-assert.equal(readConfig(copilotHooks.greplicaHome).session.autoMemoryUpdates, true);
+assert.equal(readRepoInstall(copilotHooks.greplicaHome).auto_memory_updates, 1);
 
 const cursorHooks = installInTempRepo("cursor-hooks", ["--hooks", "enabled", "--auto-memory", "enabled"], "cursor");
 assert.match(cursorHooks.output, /Installed Greplica for Cursor\./);
@@ -74,7 +72,7 @@ assert.match(cursorHooks.output, /Automatic memory updates: enabled\./);
 assert.doesNotMatch(cursorHooks.output, /automatic memory updates are not supported yet/);
 assert.ok(existsSync(join(cursorHooks.cursorHome, "hooks.json")));
 assert.ok(existsSync(join(cursorHooks.repo, ".cursor", "rules", "greplica.mdc")));
-assert.equal(readConfig(cursorHooks.greplicaHome).session.autoMemoryUpdates, true);
+assert.equal(readRepoInstall(cursorHooks.greplicaHome).auto_memory_updates, 1);
 
 const invalid = spawnSync(
   process.execPath,
@@ -171,4 +169,13 @@ function installInTempRepo(name, flags, platform = "codex") {
 
 function readConfig(greplicaHome) {
   return JSON.parse(readFileSync(join(greplicaHome, "config.json"), "utf8"));
+}
+
+function readRepoInstall(greplicaHome) {
+  const db = new Database(join(greplicaHome, "graph.db"), { readonly: true });
+  try {
+    return db.prepare("SELECT * FROM repos").get();
+  } finally {
+    db.close();
+  }
 }

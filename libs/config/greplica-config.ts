@@ -12,16 +12,20 @@ export interface EmbeddingConfig {
 }
 
 export interface GreplicaConfig {
-  version: 1;
+  version: 2;
   embedding: EmbeddingConfig;
   session: SessionConfig;
+  managed: ManagedServerConfig;
 }
 
 export interface SessionConfig {
   stopThreshold: number;
   timeThresholdMinutes: number;
   currentGraceMinutes: number;
-  autoMemoryUpdates: boolean;
+}
+
+export interface ManagedServerConfig {
+  apiUrl: string;
 }
 
 export interface EmbeddingConfigInput {
@@ -50,13 +54,13 @@ export const defaultSessionConfig: SessionConfig = {
   stopThreshold: 7,
   timeThresholdMinutes: 40,
   currentGraceMinutes: 5,
-  autoMemoryUpdates: true,
 };
 
 export const defaultGreplicaConfig: GreplicaConfig = {
-  version: 1,
+  version: 2,
   embedding: { ...embeddingDefaults.local },
   session: { ...defaultSessionConfig },
+  managed: { apiUrl: "https://api.greplica.com" },
 };
 
 export function defaultEmbeddingConfig(provider: EmbeddingProvider): EmbeddingConfig {
@@ -72,7 +76,10 @@ export function ensureGreplicaConfig(path = greplicaConfigPath()): GreplicaConfi
     writeGreplicaConfig(defaultGreplicaConfig, path);
     return cloneConfig(defaultGreplicaConfig);
   }
-  return readGreplicaConfig(path);
+  const config = readGreplicaConfig(path);
+  const raw = JSON.parse(readFileSync(path, "utf8")) as unknown;
+  if (!isRecord(raw) || raw.version !== 2) writeGreplicaConfig(config, path);
+  return config;
 }
 
 export function readGreplicaConfig(path = greplicaConfigPath()): GreplicaConfig {
@@ -98,7 +105,7 @@ export function updateEmbeddingConfig(input: EmbeddingConfigInput, path = grepli
   const existing = readGreplicaConfig(path);
   const base = defaultEmbeddingConfig(input.provider);
   const config: GreplicaConfig = {
-    version: 1,
+    version: 2,
     embedding: {
       ...base,
       model: input.model ?? base.model,
@@ -106,6 +113,7 @@ export function updateEmbeddingConfig(input: EmbeddingConfigInput, path = grepli
       batchSize: input.batchSize ?? base.batchSize,
     },
     session: existing.session,
+    managed: existing.managed,
   };
   writeGreplicaConfig(config, path);
   return config;
@@ -114,7 +122,9 @@ export function updateEmbeddingConfig(input: EmbeddingConfigInput, path = grepli
 function normalizeConfig(value: unknown, path: string): GreplicaConfig {
   if (!isRecord(value)) throw new Error(`Invalid Greplica config at ${path}: expected an object.`);
   const version = value.version === undefined ? 1 : value.version;
-  if (version !== 1) throw new Error(`Invalid Greplica config at ${path}: unsupported version ${String(version)}.`);
+  if (version !== 1 && version !== 2) {
+    throw new Error(`Invalid Greplica config at ${path}: unsupported version ${String(version)}.`);
+  }
 
   const embeddingValue = value.embedding;
   if (!isRecord(embeddingValue)) {
@@ -127,9 +137,10 @@ function normalizeConfig(value: unknown, path: string): GreplicaConfig {
   const dimensions = parsePositiveInteger(embeddingValue.dimensions, defaults.dimensions, "embedding.dimensions", path);
   const batchSize = parsePositiveInteger(embeddingValue.batchSize, defaults.batchSize, "embedding.batchSize", path);
   const session = normalizeSessionConfig(value.session, path);
+  const managed = normalizeManagedConfig(value.managed, path);
 
   return {
-    version: 1,
+    version: 2,
     embedding: {
       provider,
       model,
@@ -137,6 +148,7 @@ function normalizeConfig(value: unknown, path: string): GreplicaConfig {
       batchSize,
     },
     session,
+    managed,
   };
 }
 
@@ -157,7 +169,14 @@ function normalizeSessionConfig(value: unknown, path: string): SessionConfig {
       "session.currentGraceMinutes",
       path,
     ),
-    autoMemoryUpdates: parseBoolean(value.autoMemoryUpdates, defaultSessionConfig.autoMemoryUpdates, "session.autoMemoryUpdates", path),
+  };
+}
+
+function normalizeManagedConfig(value: unknown, path: string): ManagedServerConfig {
+  if (value === undefined) return { ...defaultGreplicaConfig.managed };
+  if (!isRecord(value)) throw new Error(`Invalid Greplica config at ${path}: managed must be an object.`);
+  return {
+    apiUrl: parseString(value.apiUrl, defaultGreplicaConfig.managed.apiUrl, "managed.apiUrl", path).replace(/\/+$/, ""),
   };
 }
 
@@ -179,12 +198,6 @@ function parsePositiveInteger(value: unknown, fallback: number, field: string, p
   throw new Error(`Invalid Greplica config at ${path}: ${field} must be a positive integer.`);
 }
 
-function parseBoolean(value: unknown, fallback: boolean, field: string, path: string): boolean {
-  if (value === undefined) return fallback;
-  if (typeof value === "boolean") return value;
-  throw new Error(`Invalid Greplica config at ${path}: ${field} must be a boolean.`);
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -194,5 +207,19 @@ function cloneConfig(config: GreplicaConfig): GreplicaConfig {
     version: config.version,
     embedding: { ...config.embedding },
     session: { ...config.session },
+    managed: { ...config.managed },
   };
+}
+
+export function updateManagedApiUrl(apiUrl: string, path = greplicaConfigPath()): GreplicaConfig {
+  const trimmed = apiUrl.trim().replace(/\/+$/, "");
+  if (trimmed.length === 0) throw new Error("Managed API URL must be non-empty.");
+  const config = readGreplicaConfig(path);
+  config.managed.apiUrl = trimmed;
+  writeGreplicaConfig(config, path);
+  return config;
+}
+
+export function managedApiUrl(config: GreplicaConfig): string {
+  return (process.env.GREPLICA_MANAGED_API_URL ?? config.managed.apiUrl).replace(/\/+$/, "");
 }

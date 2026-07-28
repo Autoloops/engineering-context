@@ -24,6 +24,7 @@ export interface BuildGraphContextOptions {
   warnOnCreatedEmbeddings?: boolean;
   config?: GraphContextConfig;
   repoRoot?: string;
+  resolveCodeAnchors?: boolean;
 }
 
 interface ExistingEmbedding {
@@ -34,7 +35,7 @@ interface ExistingEmbedding {
 export class GraphContextBuilder {
   private readonly codeAnchorResolver = new CodeAnchorResolver();
 
-  constructor(private readonly repository: SqliteRepository) {}
+  constructor(private readonly repository?: SqliteRepository) {}
 
   async build(repoId: string, graph: GraphReadResult, query: string, options: BuildGraphContextOptions = {}): Promise<GraphContextResult> {
     const config = options.config ?? graphContextConfig;
@@ -50,10 +51,30 @@ export class GraphContextBuilder {
     }
 
     const queryEmbedding = await embedder.embed(query);
+    const embeddings = this.loadEmbeddings(repoId, config);
+    return this.buildFromVectors(graph, query, queryEmbedding, embeddings, {
+      ...options,
+      config,
+      embeddingStatus,
+    });
+  }
+
+  async buildFromVectors(
+    graph: GraphReadResult,
+    query: string,
+    queryEmbedding: number[],
+    embeddings: Map<string, Float32Array>,
+    options: BuildGraphContextOptions & { embeddingStatus: EmbeddingStatus },
+  ): Promise<GraphContextResult> {
+    const config = options.config ?? graphContextConfig;
+    const claimDocuments = buildClaimDocuments(graph);
+    const componentDocuments = buildComponentDocuments(graph);
+    const flowDocuments = buildFlowDocuments(graph);
+    const evidenceByClaim = buildEvidenceByClaim(graph);
     const baseRanked = {
-      claims: this.rankDocuments(repoId, query, queryEmbedding, claimDocuments, config),
-      components: this.rankDocuments(repoId, query, queryEmbedding, componentDocuments, config),
-      flows: this.rankDocuments(repoId, query, queryEmbedding, flowDocuments, config),
+      claims: this.rankDocuments(query, queryEmbedding, claimDocuments, embeddings, config),
+      components: this.rankDocuments(query, queryEmbedding, componentDocuments, embeddings, config),
+      flows: this.rankDocuments(query, queryEmbedding, flowDocuments, embeddings, config),
     };
     const ranked = applyGraphRanking(baseRanked, graph, config);
     const selectedClaims = await selectClaims(
@@ -62,6 +83,7 @@ export class GraphContextBuilder {
       config,
       this.codeAnchorResolver,
       options.repoRoot,
+      options.resolveCodeAnchors ?? true,
     );
     const selectedComponents = selectGraphObjects(
       ranked.components,
@@ -80,7 +102,7 @@ export class GraphContextBuilder {
     return {
       query,
       search_config_version: config.version,
-      embedding_status: embeddingStatus,
+      embedding_status: options.embeddingStatus,
       claims: selectedClaims,
       components: selectedComponents,
       flows: selectedFlows,
@@ -114,8 +136,9 @@ export class GraphContextBuilder {
     embedder: Embedder,
     config: GraphContextConfig,
   ): Promise<EmbeddingStatus> {
+    const repository = this.requireRepository();
     const existing = new Set(
-      this.repository
+      repository
         .listGraphObjectEmbeddings({
           repo_id: repoId,
           provider: config.embedding.provider,
@@ -127,7 +150,7 @@ export class GraphContextBuilder {
     const missing = documents.filter((document) => !existing.has(document.key));
     const vectors = await embedder.embedBatch(missing.map((document) => document.text));
 
-    this.repository.insertGraphObjectEmbeddings(
+    repository.insertGraphObjectEmbeddings(
       missing.map((document, index) => ({
         repo_id: repoId,
         object_type: document.type,
@@ -147,29 +170,28 @@ export class GraphContextBuilder {
   }
 
   private rankDocuments(
-    repoId: string,
     query: string,
     queryEmbedding: number[],
     documents: ContextDocument[],
+    embeddings: Map<string, Float32Array>,
     config: GraphContextConfig,
   ): RankedContextDocument[] {
-    const semantic = this.scoreSemantic(repoId, documents, queryEmbedding, config);
+    const semantic = this.scoreSemantic(documents, queryEmbedding, embeddings);
     const bm25 = scoreBm25(query, documents, config);
     return rankContextDocuments(documents, semantic, bm25, config);
   }
 
   private scoreSemantic(
-    repoId: string,
     documents: ContextDocument[],
     queryEmbedding: number[],
-    config: GraphContextConfig,
+    embeddings: Map<string, Float32Array>,
   ): SemanticScoreEntry[] {
     const documentKeys = new Set(documents.map((document) => document.key));
-    const embeddings = this.loadEmbeddings(repoId, config).filter((embedding) => documentKeys.has(embedding.key));
-    const scored = embeddings
-      .map((embedding) => ({
-        id: embedding.key,
-        score: cosineSimilarity(queryEmbedding, embedding.vector),
+    const scored = [...embeddings.entries()]
+      .filter(([key]) => documentKeys.has(key))
+      .map(([key, vector]) => ({
+        id: key,
+        score: cosineSimilarity(queryEmbedding, vector),
       }))
       .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
     const maxScore = scored[0]?.score ?? 1;
@@ -182,18 +204,23 @@ export class GraphContextBuilder {
     }));
   }
 
-  private loadEmbeddings(repoId: string, config: GraphContextConfig): ExistingEmbedding[] {
-    return this.repository
+  private loadEmbeddings(repoId: string, config: GraphContextConfig): Map<string, Float32Array> {
+    return new Map(this.requireRepository()
       .listGraphObjectEmbeddings({
         repo_id: repoId,
         provider: config.embedding.provider,
         model: config.embedding.model,
         dimensions: config.embedding.dimensions,
       })
-      .map((record) => ({
-        key: contextDocumentKey(record.object_type, record.object_id),
-        vector: bufferToFloat32Array(record.embedding),
-      }));
+      .map((record) => [
+        contextDocumentKey(record.object_type, record.object_id),
+        bufferToFloat32Array(record.embedding),
+      ] as const));
+  }
+
+  private requireRepository(): SqliteRepository {
+    if (this.repository === undefined) throw new Error("This graph context operation requires a storage repository.");
+    return this.repository;
   }
 }
 
@@ -227,10 +254,11 @@ function selectClaims(
   config: GraphContextConfig,
   resolver: CodeAnchorResolver,
   repoRoot: string | undefined,
+  resolveAnchors: boolean,
 ): Promise<ClaimContextResult[]> {
   return Promise.all(selectRankedDocuments(ranked, config, { minimumSelected: config.ranking.minimumSelectedClaims })
     .sort((left, right) => right.score - left.score || left.document.key.localeCompare(right.document.key))
-    .map((document, index) => toClaimResult(document, index, evidenceByClaim, resolver, repoRoot)));
+    .map((document, index) => toClaimResult(document, index, evidenceByClaim, resolver, repoRoot, resolveAnchors)));
 }
 
 async function toClaimResult(
@@ -239,6 +267,7 @@ async function toClaimResult(
   evidenceByClaim: Map<string, ClaimEvidenceResult[]>,
   resolver: CodeAnchorResolver,
   repoRoot: string | undefined,
+  resolveAnchors: boolean,
 ): Promise<ClaimContextResult> {
   const claim = document.document.object as Claim;
   return {
@@ -248,7 +277,7 @@ async function toClaimResult(
     object: claim,
     about: document.document.about,
     evidence: evidenceByClaim.get(document.document.id) ?? [],
-    code_anchors: await resolveCodeAnchors(resolver, repoRoot, claim),
+    code_anchors: resolveAnchors ? await resolveCodeAnchors(resolver, repoRoot, claim) : [],
   };
 }
 
