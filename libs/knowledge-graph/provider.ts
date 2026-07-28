@@ -4,6 +4,7 @@ import type { GraphContextResult } from "./graph-context/types.js";
 import type { GraphViewData } from "./graph-view/build-graph-view.js";
 import type {
   ApplyProposalResult,
+  DuplicateAuditResult,
   GraphReadResult,
   ProposalReviewResult,
 } from "./service.js";
@@ -23,6 +24,7 @@ export interface GraphMemoryProvider {
   viewData(): Promise<GraphViewData>;
   buildGraphView(): Promise<string>;
   auditCodeAnchors(): Promise<ClaimAnchorAuditResult>;
+  auditDuplicateClaims(): Promise<DuplicateAuditResult>;
   reviewProposal(proposal: unknown): Promise<ManagedProposalReviewResult>;
   applyProposal(proposal: unknown): Promise<ApplyProposalResult>;
   close(): void;

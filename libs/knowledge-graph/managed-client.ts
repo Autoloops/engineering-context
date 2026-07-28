@@ -17,6 +17,7 @@ import { normalizeProposal } from "./proposal.js";
 import type { GraphMemoryProvider, ManagedProposalReviewResult } from "./provider.js";
 import type { ApplyProposalResult, GraphReadResult, RepoRef } from "./service.js";
 import type { GraphContextResult } from "./graph-context/types.js";
+import type { ManagedDuplicateAudit } from "../managed/protocol.js";
 
 export interface ManagedGraphClientOptions {
   apiUrl: string;
@@ -99,6 +100,10 @@ export class ManagedGraphMemoryClient implements GraphMemoryProvider {
       undefined,
       new Map(Object.entries(data.fingerprints)),
     );
+  }
+
+  async auditDuplicateClaims(): Promise<ManagedDuplicateAudit> {
+    return this.request("/graph/audit-duplicates", { method: "GET" });
   }
 
   async reviewProposal(proposal: unknown): Promise<ManagedProposalReviewResult> {

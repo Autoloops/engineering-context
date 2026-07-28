@@ -17,7 +17,7 @@ import { SqliteRepository as SqliteKnowledgeGraphRepository } from "../storage/s
 import { bufferToFloat32Array } from "./graph-context/vector.js";
 import { createEmbedder } from "./graph-context/embedder.js";
 import { buildClaimDocuments } from "./graph-context/documents.js";
-import { findSimilarClaims, type SimilarClaimMatch } from "./dedupe/find-similar-claims.js";
+import { findSimilarClaims, type SimilarClaimMatch, type ClaimEmbeddingCandidate } from "./dedupe/find-similar-claims.js";
 
 export type { GraphContextResult } from "./graph-context/types.js";
 export type { ClaimAnchorAuditResult } from "./code-anchors/types.js";
@@ -60,6 +60,17 @@ export interface ApplyProposalResult {
 
 export interface ProposalReviewResult extends ProposalValidationResult {
   duplicate_warnings: Record<string, SimilarClaimMatch[]>;
+}
+
+export interface DuplicateAuditGroup {
+  claim_id: string;
+  claim_text: string;
+  duplicates: Array<{ claim_id: string; claim_text: string; similarity: number }>;
+}
+
+export interface DuplicateAuditResult {
+  total_claims: number;
+  groups: DuplicateAuditGroup[];
 }
 
 export class KnowledgeGraphService {
@@ -150,6 +161,104 @@ export class KnowledgeGraphService {
       claims.map((claim) => claim.id),
     );
     return auditClaimCodeAnchors(input.repo_root, claims, new CodeAnchorResolver(), baselineFingerprints);
+  }
+
+  async auditDuplicateClaims(input: RepoRef): Promise<DuplicateAuditResult> {
+    const initialized = this.requireRepo(input);
+    const graph = this.repository.readGraphView(initialized.repo_id);
+    if (graph.claims.length === 0) {
+      return { total_claims: 0, groups: [] };
+    }
+
+    const supersededIds = new Set(
+      this.repository.readSupersededClaims(initialized.repo_id).map((claim) => claim.id),
+    );
+    const activeClaims = graph.claims.filter((claim) => !supersededIds.has(claim.id));
+    if (activeClaims.length === 0) {
+      return { total_claims: 0, groups: [] };
+    }
+
+    const storedVectors = new Map(
+      this.repository
+        .listGraphObjectEmbeddings({
+          repo_id: initialized.repo_id,
+          provider: this.contextConfig.embedding.provider,
+          model: this.contextConfig.embedding.model,
+          dimensions: this.contextConfig.embedding.dimensions,
+        })
+        .filter((record) => record.object_type === "claim")
+        .map((record) => {
+          const vector = bufferToFloat32Array(record.embedding);
+          if (vector.length !== this.contextConfig.embedding.dimensions) {
+            throw new Error(
+              `Stored embedding for claim ${record.object_id} has ${vector.length} dimensions; expected ${this.contextConfig.embedding.dimensions}.`,
+            );
+          }
+          return [record.object_id, vector] as const;
+        }),
+    );
+
+    const activeDocuments = buildClaimDocuments({ ...graph, claims: activeClaims });
+    const existingVectors: ClaimEmbeddingCandidate[] = [];
+    const missingDocs: typeof activeDocuments = [];
+    for (const doc of activeDocuments) {
+      const vector = storedVectors.get(doc.id);
+      if (vector === undefined) {
+        missingDocs.push(doc);
+      } else {
+        existingVectors.push({ claim_id: doc.id, vector });
+      }
+    }
+
+    if (missingDocs.length > 0) {
+      const embedder = createEmbedder(this.contextConfig.embedding);
+      const generated = await embedder.embedBatch(missingDocs.map((d) => d.text));
+      if (generated.length !== missingDocs.length) {
+        throw new Error(
+          `Embedding provider returned ${generated.length} vectors for ${missingDocs.length} missing claims.`,
+        );
+      }
+      for (const [index, doc] of missingDocs.entries()) {
+        const values = generated[index];
+        if (values === undefined || values.length !== this.contextConfig.embedding.dimensions) {
+          throw new Error(
+            `Embedding for claim ${doc.id} has ${values?.length ?? 0} dimensions; expected ${this.contextConfig.embedding.dimensions}.`,
+          );
+        }
+        const vector = new Float32Array(values);
+        existingVectors.push({ claim_id: doc.id, vector });
+      }
+    }
+
+    const seen = new Set<string>();
+    const claimText = new Map(activeClaims.map((c) => [c.id, c.text]));
+    const groups: DuplicateAuditGroup[] = [];
+
+    for (const claim of activeClaims) {
+      if (seen.has(claim.id)) continue;
+      const vector = existingVectors.find((v) => v.claim_id === claim.id)?.vector;
+      if (vector === undefined) continue;
+      const others = existingVectors.filter((v) => v.claim_id !== claim.id && !seen.has(v.claim_id));
+      const matches = findSimilarClaims(vector, others, this.contextConfig.dedupe.similarityThreshold)
+        .filter((m) => m.claim_id !== claim.id)
+        .map((m) => ({
+          claim_id: m.claim_id,
+          claim_text: claimText.get(m.claim_id) ?? "",
+          similarity: m.similarity,
+        }));
+      if (matches.length > 0) {
+        groups.push({
+          claim_id: claim.id,
+          claim_text: claim.text,
+          duplicates: matches,
+        });
+        seen.add(claim.id);
+        for (const m of matches) seen.add(m.claim_id);
+      }
+    }
+
+    groups.sort((a, b) => b.duplicates[0].similarity - a.duplicates[0].similarity);
+    return { total_claims: activeClaims.length, groups };
   }
 
   async validateProposal(input: RepoRef, proposal: unknown): Promise<ProposalReviewResult> {

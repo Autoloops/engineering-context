@@ -192,6 +192,13 @@ const cliCommands = [
     showInTopLevelHelp: true,
   },
   {
+    key: "graphAuditDuplicates",
+    path: ["graph", "audit", "duplicates"],
+    usage: "graph audit duplicates",
+    handler: withCommandContext(runGraphAuditDuplicatesCommand),
+    showInTopLevelHelp: true,
+  },
+  {
     key: "graphExport",
     path: ["graph", "export"],
     usage: "graph export <dir>",
@@ -414,6 +421,27 @@ async function runGraphAuditAnchorsCommand(_args: string[], getContext: CommandC
   const result = await service.auditCodeAnchors();
   printAnchorAudit(result);
   if (anchorAuditIssueCount(result) > 0) process.exitCode = 1;
+}
+
+async function runGraphAuditDuplicatesCommand(_args: string[], getContext: CommandContextProvider): Promise<void> {
+  const { service } = getContext();
+  const result = await service.auditDuplicateClaims();
+  console.log("Duplicate claims audit:");
+  console.log(`Total active claims checked: ${result.total_claims}`);
+  if (result.groups.length === 0) {
+    console.log("- No duplicate claim groups found.");
+    return;
+  }
+  const totalDuplicates = result.groups.reduce((sum, group) => sum + group.duplicates.length, 0);
+  console.log(`Total duplicate pairs found: ${totalDuplicates}`);
+  for (const group of result.groups) {
+    const truncated = group.claim_text.length > 80 ? group.claim_text.slice(0, 80) + "..." : group.claim_text;
+    console.log(`- "${group.claim_id}" ("${truncated}")`);
+    for (const dup of group.duplicates) {
+      const dupTruncated = dup.claim_text.length > 80 ? dup.claim_text.slice(0, 80) + "..." : dup.claim_text;
+      console.log(`  → "${dup.claim_id}" (${dup.similarity.toFixed(4)}) "${dupTruncated}"`);
+    }
+  }
 }
 
 async function runGraphExportCommand(args: string[], getContext: CommandContextProvider): Promise<void> {

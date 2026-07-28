@@ -38,6 +38,10 @@ export class LocalGraphMemoryProvider implements GraphMemoryProvider {
     return this.service.auditCodeAnchors(this.repo);
   }
 
+  async auditDuplicateClaims() {
+    return this.service.auditDuplicateClaims(this.repo);
+  }
+
   async reviewProposal(proposal: unknown) {
     return this.service.validateProposal(this.repo, proposal);
   }
