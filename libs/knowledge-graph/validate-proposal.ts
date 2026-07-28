@@ -214,7 +214,7 @@ function validateClaimCodeAnchors(claim: Record<string, unknown>, errors: string
 }
 
 function isAbsoluteOrLineAnchor(file: string): boolean {
-  if (file.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(file) || /:\d+(:\d+)?$/.test(file)) return true;
+  if (/^[\\/]/.test(file) || /^[a-zA-Z]:[\\/]/.test(file) || /:\d+(:\d+)?$/.test(file)) return true;
   // Reject any ".." path segment (checked on both separators, since the string
   // itself isn't resolved on this OS yet) so a proposal can't escape the repo
   // root via e.g. "../../../../etc/passwd" -- this validator's error message

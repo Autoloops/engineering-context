@@ -205,6 +205,9 @@ const traversalCases = [
   "../secrets.env",
   "components/../../../../etc/passwd",
   "..\\..\\..\\Windows\\System32\\config\\SAM",
+  "\\Windows\\System32\\config\\SAM",
+  "\\\\server\\share\\secret.txt",
+  "\\\\?\\C:\\Windows\\System32\\config\\SAM",
 ];
 
 for (const file of traversalCases) {
