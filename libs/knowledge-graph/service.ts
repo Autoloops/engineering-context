@@ -175,7 +175,7 @@ export class KnowledgeGraphService {
     );
     const activeClaims = graph.claims.filter((claim) => !supersededIds.has(claim.id));
     if (activeClaims.length === 0) {
-      return { total_claims: graph.claims.length, groups: [] };
+      return { total_claims: 0, groups: [] };
     }
 
     const storedVectors = new Map(
@@ -187,7 +187,15 @@ export class KnowledgeGraphService {
           dimensions: this.contextConfig.embedding.dimensions,
         })
         .filter((record) => record.object_type === "claim")
-        .map((record) => [record.object_id, bufferToFloat32Array(record.embedding)]),
+        .map((record) => {
+          const vector = bufferToFloat32Array(record.embedding);
+          if (vector.length !== this.contextConfig.embedding.dimensions) {
+            throw new Error(
+              `Stored embedding for claim ${record.object_id} has ${vector.length} dimensions; expected ${this.contextConfig.embedding.dimensions}.`,
+            );
+          }
+          return [record.object_id, vector] as const;
+        }),
     );
 
     const activeDocuments = buildClaimDocuments({ ...graph, claims: activeClaims });
@@ -205,8 +213,19 @@ export class KnowledgeGraphService {
     if (missingDocs.length > 0) {
       const embedder = createEmbedder(this.contextConfig.embedding);
       const generated = await embedder.embedBatch(missingDocs.map((d) => d.text));
+      if (generated.length !== missingDocs.length) {
+        throw new Error(
+          `Embedding provider returned ${generated.length} vectors for ${missingDocs.length} missing claims.`,
+        );
+      }
       for (const [index, doc] of missingDocs.entries()) {
-        const vector = new Float32Array(generated[index]);
+        const values = generated[index];
+        if (values === undefined || values.length !== this.contextConfig.embedding.dimensions) {
+          throw new Error(
+            `Embedding for claim ${doc.id} has ${values?.length ?? 0} dimensions; expected ${this.contextConfig.embedding.dimensions}.`,
+          );
+        }
+        const vector = new Float32Array(values);
         existingVectors.push({ claim_id: doc.id, vector });
       }
     }
