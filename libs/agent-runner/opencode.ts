@@ -39,12 +39,15 @@ function runOpenCodeProcess(
       stdio: ["ignore", "pipe", "inherit"],
     });
 
+    let spawnError: Error | undefined;
     child.once("error", (error) => {
+      spawnError = error;
+      transcript.once("close", () => reject(error));
       transcript.end();
-      reject(error);
     });
     child.stdout.pipe(transcript);
     child.once("close", (exitCode, signal) => {
+      if (spawnError !== undefined) return;
       writeFileSync(
         input.finalMessagePath,
         `OpenCode update runner exited with code ${exitCode ?? "null"} and signal ${signal ?? "null"}.\n`,
