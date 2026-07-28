@@ -6,7 +6,7 @@ import type { Component, Flow, GraphObjectType, Source } from "./schema.js";
 import { GraphContextBuilder } from "./graph-context/context-builder.js";
 import { graphContextConfig, type GraphContextConfig } from "./graph-context/config.js";
 import type { EmbeddingStatus, GraphContextResult } from "./graph-context/types.js";
-import { buildGraphViewHtml } from "./graph-view/build-graph-view.js";
+import { buildGraphViewData, buildGraphViewHtml, type GraphViewData } from "./graph-view/build-graph-view.js";
 import { auditClaimCodeAnchors } from "./code-anchors/audit.js";
 import { CodeAnchorResolver } from "./code-anchors/resolver.js";
 import { fingerprintClaimAnchors } from "./code-anchors/fingerprint.js";
@@ -123,6 +123,14 @@ export class KnowledgeGraphService {
     const provenance = this.repository.readClaimProvenance(initialized.repo_id);
     const supersededClaims = this.repository.readSupersededClaims(initialized.repo_id);
     return buildGraphViewHtml(graph, provenance, supersededClaims, { repoName: input.repo_name });
+  }
+
+  graphViewData(input: RepoRef): GraphViewData {
+    const initialized = this.requireRepo(input);
+    const graph = this.repository.readGraphView(initialized.repo_id);
+    const provenance = this.repository.readClaimProvenance(initialized.repo_id);
+    const supersededClaims = this.repository.readSupersededClaims(initialized.repo_id);
+    return buildGraphViewData(graph, provenance, supersededClaims);
   }
 
   async contextGraph(input: RepoRef, query: string): Promise<GraphContextResult> {
