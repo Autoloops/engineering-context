@@ -1,0 +1,11 @@
+{
+  "title": "Update working memory from session 4f2f2cab",
+  "summary": "No durable memory was created because the filtered transcript contains only session metadata and the target repository has no working-tree diff for this replay.",
+  "creates": {
+    "components": [],
+    "flows": [],
+    "claims": [],
+    "sources": [],
+    "edges": []
+  }
+}

@@ -1,0 +1,1 @@
+Conversation forking crosses user gestures, async export/prep work, cross-tab data transfer, popup blockers, and different extension/browser storage semantics. Firefox and Safari users say it fails unreliably. Can you investigate enough to plan a cross-browser fix that preserves the current UX without relying on Chrome-only timing assumptions?

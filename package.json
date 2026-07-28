@@ -1,6 +1,6 @@
 {
   "name": "greplica",
-  "version": "0.1.12",
+  "version": "0.2.1",
   "description": "Long-term, searchable AGENTS.md for coding agents.",
   "license": "MIT",
   "private": false,
@@ -26,12 +26,18 @@
     "test": "npm run build && node scripts/check-transcript-bundle.js && node scripts/check-repo-context.js && node scripts/check-install-options.js && node scripts/check-graph-view.js && node scripts/check-proposal-validate.js && node scripts/check-bm25-tokenizer.js && node scripts/check-antigravity-hooks.js",
     "test:transcript-bundle": "npm run build && node scripts/check-transcript-bundle.js",
     "test:repo-context": "npm run build && node scripts/check-repo-context.js",
+    "test:source-memberships": "npm run build && node scripts/check-source-memberships.js",
+    "test:opencode-sqlite-transcript": "npm run build && node scripts/check-opencode-sqlite-transcript.js",
     "eval:bootstrap-current": "npm run build && node dist/evals/cases/bootstrap-current-repo-at-8038fe8/run.js",
     "eval:coding-proposal-apply-atomicity": "npm run build && node dist/evals/cases/coding-proposal-apply-atomicity-at-d6ebf80/run.js",
     "eval:curated-doc-bootstrap-vercel-chat": "npm run build && node dist/evals/cases/curated-doc-bootstrap-vercel-chat-at-f3de128/run.js",
     "eval:search-current": "npm run build && node dist/evals/cases/search-current-repo-at-8038fe8/run.js",
+    "eval:swechat-plan": "npm run build && node dist/evals/swechat-plan/run.js",
+    "eval:swechat-plan-build-memory": "npm run build && node dist/evals/swechat-plan/build-memory.js",
     "eval:transcript-backfill-insights": "npm run build && node dist/evals/cases/transcript-backfill-insights/run.js --judge openai",
+    "eval:claim-dedupe-threshold-calibration": "npm run build && node dist/evals/cases/claim-dedupe-threshold-calibration/run.js",
     "eval:update-working-memory-source-evidence": "npm run build && node dist/evals/cases/update-working-memory-source-evidence-at-0438915/run.js",
+    "eval:anchor-drift-supersede": "npm run build && node dist/evals/cases/anchor-drift-supersede/run.js",
     "smoke:factory-droid": "npm run build && node scripts/smoke-factory-droid.mjs",
     "bench:contextbench": "npm run build && node dist/evals/cases/contextbench-retrieval-from-sqlite/run.js",
     "optimize:search-ranking": "npm run build && node dist/evals/ranking-optimizer/train.js",
@@ -58,7 +64,10 @@
   ],
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
+    "@sinclair/typebox": "^0.34.38",
     "better-sqlite3": "^12.11.1",
+    "chart.js": "4.4.7",
+    "chartjs-plugin-datalabels": "2.2.0",
     "tree-sitter-wasms": "^0.1.13",
     "web-tree-sitter": "^0.24.7"
   },
@@ -66,5 +75,10 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.15.3",
     "typescript": "^5.8.3"
+  },
+  "overrides": {
+    "adm-zip": "0.6.0",
+    "protobufjs": "^7.6.5",
+    "sharp": "^0.35.3"
   }
 }

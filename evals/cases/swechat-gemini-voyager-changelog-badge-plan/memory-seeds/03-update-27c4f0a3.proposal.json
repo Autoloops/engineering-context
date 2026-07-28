@@ -1,0 +1,228 @@
+{
+  "title": "Update working memory from folder manual ordering session",
+  "summary": "Durable context from the session that added persisted manual ordering for folders and folder conversations, including the accepted recency-ordering trade-off and one unresolved Timeline storage-access report.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.folder_sidebar_manager",
+        "name": "Folder Sidebar Manager",
+        "code_anchor": "src/pages/content/folder/manager.ts"
+      },
+      {
+        "id": "component.timeline_manager",
+        "name": "Timeline Manager",
+        "code_anchor": "src/pages/content/timeline/manager.ts"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.folder_manual_ordering",
+        "name": "Folder Manual Ordering",
+        "touches": [
+          "component.folder_model",
+          "component.folder_sidebar_manager"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.folder_manual_order_sort_index_model",
+        "kind": "fact",
+        "text": "The shared folder model persists manual ordering with optional `sortIndex` fields on both folders and folder conversation references.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.folder_manual_ordering",
+          "component.folder_model"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/types/folder.ts"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_manual_order_sorting_contract",
+        "kind": "fact",
+        "text": "Folder sidebar ordering keeps pinned folders ahead of unpinned folders and starred conversations ahead of normal conversations; within each pinned or starred group, items with `sortIndex` are ordered by that value before falling back to the previous name or time sort.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.folder_manual_ordering",
+          "component.folder_sidebar_manager"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager"
+          },
+          {
+            "file": "src/pages/content/folder/conversationSort.ts",
+            "symbol": "sortConversationsByPriority"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_manual_order_migration_preserves_legacy_order",
+        "kind": "fact",
+        "text": "FolderManager data integrity now fills missing `sortIndex` values: folders are initialized from the existing name-based sibling order, and conversations are initialized from the existing `lastOpenedAt`/`addedAt` time order.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.folder_manual_ordering",
+          "component.folder_sidebar_manager",
+          "component.folder_model"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_manual_order_drag_drop_surfaces",
+        "kind": "fact",
+        "text": "Conversation reordering is handled directly on conversation elements with top/bottom half detection and `gv-reorder-above`/`gv-reorder-below` indicators; folder reordering uses `gv-reorder-gap` drop zones between folder items.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.folder_manual_ordering",
+          "component.folder_sidebar_manager"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager"
+          },
+          {
+            "file": "public/contentStyle.css"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_manual_order_reorder_logic_scope",
+        "kind": "fact",
+        "text": "The manual-ordering implementation can reorder folders within a parent or move them to another parent at a target index, and can reorder or move one or more conversations while adjusting same-folder insertion indexes after removal and clamping the final target index.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.folder_manual_ordering",
+          "component.folder_sidebar_manager"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager"
+          }
+        ]
+      },
+      {
+        "id": "claim.manual_order_replaces_recency_after_migration",
+        "kind": "decision",
+        "text": "The accepted behavior is full manual conversation ordering after migration: once `ensureSortIndices()` has populated `sortIndex`, `lastOpenedAt` is only the initial-order input and later clicks should not move conversations ahead of the user's manual order.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.folder_manual_ordering",
+          "component.folder_sidebar_manager"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager"
+          },
+          {
+            "file": "src/pages/content/folder/conversationSort.ts",
+            "symbol": "sortConversationsByPriority"
+          }
+        ]
+      },
+      {
+        "id": "claim.recency_default_until_drag_rejected",
+        "kind": "decision",
+        "text": "The session rejected the alternative where `sortIndex` would be written only after a user drags an item and un-dragged conversations would continue to sort by `lastOpenedAt`; the user approved keeping the current fully manual ordering model.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.folder_manual_ordering"
+        ]
+      },
+      {
+        "id": "claim.folder_manual_order_drop_semantics_preserved",
+        "kind": "requirement",
+        "text": "Manual reordering must preserve the existing folder drop semantics: dropping onto a folder moves the item into that folder, while dropping between folders reorders and dropping a conversation onto another conversation's upper or lower half reorders relative to that conversation.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.folder_manual_ordering",
+          "component.folder_sidebar_manager"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager"
+          }
+        ]
+      },
+      {
+        "id": "claim.timeline_reapply_position_extension_context_followup",
+        "kind": "task",
+        "text": "Investigate whether TimelineManager.reapplyPosition should suppress or more gracefully handle `Extension context invalidated` storage-access failures; the issue was reported during the folder-ordering session but was not resolved in that slice.",
+        "truth": "unknown",
+        "intent": "intended",
+        "about": [
+          "component.timeline_manager"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/timeline/manager.ts",
+            "symbol": "TimelineManager"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.27c4f0a3_a92c_42db_9d92_c81d0ed03ce4",
+        "kind": "session",
+        "ref": "claude-code-session:27c4f0a3-a92c-42db-9d92-c81d0ed03ce4",
+        "title": "Folder manual ordering session"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.manual_order_replaces_recency_after_migration",
+        "to": "source.claude_code_session.27c4f0a3_a92c_42db_9d92_c81d0ed03ce4",
+        "metadata": {
+          "reason": "The user asked whether last-opened sorting had effectively been canceled; the accepted response explained that populated `sortIndex` makes `lastOpenedAt` only an initial migration input so clicks do not disturb manual order, and the user approved that behavior."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.recency_default_until_drag_rejected",
+        "to": "source.claude_code_session.27c4f0a3_a92c_42db_9d92_c81d0ed03ce4",
+        "metadata": {
+          "reason": "The assistant offered the alternative of not auto-populating `sortIndex` so un-dragged conversations would keep `lastOpenedAt` ordering; the user answered that the current behavior was good and asked to commit it."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.folder_manual_order_drop_semantics_preserved",
+        "to": "source.claude_code_session.27c4f0a3_a92c_42db_9d92_c81d0ed03ce4",
+        "metadata": {
+          "reason": "The session distinguished dropping onto a folder from dropping between items, then refined conversation reordering so conversation-on-conversation drops use upper/lower position while folder-on-folder behavior remains a move."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.timeline_reapply_position_extension_context_followup",
+        "to": "source.claude_code_session.27c4f0a3_a92c_42db_9d92_c81d0ed03ce4",
+        "metadata": {
+          "reason": "The user reported `[Timeline] reapplyPosition storage access failed: Error: Extension context invalidated.` in the same message as the conversation drag issue; the accepted follow-up fixed drag behavior and did not address this Timeline report."
+        }
+      }
+    ]
+  }
+}

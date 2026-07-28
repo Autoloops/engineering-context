@@ -1,0 +1,11 @@
+{
+  "title": "Update working memory from Safari update prompt session",
+  "summary": "No durable context was recoverable from this filtered historical transcript: it contains session metadata only, the target working tree has no reconstructed diff, and existing memory/context checks did not provide session-specific claims to supersede.",
+  "creates": {
+    "components": [],
+    "flows": [],
+    "claims": [],
+    "sources": [],
+    "edges": []
+  }
+}

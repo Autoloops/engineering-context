@@ -1,0 +1,233 @@
+{
+  "title": "Update working memory from typography and layout review",
+  "summary": "Durable visual-design context learned from the historical IPTVnator typography and layout review session.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.iptvnator_visual_style",
+        "name": "IPTVnator UI typography and interaction style",
+        "code_anchor": "apps/web/src/m3-theme.scss"
+      }
+    ],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.iptvnator_page_title_scale",
+        "kind": "fact",
+        "text": "Search, Downloads, and Sources page titles currently use the shared page-title scale of 1.2rem font size, 650 font weight, and -0.02em letter spacing.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.iptvnator_visual_style",
+          "component.web_app_shell",
+          "component.download_manager"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/search-layout/search-layout.component.scss"
+          },
+          {
+            "file": "libs/portal/downloads/feature/src/lib/downloads.component.scss"
+          },
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-sources/workspace-sources.component.scss"
+          }
+        ]
+      },
+      {
+        "id": "claim.downloads_title_is_text_only",
+        "kind": "fact",
+        "text": "The Downloads page header renders a text-only h1 inside settings-group__header-text and no longer includes a settings-group__header-icon title pill.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.download_manager",
+          "component.iptvnator_visual_style"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/portal/downloads/feature/src/lib/downloads.component.html"
+          }
+        ]
+      },
+      {
+        "id": "claim.downloads_empty_state_scale",
+        "kind": "fact",
+        "text": "Downloads empty-state primary text uses the compact empty-state scale: 1.05rem font size, 520 font weight, and -0.01em letter spacing.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.download_manager",
+          "component.iptvnator_visual_style"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/portal/downloads/feature/src/lib/downloads.component.scss"
+          }
+        ]
+      },
+      {
+        "id": "claim.sources_filters_use_dashboard_eyebrow",
+        "kind": "fact",
+        "text": "The Sources filter panel section labels such as Type and Sort By use the dashboard-style eyebrow treatment: 0.72rem, uppercase, 0.08em letter spacing, muted on-surface-variant color, and 0.6 opacity.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.web_app_shell",
+          "component.workspace_dashboard",
+          "component.iptvnator_visual_style"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-sources-filters-panel/workspace-sources-filters-panel.component.scss"
+          },
+          {
+            "file": "libs/workspace/dashboard/feature/src/lib/workspace-dashboard.component.scss"
+          }
+        ]
+      },
+      {
+        "id": "claim.nav_item_sidebar_alignment",
+        "kind": "fact",
+        "text": "Shared nav-list items align sidebar labels through the flex item gap and base item padding, while sidebar headers keep their own 8px 12px padding; nav-item-label does not add a separate left padding.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.web_app_shell",
+          "component.iptvnator_visual_style"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/web/src/nav-list.scss"
+          },
+          {
+            "file": "libs/ui/styles/_portal-sidebar.scss"
+          }
+        ]
+      },
+      {
+        "id": "claim.downloads_title_icon_outlier_decision",
+        "kind": "decision",
+        "text": "The typography deep dive treated the Downloads title icon pill as an outlier to remove, not as a pattern to add to every page title.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.download_manager",
+          "component.iptvnator_visual_style"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/portal/downloads/feature/src/lib/downloads.component.html"
+          }
+        ]
+      },
+      {
+        "id": "claim.page_titles_remain_page_titles_not_eyebrows",
+        "kind": "decision",
+        "text": "Normal page titles such as Sources, Search, Downloads, and Recently Viewed should remain proper page headings rather than adopting the dashboard's small uppercase eyebrow treatment.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.iptvnator_visual_style",
+          "component.web_app_shell",
+          "component.workspace_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/workspace/dashboard/feature/src/lib/workspace-dashboard.component.scss"
+          },
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-sources/workspace-sources.component.scss"
+          },
+          {
+            "file": "libs/portal/shared/ui/src/lib/components/search-layout/search-layout.component.scss"
+          }
+        ]
+      },
+      {
+        "id": "claim.eyebrow_style_for_sidebar_section_labels",
+        "kind": "decision",
+        "text": "Dashboard-style eyebrow typography is appropriate for secondary section labels such as Sources filter Type and Sort By, where the label names a control group rather than the page.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.iptvnator_visual_style",
+          "component.web_app_shell",
+          "component.workspace_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-sources-filters-panel/workspace-sources-filters-panel.component.scss"
+          },
+          {
+            "file": "libs/workspace/dashboard/feature/src/lib/workspace-dashboard.component.scss"
+          }
+        ]
+      },
+      {
+        "id": "claim.hover_treatments_contextual_not_identical",
+        "kind": "decision",
+        "text": "Hover effects should remain consistent within each surface type, but navigation lists, channel rows, rails, and header buttons do not need one identical hover treatment.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.iptvnator_visual_style",
+          "component.web_app_shell"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/web/src/nav-list.scss"
+          },
+          {
+            "file": "libs/ui/components/src/lib/channel-list-container/channel-list-item/channel-list-item.component.scss"
+          },
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/components/workspace-shell-rail/workspace-shell-rail.component.scss"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.f58c3ce4_3c8c_4348_82e2_e85a851517fb",
+        "kind": "session",
+        "ref": "claude-code-session:f58c3ce4-3c8c-4348-82e2-e85a851517fb",
+        "title": "Typography and layout review session f58c3ce4"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.downloads_title_icon_outlier_decision",
+        "to": "source.claude_code_session.f58c3ce4_3c8c_4348_82e2_e85a851517fb",
+        "metadata": {
+          "reason": "The user specifically asked whether the Downloads title icon should be propagated, and the completed deep dive decided to remove it for consistency."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.page_titles_remain_page_titles_not_eyebrows",
+        "to": "source.claude_code_session.f58c3ce4_3c8c_4348_82e2_e85a851517fb",
+        "metadata": {
+          "reason": "The session explicitly distinguished the dashboard label as an eyebrow and kept ordinary page titles as page-heading typography."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.eyebrow_style_for_sidebar_section_labels",
+        "to": "source.claude_code_session.f58c3ce4_3c8c_4348_82e2_e85a851517fb",
+        "metadata": {
+          "reason": "The final design response says Type and Sort By on the Sources sidebar were harmonized to the same eyebrow treatment as the Dashboard label."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.hover_treatments_contextual_not_identical",
+        "to": "source.claude_code_session.f58c3ce4_3c8c_4348_82e2_e85a851517fb",
+        "metadata": {
+          "reason": "The hover audit concluded that hover patterns are intentionally differentiated by context and should be consistent within each category rather than identical globally."
+        }
+      }
+    ]
+  }
+}

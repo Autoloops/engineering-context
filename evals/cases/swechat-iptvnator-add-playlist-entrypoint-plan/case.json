@@ -1,0 +1,55 @@
+{
+  "case_id": "swechat-iptvnator-add-playlist-entrypoint-plan",
+  "dataset": {
+    "name": "SALT-NLP/SWE-chat",
+    "held_out_session_id": "6d8abbfe-ae0d-4e8f-a9e6-be06fad5cd10",
+    "held_out_created_at": "2026-03-29T21:51:29.453104Z",
+    "prior_sessions": [
+      {
+        "session_id": "e340da8c-f607-4672-932d-2d6a9970d20e",
+        "created_at": "2026-03-25T18:14:55.608427Z",
+        "checkpoint_id": "4gray/iptvnator#130fa99dcbb4",
+        "title": "Favorites and recent-items navigation"
+      },
+      {
+        "session_id": "4f2f2cab-a227-46e8-a4c4-d8793ea5a92c",
+        "created_at": "2026-03-25T20:05:24.731979Z",
+        "checkpoint_id": "4gray/iptvnator#73c4b0ef53fd",
+        "title": "Module UI consistency"
+      },
+      {
+        "session_id": "f58c3ce4-3c8c-4348-82e2-e85a851517fb",
+        "created_at": "2026-03-25T21:03:22.013484Z",
+        "checkpoint_id": "4gray/iptvnator#7a59119e1876",
+        "title": "Typography and layout review"
+      },
+      {
+        "session_id": "545831c3-f1bb-402d-b3f0-dce48fb6bfb2",
+        "created_at": "2026-03-26T15:02:05.084304Z",
+        "checkpoint_id": "4gray/iptvnator#1410dcc0c9ff",
+        "title": "Favorites/recent visual positioning"
+      }
+    ],
+    "checkpoint_id": "4gray/iptvnator#271bd0162027",
+    "base_commit_source": "Held-out public commit f87a261fb1c0334923d43a30b3f6f2d2852a983a refactors playlist item layout and related add-flow surfaces; eval base is its parent."
+  },
+  "repo": {
+    "full_name": "4gray/iptvnator",
+    "url": "https://github.com/4gray/iptvnator.git",
+    "base_commit": "94e9a5119c3a63924891ecd7354ed9a1e8b47dfd"
+  },
+  "task": {
+    "prompt_path": "prompt.md",
+    "judge_path": "judge.md",
+    "expected_relevant_areas": [
+      "add playlist dialog",
+      "playlist import feature",
+      "workspace shell actions",
+      "M3U/Stalker/Xtream import paths",
+      "web e2e playlist flows"
+    ]
+  },
+  "memory": {
+    "manifest_path": "memory-seeds/manifest.json"
+  }
+}

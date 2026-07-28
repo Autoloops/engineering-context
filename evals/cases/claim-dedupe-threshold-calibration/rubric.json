@@ -1,0 +1,622 @@
+{
+  "case_id": "claim-dedupe-threshold-calibration",
+  "benchmark_version": "0.1.0",
+  "evaluation": {
+    "thresholds": [0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90]
+  },
+  "score": {
+    "primary_metric": "f1",
+    "metrics": ["precision", "recall", "f1"]
+  },
+  "duplicate_categories": {
+    "exact": true,
+    "paraphrase": true,
+    "distinct": false,
+    "unrelated": false
+  },
+  "methodology": {
+    "summary": "Measures duplicate detection performance on manually labeled semantic claim pairs."
+  },
+  "pairs": [
+    {
+      "candidate": "claim.install_flags_hooks_auto_memory_20260629",
+      "existing": "claim.install_cli_flags_support",
+      "expected": "exact",
+      "reason": "Both state that greplica install accepts --hooks enabled|disabled and --auto-memory enabled|disabled with defaults enabled."
+    },
+    {
+      "candidate": "claim.install_flags_hooks_auto_memory_20260629",
+      "existing": "claim.cli_install_flags_enabled_disabled_20260629",
+      "expected": "exact",
+      "reason": "Both state that greplica install accepts --hooks enabled|disabled and --auto-memory enabled|disabled with defaults enabled."
+    },
+    {
+      "candidate": "claim.install_cli_flags_support",
+      "existing": "claim.cli_install_flags_enabled_disabled_20260629",
+      "expected": "exact",
+      "reason": "Both state that greplica install now parses/accepts --hooks and --auto-memory as enabled/disabled values."
+    },
+    {
+      "candidate": "claim.install_flag_mapping_and_validation_019f143e",
+      "existing": "claim.install_cli_flags_support",
+      "expected": "exact",
+      "reason": "Both state that Install now accepts --hooks enabled|disabled and --auto-memory enabled|disabled flags."
+    },
+    {
+      "candidate": "claim.no_hooks_manual_guidance_snippet",
+      "existing": "claim.no_hooks_session_guidance_behavior",
+      "expected": "exact",
+      "reason": "Both state that no-hooks onboarding does not modify AGENTS.md/CLAUDE.md and prints a reusable guidance snippet."
+    },
+    {
+      "candidate": "claim.no_hooks_manual_guidance_snippet_requirement_20260629",
+      "existing": "claim.no_hooks_manual_guidance_snippet_requirement_20260629_v2",
+      "expected": "exact",
+      "reason": "Both state that in No hooks onboarding, Greplica must not edit AGENTS.md/CLAUDE.md and should print the hook guidance snippet."
+    },
+    {
+      "candidate": "claim.no_hooks_manual_guidance_snippet_019f143e",
+      "existing": "claim.no_hooks_manual_guidance_snippet",
+      "expected": "exact",
+      "reason": "Both state that with hooks disabled, onboarding no longer edits AGENTS.md/CLAUDE.md and prints the shared Greplica hook guidance snippet."
+    },
+    {
+      "candidate": "claim.hook_guidance_separate_from_auto_memory_20260629",
+      "existing": "claim.hook_guidance_vs_auto_updates_019f143e",
+      "expected": "exact",
+      "reason": "Both state that hook guidance and background memory updates are separate; guidance can still emit but worker starts only when autoMemoryUpdates is true."
+    },
+    {
+      "candidate": "claim.session_auto_memory_default_and_mapping",
+      "existing": "claim.session_auto_memory_default_mapping_019f143e",
+      "expected": "exact",
+      "reason": "Both state that Session config includes autoMemoryUpdates with default true, install writes this flag, forces false when hooks disabled."
+    },
+    {
+      "candidate": "claim.install_auto_memory_toggle_respects_hooks_20260629",
+      "existing": "claim.session_auto_memory_default_and_mapping",
+      "expected": "exact",
+      "reason": "Both state that install writes session.autoMemoryUpdates into config and forces it false when hooks are not installed."
+    },
+    {
+      "candidate": "claim.onboarding_questionnaire_contract",
+      "existing": "claim.onboarding_questionnaire_019f143e",
+      "expected": "exact",
+      "reason": "Both state that onboarding asks exactly two questions before install: guidance mode and prior-session backfill."
+    },
+    {
+      "candidate": "claim.onboarding_questionnaire_and_default_modes",
+      "existing": "claim.onboarding_two_questionnaire_mapping",
+      "expected": "exact",
+      "reason": "Both state that Greplica install uses a two-question onboarding questionnaire for hook/auto-memory choices."
+    },
+    {
+      "candidate": "claim.onboarding_questionnaire_first",
+      "existing": "claim.onboarding_questionnaire_contract",
+      "expected": "exact",
+      "reason": "Both state that onboarding is agent-led before install, asks for hook/guidance choice and prior-session backfill."
+    },
+    {
+      "candidate": "claim.factory_droid_respects_no_hooks_option_019f143e",
+      "existing": "claim.factory_droid_hook_flag_respected",
+      "expected": "exact",
+      "reason": "Both state that factory-droid installer honors --hooks disabled by installing skills but skipping hook config writes."
+    },
+    {
+      "candidate": "claim.factory_droid_hooks_respected",
+      "existing": "claim.factory_droid_hook_disable_respected",
+      "expected": "exact",
+      "reason": "Both state that Factory-Droid installer respects --hooks disabled by preventing hook config writes."
+    },
+    {
+      "candidate": "claim.swechat_plan_cases_should_remain_data_only",
+      "existing": "claim.swechat_plan_case_layout_is_data_only",
+      "expected": "exact",
+      "reason": "Both state that SWE-chat plan eval cases should be data-only with case.json, prompt.md, judge.md, memory-seeds."
+    },
+    {
+      "candidate": "claim.swechat_plan_case_layout_is_data_only",
+      "existing": "claim.swechat_plan_case_format_data_only",
+      "expected": "exact",
+      "reason": "Both state that a generic SWE-chat plan case is now data-only with case.json, prompt.md, judge.md, memory-seeds."
+    },
+    {
+      "candidate": "claim.swechat_plan_eval_no_answer_shaped_retrieval_hint",
+      "existing": "claim.swechat_plan_eval_no_case_hardcoded_greplica_query",
+      "expected": "exact",
+      "reason": "Both state that SWE-chat plan cases should not prescribe the exact Greplica retrieval query or store memory.retrieval_query."
+    },
+    {
+      "candidate": "claim.swechat_plan_greplica_agent_chooses_query",
+      "existing": "claim.swechat_plan_greplica_query_not_case_hardcoded",
+      "expected": "exact",
+      "reason": "Both state that the Greplica arm no longer stores/hard-codes a retrieval_query; agent chooses its own query."
+    },
+    {
+      "candidate": "claim.swechat_plan_greplica_agent_chooses_query",
+      "existing": "claim.swechat_plan_runner_agent_chosen_greplica_query_20260629",
+      "expected": "exact",
+      "reason": "Both state that SWE-chat plan Greplica arm no longer hard-codes a retrieval query; agent chooses its own."
+    },
+    {
+      "candidate": "claim.swechat_plan_memory_builder_replay_contract",
+      "existing": "claim.swechat_plan_memory_builder_replay_contract_refined",
+      "expected": "exact",
+      "reason": "Both state that the memory builder materializes repo, bootstraps, processes prior_sessions, uses raw tool/edit records only for diff, passes filtered transcript to agent."
+    },
+    {
+      "candidate": "claim.swechat_plan_memory_builder_replay_contract_refined",
+      "existing": "claim.swechat_plan_memory_builder_replay_contract_canonical",
+      "expected": "exact",
+      "reason": "Both state the same memory builder process: materialize repo, bootstrap, process prior sessions, use raw records only for diff."
+    },
+    {
+      "candidate": "claim.swechat_plan_memory_builder_filtered_transcript_and_diff_roles",
+      "existing": "claim.swechat_plan_memory_builder_filtered_transcript_and_diff_context",
+      "expected": "exact",
+      "reason": "Both state that the builder passes only filtered human/assistant messages to the agent; raw tool-call JSONL is used only for reconstructing diffs."
+    },
+    {
+      "candidate": "claim.swechat_plan_memory_build_filtered_transcripts",
+      "existing": "claim.swechat_plan_memory_build_bootstrap_then_temporal_updates",
+      "expected": "exact",
+      "reason": "Both state that the memory builder passes filtered Markdown transcripts to update agents and uses raw edit records only for diff reconstruction."
+    },
+    {
+      "candidate": "claim.swechat_plan_memory_builder_uses_filtered_transcripts_and_replay_diffs_20260629",
+      "existing": "claim.swechat_plan_memory_builder_filters_transcripts_and_replays_edits",
+      "expected": "exact",
+      "reason": "Both state that memory generation is case-driven, projects JSONL into filtered Markdown, reconstructs edits from toolUseResult for diff."
+    },
+    {
+      "candidate": "claim.install_flags_hooks_auto_memory_20260629",
+      "existing": "claim.install_flag_mapping_and_validation_019f143e",
+      "expected": "paraphrase",
+      "reason": "Both describe the same install flag behavior with different wording: one says 'accepts --hooks enabled|disabled' and the other says 'accepts --hooks enabled|disabled flags (default true)'."
+    },
+    {
+      "candidate": "claim.no_hooks_manual_guidance_snippet",
+      "existing": "claim.no_hooks_manual_guidance_snippet_requirement_20260629",
+      "expected": "paraphrase",
+      "reason": "Both say no-hooks onboarding does not edit AGENTS.md/CLAUDE.md and prints a reusable guidance snippet, with different phrasing."
+    },
+    {
+      "candidate": "claim.session_auto_memory_default_and_mapping",
+      "existing": "claim.install_auto_memory_toggle_respects_hooks_20260629",
+      "expected": "paraphrase",
+      "reason": "Both describe autoMemoryUpdates default true and install forcing it false when hooks are unavailable, with different wording."
+    },
+    {
+      "candidate": "claim.onboarding_questionnaire_contract",
+      "existing": "claim.onboarding_questionnaire_and_default_modes",
+      "expected": "paraphrase",
+      "reason": "Both describe the two-question onboarding flow with different wording: one says 'asks exactly two questions' and the other says 'prompts for hook/auto-memory choices'."
+    },
+    {
+      "candidate": "claim.factory_droid_respects_no_hooks_option_019f143e",
+      "existing": "claim.factory_droid_hooks_respected",
+      "expected": "paraphrase",
+      "reason": "Both state that factory-droid installer honors --hooks disabled by installing skills but skipping hook config writes, with different wording."
+    },
+    {
+      "candidate": "claim.swechat_plan_cases_should_remain_data_only",
+      "existing": "claim.swechat_plan_case_layout_is_data_only",
+      "expected": "paraphrase",
+      "reason": "Both describe the data-only case format with case.json/prompt.md/judge.md/memory-seeds, with different phrasing."
+    },
+    {
+      "candidate": "claim.swechat_plan_eval_no_answer_shaped_retrieval_hint",
+      "existing": "claim.swechat_plan_clean_case_config_constraint",
+      "expected": "paraphrase",
+      "reason": "Both state that case.json should not prescribe retrieval queries or leak answer-shaped hints, with different wording."
+    },
+    {
+      "candidate": "claim.swechat_plan_greplica_agent_chooses_query",
+      "existing": "claim.swechat_plan_greplica_agent_chooses_query",
+      "expected": "paraphrase",
+      "reason": "Both state that the Greplica arm no longer hard-codes a retrieval query and the agent chooses its own, with different wording."
+    },
+    {
+      "candidate": "claim.swechat_plan_memory_builder_replay_contract",
+      "existing": "claim.swechat_plan_memory_builder_replay_contract_canonical",
+      "expected": "paraphrase",
+      "reason": "Both describe the same memory builder process: materialize repo, bootstrap, process prior sessions, use raw records only for diff, pass filtered transcript."
+    },
+    {
+      "candidate": "claim.swechat_plan_memory_builder_filtered_transcript_and_diff_roles",
+      "existing": "claim.swechat_plan_memory_build_filtered_transcripts",
+      "expected": "paraphrase",
+      "reason": "Both state that the builder passes only filtered human/assistant messages to the agent and uses raw tool-call JSONL only for diff reconstruction."
+    },
+    {
+      "candidate": "claim.swechat_plan_memory_builder_uses_filtered_transcripts_and_replay_diffs_20260629",
+      "existing": "claim.swechat_plan_memory_builder_replay_contract",
+      "expected": "paraphrase",
+      "reason": "Both describe the case-driven memory build process with filtered transcripts and edit reconstruction, with different wording."
+    },
+    {
+      "candidate": "claim.swechat_plan_replay_path_normalization_strips_checkout_aliases",
+      "existing": "claim.swechat_plan_replay_path_normalizes_checkout_aliases_20260629",
+      "expected": "paraphrase",
+      "reason": "Both describe path normalization that strips local checkout aliases to prevent nested alias directories, with different wording."
+    },
+    {
+      "candidate": "claim.swechat_plan_memory_seeds_are_replay_artifacts_not_sqlite",
+      "existing": "claim.swechat_plan_memory_build_stores_proposal_manifest_20260703",
+      "expected": "paraphrase",
+      "reason": "Both state that memory is stored as proposal JSON files with manifest.json, not committed SQLite/runtime state."
+    },
+    {
+      "candidate": "claim.swechat_plan_case_layout_canonical_data_only_20260629",
+      "existing": "claim.swechat_plan_case_format_data_only",
+      "expected": "paraphrase",
+      "reason": "Both describe the data-only case format with case.json/prompt.md/judge.md/memory-seeds and no case-local runners."
+    },
+    {
+      "candidate": "claim.swechat_plan_generic_judge_scoring_contract",
+      "existing": "claim.swechat_plan_judge_schema_and_scoring_contract",
+      "expected": "paraphrase",
+      "reason": "Both describe the generic boolean judge with case-specific judge.md guidance and deterministic scoreJudgeChecks scoring."
+    },
+    {
+      "candidate": "claim.swechat_plan_runner_case_driven_execution",
+      "existing": "claim.swechat_plan_eval_runner_materializes_plan_and_scores_generically",
+      "expected": "paraphrase",
+      "reason": "Both describe the generic runner loading case config, materializing repo, running agent, and using boolean judge with deterministic scoring."
+    },
+    {
+      "candidate": "claim.swechat_plan_eval_report_multiple_runs",
+      "existing": "claim.swechat_plan_eval_result_variance_requires_repeated_runs",
+      "expected": "paraphrase",
+      "reason": "Both recommend repeated runs and median/pass-rate summaries instead of single-run comparisons due to baseline noise."
+    },
+    {
+      "candidate": "claim.swechat_plan_only_two_generic_npm_scripts",
+      "existing": "claim.swechat_plan_generic_npm_entrypoints",
+      "expected": "paraphrase",
+      "reason": "Both state that package.json exposes eval:swechat-plan and eval:swechat-plan-build-memory as the two generic commands."
+    },
+    {
+      "candidate": "claim.swechat_plan_memory_builder_case_driven",
+      "existing": "claim.swechat_plan_memory_builder_case_driven",
+      "expected": "paraphrase",
+      "reason": "Both describe the case-driven memory builder that reads prior_sessions, materializes repo, bootstraps, and processes sessions in order."
+    },
+    {
+      "candidate": "claim.swechat_plan_memory_builder_case_driven_replay",
+      "existing": "claim.swechat_plan_memory_builder_case_driven",
+      "expected": "paraphrase",
+      "reason": "Both describe the case-driven memory builder that reads prior_sessions, materializes repo, bootstraps, and processes sessions in order."
+    },
+    {
+      "candidate": "claim.swechat_plan_prior_cap_3_to_4",
+      "existing": "claim.swechat_plan_memory_build_prior_cap_user_rule_20260629",
+      "expected": "paraphrase",
+      "reason": "Both state that prior sessions should be capped to 3-4 to keep memory-build cost manageable."
+    },
+    {
+      "candidate": "claim.swechat_plan_case_selection_requires_public_base_materialization",
+      "existing": "claim.swechat_plan_skip_unmaterializable_cases",
+      "expected": "paraphrase",
+      "reason": "Both state that cases must be materializable from public Git data or should be skipped."
+    },
+    {
+      "candidate": "claim.swechat_plan_greplica_query_is_agent_chosen",
+      "existing": "claim.swechat_plan_greplica_agent_chooses_query",
+      "expected": "paraphrase",
+      "reason": "Both state that Greplica runs must not hard-code a retrieval query and the agent chooses its own query from the user request."
+    },
+    {
+      "candidate": "claim.swechat_plan_memory_builder_filters_transcripts_and_replays_edits",
+      "existing": "claim.swechat_plan_memory_build_contract_from_session_artifacts",
+      "expected": "paraphrase",
+      "reason": "Both describe the memory builder replaying prior sessions with filtered transcripts and edit reconstruction from tool records."
+    },
+    {
+      "candidate": "claim.swechat_plan_memory_build_contract_from_session_artifacts",
+      "existing": "claim.swechat_plan_memory_builder_replay_contract_canonical",
+      "expected": "paraphrase",
+      "reason": "Both describe the memory builder using prior_sessions, bootstrap, filtered transcripts, and edit reconstruction from raw records."
+    },
+    {
+      "candidate": "claim.install_initializes_repo_memory",
+      "existing": "claim.codex_install_copies_skills_and_hooks",
+      "expected": "distinct",
+      "reason": "Both describe install behavior but one is the general installGreplica flow and the other is Codex-specific installer behavior."
+    },
+    {
+      "candidate": "claim.proposal_normalizer_expands_compact_relationships",
+      "existing": "claim.proposal_validation_contract",
+      "expected": "distinct",
+      "reason": "Both are about proposals but one describes normalization of compact relationships and the other describes validation requirements."
+    },
+    {
+      "candidate": "claim.service_validates_code_anchors",
+      "existing": "claim.apply_validates_then_writes_working_memory",
+      "expected": "distinct",
+      "reason": "Both are about KnowledgeGraphService but one is about validateProposal and the other about applyProposal."
+    },
+    {
+      "candidate": "claim.graph_context_pipeline",
+      "existing": "claim.sqlite_repository_scopes_and_views",
+      "expected": "distinct",
+      "reason": "Both are about graph infrastructure but one is about context building and the other about SQLite persistence."
+    },
+    {
+      "candidate": "claim.fast_session_bootstrap_one_reconstructable_topic",
+      "existing": "claim.bootstrap_skill_fast_inspection_contract",
+      "expected": "distinct",
+      "reason": "Both are about bootstrap skills but one is about fast-session-bootstrap and the other about greplica-bootstrap."
+    },
+    {
+      "candidate": "claim.release_0_1_5_published",
+      "existing": "claim.package_version_0_1_5",
+      "expected": "distinct",
+      "reason": "Both are about version 0.1.5 but one says it was published to npm and the other says package metadata declares the version."
+    },
+    {
+      "candidate": "claim.greplica_reset_backup_20260626",
+      "existing": "claim.greplica_reset_delete_only_no_install",
+      "expected": "distinct",
+      "reason": "Both are about the 2026-06-26 Greplica reset but one describes the backup and the other describes the delete-only scope decision."
+    },
+    {
+      "candidate": "claim.contextbench_dataset_materializer_uses_synthetic_memory_remote",
+      "existing": "claim.contextbench_retrieval_eval_compares_greplica_and_baseline",
+      "expected": "distinct",
+      "reason": "Both are about ContextBench but one is about dataset materialization and the other about retrieval eval comparison."
+    },
+    {
+      "candidate": "claim.swe_chat_benchmark_repo_selection_rule",
+      "existing": "claim.swe_chat_benchmark_stays_with_dataset",
+      "expected": "distinct",
+      "reason": "Both are about SWE-chat benchmark methodology but one is about repo selection criteria and the other about staying within the dataset."
+    },
+    {
+      "candidate": "claim.swe_chat_benchmark_primary_repo_marin",
+      "existing": "claim.swe_chat_benchmark_marin_tokenizer_case",
+      "expected": "distinct",
+      "reason": "Both are about Marin as benchmark target but one is about choosing Marin as primary repo and the other about the specific tokenizer case."
+    },
+    {
+      "candidate": "claim.swechat_marin_tokenize_case_config",
+      "existing": "claim.swechat_marin_tokenize_fixture_materialization",
+      "expected": "distinct",
+      "reason": "Both are about the Marin tokenizer eval but one is about case config and the other about fixture materialization."
+    },
+    {
+      "candidate": "claim.swechat_marin_tokenize_baseline_isolation",
+      "existing": "claim.swechat_marin_tokenize_greplica_arm",
+      "expected": "distinct",
+      "reason": "Both are about Marin tokenizer runner arms but one is about baseline isolation and the other about Greplica arm setup."
+    },
+    {
+      "candidate": "claim.swechat_marin_tokenize_judge_contract",
+      "existing": "claim.swechat_marin_tokenize_deterministic_scorer",
+      "expected": "distinct",
+      "reason": "Both are about Marin tokenizer scoring but one is about the judge contract and the other about the deterministic scorer."
+    },
+    {
+      "candidate": "claim.swechat_marin_tokenize_first_run_result",
+      "existing": "claim.swechat_marin_tokenize_synthetic_seed_is_plumbing_only",
+      "expected": "distinct",
+      "reason": "Both are about Marin tokenizer first run but one is about actual results and the other about the synthetic seed being plumbing-only."
+    },
+    {
+      "candidate": "claim.swechat_marin_zephyr_restart_best_contextual_candidate",
+      "existing": "claim.swechat_marin_zephyr_restart_materialization_caveat",
+      "expected": "distinct",
+      "reason": "Both are about the Zephyr restart candidate but one says it is the best candidate and the other warns about materialization difficulty."
+    },
+    {
+      "candidate": "claim.swechat_plan_eval_runner_data_driven",
+      "existing": "claim.swechat_plan_eval_greplica_arm_manifest_seeded",
+      "expected": "distinct",
+      "reason": "Both are about the SWE-chat plan eval runner but one is about the generic runner and the other about the Greplica-specific arm."
+    },
+    {
+      "candidate": "claim.swechat_plan_eval_judge_generic_boolean_scorer",
+      "existing": "claim.swechat_plan_eval_runner_materializes_plan_and_scores_generically",
+      "expected": "distinct",
+      "reason": "Both are about the generic plan eval but one is about the judge and the other about the runner."
+    },
+    {
+      "candidate": "claim.swechat_plan_memory_builder_case_driven",
+      "existing": "claim.swechat_plan_memory_builder_filtered_transcript_and_diff_roles",
+      "expected": "distinct",
+      "reason": "Both are about the memory builder but one is about it being case-driven and the other about transcript filtering."
+    },
+    {
+      "candidate": "claim.swechat_plan_six_case_batch_created",
+      "existing": "claim.swechat_plan_case_quality_after_first_batch",
+      "expected": "distinct",
+      "reason": "Both are about the first batch but one is about which cases were created and the other about their quality assessment."
+    },
+    {
+      "candidate": "claim.swechat_plan_rudel_memory_seed_partial",
+      "existing": "claim.swechat_plan_rudel_reclassified_mixed_after_rerun",
+      "expected": "distinct",
+      "reason": "Both are about Rudel but one is about the memory seed being partial and the other about reclassification after rerun."
+    },
+    {
+      "candidate": "claim.swechat_plan_first_batch_result_pattern",
+      "existing": "claim.swechat_plan_first_six_case_readout_after_rudel_completion",
+      "expected": "distinct",
+      "reason": "Both are about first batch results but one is about the pattern and the other about the readout after Rudel completion."
+    },
+    {
+      "candidate": "claim.swechat_plan_memory_builder_normalizes_checkout_alias_paths",
+      "existing": "claim.swechat_plan_replay_path_normalization_strips_checkout_aliases",
+      "expected": "distinct",
+      "reason": "Both are about path normalization but one is about the memory builder and the other about replay path normalization."
+    },
+    {
+      "candidate": "claim.swechat_plan_case_inventory_17_cases_20260629",
+      "existing": "claim.swechat_plan_case_inventory_17_cases_8_repos_20260629",
+      "expected": "distinct",
+      "reason": "Both are about case inventory but one says 17 cases and the other adds the 8 repos detail."
+    },
+    {
+      "candidate": "claim.swechat_plan_moltis_seed_manifest_stale_after_prior_cap_20260629",
+      "existing": "claim.swechat_plan_moltis_loop_mixed_result_20260629",
+      "expected": "distinct",
+      "reason": "Both are about Moltis but one is about stale seed manifest and the other about mixed loop result."
+    },
+    {
+      "candidate": "claim.swechat_plan_batch_runs_require_transcript_hydration_20260629",
+      "existing": "claim.swechat_plan_transcripts_hydrated",
+      "expected": "distinct",
+      "reason": "Both are about transcripts but one is a requirement and the other is a status update."
+    },
+    {
+      "candidate": "claim.repo_identity",
+      "existing": "claim.swechat_marin_tokenize_first_run_result",
+      "expected": "unrelated",
+      "reason": "One describes what Greplica is as a CLI tool and the other describes a specific benchmark run result."
+    },
+    {
+      "candidate": "claim.install_initializes_repo_memory",
+      "existing": "claim.greplica_video_specs_locked",
+      "expected": "unrelated",
+      "reason": "One is about the install flow and the other is about video composition specs."
+    },
+    {
+      "candidate": "claim.proposal_normalizer_expands_compact_relationships",
+      "existing": "claim.copilot_platform_registered",
+      "expected": "unrelated",
+      "reason": "One is about proposal normalization and the other about Copilot platform registration."
+    },
+    {
+      "candidate": "claim.graph_context_pipeline",
+      "existing": "claim.019f2eae_mit_license_decision",
+      "expected": "unrelated",
+      "reason": "One is about graph context building and the other about repository license choice."
+    },
+    {
+      "candidate": "claim.fast_session_bootstrap_one_reconstructable_topic",
+      "existing": "claim.sqlrepository_loadcomponents_null_anchor_normalized",
+      "expected": "unrelated",
+      "reason": "One is about the fast-session-bootstrap skill and the other about SQLite null handling in loadComponents."
+    },
+    {
+      "candidate": "claim.release_0_1_5_published",
+      "existing": "claim.graph_view_regression_check_created",
+      "expected": "unrelated",
+      "reason": "One is about a release being published and the other about a regression test script."
+    },
+    {
+      "candidate": "claim.greplica_reset_backup_20260626",
+      "existing": "claim.readme_how_it_works_loop_table",
+      "expected": "unrelated",
+      "reason": "One is about a backup from a reset session and the other about README content structure."
+    },
+    {
+      "candidate": "claim.contextbench_dataset_materializer_uses_synthetic_memory_remote",
+      "existing": "claim.019f18fe_demo20_timeline",
+      "expected": "unrelated",
+      "reason": "One is about ContextBench dataset materialization and the other about demo video scene timing."
+    },
+    {
+      "candidate": "claim.swe_chat_benchmark_repo_selection_rule",
+      "existing": "claim.no_hooks_manual_guidance_snippet",
+      "expected": "unrelated",
+      "reason": "One is about benchmark repo selection criteria and the other about no-hooks onboarding behavior."
+    },
+    {
+      "candidate": "claim.swechat_marin_tokenize_case_config",
+      "existing": "claim.factory_droid_respects_no_hooks_option_019f143e",
+      "expected": "unrelated",
+      "reason": "One is about the Marin tokenizer eval case config and the other about factory-droid installer behavior."
+    },
+    {
+      "candidate": "claim.swechat_marin_zephyr_restart_best_contextual_candidate",
+      "existing": "claim.onboarding_questionnaire_contract",
+      "expected": "unrelated",
+      "reason": "One is about benchmark candidate selection and the other about onboarding questionnaire design."
+    },
+    {
+      "candidate": "claim.swechat_plan_eval_runner_data_driven",
+      "existing": "claim.hook_guidance_separate_from_auto_memory_20260629",
+      "expected": "unrelated",
+      "reason": "One is about the SWE-chat plan eval runner and the other about hook guidance separation from auto-memory."
+    },
+    {
+      "candidate": "claim.swechat_plan_six_case_batch_created",
+      "existing": "claim.session_auto_memory_default_and_mapping",
+      "expected": "unrelated",
+      "reason": "One is about benchmark case creation and the other about session config autoMemoryUpdates."
+    },
+    {
+      "candidate": "claim.swechat_plan_rudel_memory_seed_partial",
+      "existing": "claim.install_flags_hooks_auto_memory_20260629",
+      "expected": "unrelated",
+      "reason": "One is about Rudel case memory seed status and the other about install flag parsing."
+    },
+    {
+      "candidate": "claim.swechat_plan_first_batch_result_pattern",
+      "existing": "claim.proposal_validation_contract",
+      "expected": "unrelated",
+      "reason": "One is about benchmark result patterns and the other about proposal validation requirements."
+    },
+    {
+      "candidate": "claim.swechat_plan_case_inventory_17_cases_20260629",
+      "existing": "claim.apply_validates_then_writes_working_memory",
+      "expected": "unrelated",
+      "reason": "One is about case inventory count and the other about proposal apply behavior."
+    },
+    {
+      "candidate": "claim.swechat_plan_moltis_seed_manifest_stale_after_prior_cap_20260629",
+      "existing": "claim.config_defaults_and_embedding_update",
+      "expected": "unrelated",
+      "reason": "One is about Moltis memory seeds needing regeneration and the other about config defaults and embedding updates."
+    },
+    {
+      "candidate": "claim.swechat_plan_batch_runs_require_transcript_hydration_20260629",
+      "existing": "claim.openai_embedding_requires_api_key",
+      "expected": "unrelated",
+      "reason": "One is about transcript hydration for batch runs and the other about OpenAI API key requirement."
+    },
+    {
+      "candidate": "claim.swechat_plan_case_set_and_scope",
+      "existing": "claim.transcript_bundle_filters_sessions",
+      "expected": "unrelated",
+      "reason": "One is about SWE-chat plan case expansion and the other about transcript bundle filtering."
+    },
+    {
+      "candidate": "claim.swechat_plan_batch_orchestrator_added",
+      "existing": "claim.cli_owns_public_commands",
+      "expected": "unrelated",
+      "reason": "One is about a batch runner script and the other about CLI command dispatch."
+    },
+    {
+      "candidate": "claim.swechat_plan_transcripts_hydrated",
+      "existing": "claim.codex_install_copies_skills_and_hooks",
+      "expected": "unrelated",
+      "reason": "One is about transcript availability and the other about Codex platform installer behavior."
+    },
+    {
+      "candidate": "claim.swechat_plan_transcript_only_sessions_supported",
+      "existing": "claim.bootstrap_eval_records_timing_splits",
+      "expected": "unrelated",
+      "reason": "One is about transcript-only session support and the other about eval timing recording."
+    },
+    {
+      "candidate": "claim.swechat_plan_path_anchor_normalization_during_seed_apply",
+      "existing": "claim.prior_session_backfill_smallest_useful_set",
+      "expected": "unrelated",
+      "reason": "One is about anchor path normalization and the other about backfill session count selection."
+    },
+    {
+      "candidate": "claim.swechat_plan_moltis_seed_manifest_needs_refresh",
+      "existing": "claim.agent_install_prompt_sequence",
+      "expected": "unrelated",
+      "reason": "One is about Moltis memory seed refresh and the other about the agent install prompt sequence."
+    },
+    {
+      "candidate": "claim.swechat_plan_runner_four_navigation_arms_20260703",
+      "existing": "claim.greplica_home_delete_hook_recreation_gotcha",
+      "expected": "unrelated",
+      "reason": "One is about runner mode support and the other about a hook recreation gotcha when deleting Greplica home."
+    }
+  ]
+}

@@ -210,6 +210,9 @@ function runCopilot(input: WorkingMemoryUpdateInput): Promise<void> {
     child.stdout.on("data", (chunk: Buffer) => {
       stdoutChunks.push(chunk);
     });
+    // If the child exits before draining the prompt, stdin emits EPIPE;
+    // the failure is reported via the exit code on "close".
+    child.stdin.once("error", () => {});
     child.stdin.end(input.prompt);
     child.once("close", (exitCode, signal) => {
       const stdout = Buffer.concat(stdoutChunks).toString("utf8");

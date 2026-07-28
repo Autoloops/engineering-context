@@ -105,19 +105,41 @@ function loadOpenCodeTranscript(transcriptPath: string): string {
   }
 }
 
-function loadFromSqlite(pointer: string): string {
-  const [pathPart, sessionId] = pointer.slice("sqlite:".length).split("#");
-  if (!pathPart || !sessionId) return "";
-  if (!existsSync(pathPart)) return "";
+interface SqlitePointer {
+  dbPath: string;
+  sessionId: string;
+}
 
-  const db = new Database(pathPart, { readonly: true, fileMustExist: true });
+function parseSqlitePointer(pointer: string): SqlitePointer | undefined {
+  const separator = pointer.lastIndexOf("#");
+  if (!pointer.startsWith("sqlite:") || separator <= "sqlite:".length) return undefined;
+  const dbPath = pointer.slice("sqlite:".length, separator);
+  const sessionId = pointer.slice(separator + 1);
+  if (!dbPath || !sessionId) return undefined;
+  return { dbPath, sessionId };
+}
+
+function loadFromSqlite(pointer: string): string {
+  const parsed = parseSqlitePointer(pointer);
+  if (parsed === undefined || !existsSync(parsed.dbPath)) return "";
+
+  let db: Database.Database | undefined;
   try {
+    db = new Database(parsed.dbPath, { readonly: true, fileMustExist: true });
     const rows = db.prepare(
-      `SELECT session_id, role, content, created_at
-       FROM messages
-       WHERE session_id = ?
-       ORDER BY created_at ASC`,
-    ).all(sessionId) as Array<{
+      `SELECT
+         message.session_id AS session_id,
+         json_extract(message.data, '$.role') AS role,
+         json_extract(part.data, '$.text') AS content,
+         part.time_created AS created_at
+       FROM message
+       INNER JOIN part ON part.message_id = message.id
+       WHERE message.session_id = ?
+         AND json_extract(message.data, '$.role') IN ('user', 'assistant')
+         AND json_extract(part.data, '$.type') = 'text'
+         AND json_type(part.data, '$.text') = 'text'
+       ORDER BY message.time_created, message.id, part.time_created, part.id`,
+    ).all(parsed.sessionId) as Array<{
       session_id: string;
       role: string;
       content: string;
@@ -136,7 +158,7 @@ function loadFromSqlite(pointer: string): string {
   } catch {
     return "";
   } finally {
-    db.close();
+    db?.close();
   }
 }
 

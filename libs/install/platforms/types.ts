@@ -13,9 +13,16 @@ export interface HookInstallResult {
   command: string;
 }
 
+export interface RuleInstallResult {
+  platform: InstallPlatform;
+  configFiles: string[];
+}
+
 export interface PlatformInstallResult {
   skills: string[];
   hooks?: HookInstallResult;
+  rules?: RuleInstallResult;
+  supportsAutoMemoryUpdates?: boolean;
 }
 
 export interface WorkingMemoryUpdateInput {

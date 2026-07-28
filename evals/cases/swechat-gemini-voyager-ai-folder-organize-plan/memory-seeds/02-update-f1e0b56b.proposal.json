@@ -1,0 +1,193 @@
+{
+  "title": "Update working memory from drag/drop session",
+  "summary": "Durable context learned from the historical folder drag/drop browser edge-case session.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.aistudio_folder_manager",
+        "name": "AI Studio folder manager",
+        "code_anchor": "src/pages/content/folder/aistudio.ts"
+      }
+    ],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.folder_drag_data_transfer_move_only",
+        "kind": "fact",
+        "text": "Gemini and AI Studio folder drag/drop paths constrain folder conversation, native conversation, reorder, and prompt-library drags to move semantics by setting DataTransfer.effectAllowed and dragover dropEffect to 'move'.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_manager",
+          "component.aistudio_folder_manager",
+          "flow.folder_manual_ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.makeConversationDraggable"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.setupConversationReorderZone"
+          },
+          {
+            "file": "src/pages/content/folder/aistudio.ts",
+            "symbol": "AIStudioFolderManager.setPromptDragData"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_drag_move_only_browser_rationale",
+        "kind": "decision",
+        "text": "The session chose move-only DataTransfer semantics because Chrome/Edge can interpret default, copy, copyMove, or link-capable drags near the browser edge as tab/link or split-screen gestures instead of in-page reordering.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_manager",
+          "component.aistudio_folder_manager",
+          "flow.folder_manual_ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.makeConversationDraggable"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.setupConversationReorderZone"
+          },
+          {
+            "file": "src/pages/content/folder/aistudio.ts",
+            "symbol": "AIStudioFolderManager.setPromptDragData"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_native_sidebar_drag_source_folder_boundary",
+        "kind": "fact",
+        "text": "Native Gemini sidebar conversation drags create DragData without sourceFolderId, while folder-origin conversation drags include sourceFolderId; folder drops without sourceFolderId ensure or add the conversation in the target folder instead of removing it from any other folder.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_manager",
+          "component.folder_model",
+          "flow.folder_manual_ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.makeConversationDraggable"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.createConversationElement"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.setupConversationReorderZone"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_manual_ordering_insert_index_after_removal",
+        "kind": "fact",
+        "text": "When folder conversations are reordered or moved at a specific position, FolderManager deduplicates incoming IDs, adjusts same-folder insertIndex by the number of dragged items originally before the target in the same starred group before removal, inserts into the target same-group sibling list, reassigns sortIndex, saves, and refreshes.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_manager",
+          "component.folder_model",
+          "flow.folder_manual_ordering"
+        ],
+        "supersedes": [
+          "claim.folder_manual_ordering_reassigns_sibling_indexes"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.reorderOrMoveConversations"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_duplicate_conversation_defenses",
+        "kind": "fact",
+        "text": "FolderManager defends against duplicate conversation references by returning only one selected reference per conversationId, deduplicating conversationIds at reorderOrMoveConversations entry, and removing duplicate conversationIds inside each folder during data integrity repair on load/save.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_manager",
+          "component.folder_model",
+          "flow.folder_manual_ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.getSelectedConversationsData"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.reorderOrMoveConversations"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.ensureDataIntegrity"
+          }
+        ]
+      },
+      {
+        "id": "claim.folder_duplicate_stacking_not_edge_specific",
+        "kind": "fact",
+        "text": "The UI-stacking duplicate-conversation bug was diagnosed as data-state dependent, not Edge-specific: Chrome can hit the same behavior when the same conversationId exists in multiple folders after repeated sidebar-to-folder adds.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.folder_manager",
+          "component.folder_model",
+          "flow.folder_manual_ordering"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.makeConversationDraggable"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.getSelectedConversationsData"
+          },
+          {
+            "file": "src/pages/content/folder/manager.ts",
+            "symbol": "FolderManager.ensureDataIntegrity"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.f1e0b56b_726f_4988_902d_d5a848ed8a19",
+        "kind": "session",
+        "ref": "claude-code-session:f1e0b56b-726f-4988-902d-d5a848ed8a19",
+        "title": "Claude Code session f1e0b56b: Drag/drop browser edge case"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.folder_drag_move_only_browser_rationale",
+        "to": "source.claude_code_session.f1e0b56b_726f_4988_902d_d5a848ed8a19",
+        "metadata": {
+          "reason": "The transcript explains that default or copy-capable drag operations were changed to move-only so Chrome would treat folder drag/drop as in-page movement rather than a split-screen or tab/link gesture."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.folder_duplicate_stacking_not_edge_specific",
+        "to": "source.claude_code_session.f1e0b56b_726f_4988_902d_d5a848ed8a19",
+        "metadata": {
+          "reason": "The transcript explicitly answers that the duplicate UI stacking issue is not Edge-only and depends on the same conversationId already being present in multiple folders."
+        }
+      }
+    ]
+  }
+}

@@ -1,12 +1,77 @@
 import type Database from "better-sqlite3";
+import { canonicalRepoKey } from "../../install/repo-identity.js";
 import { schemaSql } from "./schema.js";
 
 export function migrate(db: Database.Database): void {
   db.exec(schemaSql);
   migrateReposTable(db);
+  migrateRepoInstallationState(db);
   migrateClaimsTable(db);
   migrateGraphObjectTables(db);
+  migrateSourceMemberships(db);
   migrateClaimAnchorFingerprints(db);
+}
+
+function migrateRepoInstallationState(db: Database.Database): void {
+  const columns = new Set(
+    (db.prepare("PRAGMA table_info(repos)").all() as Array<{ name: string }>).map((column) => column.name),
+  );
+  const isLegacyInstallationState = !columns.has("repo_key");
+  const additions = [
+    ["repo_key", "TEXT"],
+    ["status", "TEXT NOT NULL DEFAULT 'inactive'"],
+    ["active_mode", "TEXT NOT NULL DEFAULT 'local'"],
+    ["managed_repo_id", "TEXT"],
+    ["managed_role", "TEXT"],
+    ["managed_access_status", "TEXT"],
+    ["managed_access_refreshed_at", "TEXT"],
+    ["hooks_enabled", "INTEGER NOT NULL DEFAULT 1"],
+    ["auto_memory_updates", "INTEGER NOT NULL DEFAULT 1"],
+    ["created_at", "TEXT"],
+    ["updated_at", "TEXT"],
+  ] as const;
+
+  for (const [name, definition] of additions) {
+    if (!columns.has(name)) db.exec(`ALTER TABLE repos ADD COLUMN ${name} ${definition}`);
+  }
+
+  const now = new Date().toISOString();
+  const rows = db.prepare("SELECT id, remote_url, root_path, repo_key FROM repos ORDER BY id").all() as Array<{
+    id: string;
+    remote_url: string | null;
+    root_path: string | null;
+    repo_key: string | null;
+  }>;
+  const usedKeys = new Set<string>();
+  const update = db.prepare(
+    `UPDATE repos
+     SET repo_key = ?,
+         status = CASE
+           WHEN ? = 1 AND EXISTS (SELECT 1 FROM graph_scopes WHERE graph_scopes.repo_id = repos.id) THEN 'active'
+           ELSE COALESCE(status, 'inactive')
+         END,
+         active_mode = COALESCE(active_mode, 'local'),
+         hooks_enabled = COALESCE(hooks_enabled, 1),
+         auto_memory_updates = COALESCE(auto_memory_updates, 1),
+         created_at = COALESCE(created_at, ?),
+         updated_at = COALESCE(updated_at, ?)
+     WHERE id = ?`,
+  );
+  const write = db.transaction(() => {
+    for (const row of rows) {
+      let key = row.repo_key ?? canonicalRepoKey({
+        remote_url: row.remote_url ?? undefined,
+        repo_root: row.root_path ?? undefined,
+      });
+      if (usedKeys.has(key)) key = `${key}:legacy:${row.id}`;
+      usedKeys.add(key);
+      update.run(key, Number(isLegacyInstallationState), now, now, row.id);
+    }
+  });
+  write();
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS repos_repo_key_idx ON repos(repo_key) WHERE repo_key IS NOT NULL");
+  db.exec("CREATE INDEX IF NOT EXISTS repos_managed_repo_idx ON repos(managed_repo_id)");
+  db.exec("CREATE INDEX IF NOT EXISTS repos_status_idx ON repos(status, active_mode)");
 }
 
 function migrateReposTable(db: Database.Database): void {
@@ -28,10 +93,21 @@ function migrateReposTable(db: Database.Database): void {
       ALTER TABLE repos RENAME TO repos_old;
       CREATE TABLE repos (
         id TEXT PRIMARY KEY,
+        repo_key TEXT UNIQUE,
         remote_url TEXT UNIQUE,
         root_path TEXT UNIQUE,
         repo_name TEXT NOT NULL,
-        default_branch TEXT NOT NULL
+        default_branch TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'inactive',
+        active_mode TEXT NOT NULL DEFAULT 'local',
+        managed_repo_id TEXT,
+        managed_role TEXT,
+        managed_access_status TEXT,
+        managed_access_refreshed_at TEXT,
+        hooks_enabled INTEGER NOT NULL DEFAULT 1,
+        auto_memory_updates INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT,
+        updated_at TEXT
       );
       INSERT INTO repos (id, remote_url, root_path, repo_name, default_branch)
       SELECT
@@ -49,6 +125,11 @@ function migrateReposTable(db: Database.Database): void {
         repo_name,
         default_branch
       FROM repos_old;
+      UPDATE repos
+      SET status = CASE
+        WHEN EXISTS (SELECT 1 FROM graph_scopes WHERE graph_scopes.repo_id = repos.id) THEN 'active'
+        ELSE 'inactive'
+      END;
       DROP TABLE repos_old;
       COMMIT;
     `);
@@ -75,6 +156,8 @@ function migrateClaimsTable(db: Database.Database): void {
 function migrateGraphObjectTables(db: Database.Database): void {
   const columns = db.prepare("PRAGMA table_info(components)").all() as Array<{ name: string }>;
   if (columns.some((column) => column.name === "repo_id")) return;
+
+  assertLegacySourcesCanBeScoped(db);
 
   const foreignKeys = db.pragma("foreign_keys", { simple: true }) as number;
   const legacyAlterTable = db.pragma("legacy_alter_table", { simple: true }) as number;
@@ -170,6 +253,46 @@ function migrateGraphObjectTables(db: Database.Database): void {
       JOIN graph_memberships gm ON gm.subject_type = 'edge' AND gm.subject_id = e.id
       JOIN graph_scopes gs ON gs.id = gm.scope_id;
 
+      INSERT OR IGNORE INTO sources (repo_id, id, kind, ref, title)
+      SELECT r.id, s.id, s.kind, s.ref, s.title
+      FROM sources_old s
+      CROSS JOIN repos r
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM edges_old e
+        JOIN graph_memberships gm ON gm.subject_type = 'edge' AND gm.subject_id = e.id
+        WHERE (e.from_type = 'source' AND e.from_id = s.id)
+           OR (e.to_type = 'source' AND e.to_id = s.id)
+      );
+
+      INSERT OR IGNORE INTO graph_memberships (scope_id, subject_type, subject_id, memory_commit_id)
+      SELECT DISTINCT gm.scope_id, 'source', s.id, gm.memory_commit_id
+      FROM sources_old s
+      JOIN edges_old e ON
+        (e.from_type = 'source' AND e.from_id = s.id) OR
+        (e.to_type = 'source' AND e.to_id = s.id)
+      JOIN graph_memberships gm ON gm.subject_type = 'edge' AND gm.subject_id = e.id;
+
+      INSERT OR IGNORE INTO graph_memberships (scope_id, subject_type, subject_id, memory_commit_id)
+      SELECT gs.id, 'source', s.id, mc.id
+      FROM sources_old s
+      CROSS JOIN repos r
+      JOIN graph_scopes gs ON gs.repo_id = r.id AND gs.kind = 'working' AND gs.name = 'working'
+      JOIN memory_commits mc ON mc.id = (
+        SELECT latest.id
+        FROM memory_commits latest
+        WHERE latest.scope_id = gs.id
+        ORDER BY latest.created_at DESC, latest.rowid DESC
+        LIMIT 1
+      )
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM edges_old e
+        JOIN graph_memberships gm ON gm.subject_type = 'edge' AND gm.subject_id = e.id
+        WHERE (e.from_type = 'source' AND e.from_id = s.id)
+           OR (e.to_type = 'source' AND e.to_id = s.id)
+      );
+
       DROP TABLE components_old;
       DROP TABLE flows_old;
       DROP TABLE claims_old;
@@ -185,6 +308,110 @@ function migrateGraphObjectTables(db: Database.Database): void {
     db.pragma(`legacy_alter_table = ${legacyAlterTable ? "ON" : "OFF"}`);
     db.pragma(`foreign_keys = ${foreignKeys ? "ON" : "OFF"}`);
   }
+}
+
+function assertLegacySourcesCanBeScoped(db: Database.Database): void {
+  const unlinkedSources = db
+    .prepare(
+      `SELECT s.id
+       FROM sources s
+       WHERE NOT EXISTS (
+         SELECT 1
+         FROM edges e
+         JOIN graph_memberships gm ON gm.subject_type = 'edge' AND gm.subject_id = e.id
+         WHERE (e.from_type = 'source' AND e.from_id = s.id)
+            OR (e.to_type = 'source' AND e.to_id = s.id)
+       )
+       ORDER BY s.id`,
+    )
+    .all() as Array<{ id: string }>;
+  if (unlinkedSources.length === 0) return;
+
+  const repoCount = (db.prepare("SELECT COUNT(*) AS count FROM repos").get() as { count: number }).count;
+  const recoveryTargetCount = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM graph_scopes gs
+         WHERE gs.kind = 'working'
+           AND gs.name = 'working'
+           AND EXISTS (SELECT 1 FROM memory_commits mc WHERE mc.scope_id = gs.id)`,
+      )
+      .get() as { count: number }
+  ).count;
+  if (repoCount === 1 && recoveryTargetCount === 1) return;
+
+  const ids = unlinkedSources.map(({ id }) => id).join(", ");
+  throw new Error(
+    `Cannot safely migrate unlinked legacy source${unlinkedSources.length === 1 ? "" : "s"} ${ids}: ` +
+      "repository ownership is ambiguous or no working memory commit is available. " +
+      "The legacy source rows were left unchanged; link each source to an evidenced_by edge or migrate it into a single repository before retrying.",
+  );
+}
+
+function migrateSourceMemberships(db: Database.Database): void {
+  const migrateMemberships = db.transaction(() => {
+    db.exec(`
+      INSERT OR IGNORE INTO graph_memberships (scope_id, subject_type, subject_id, memory_commit_id)
+      SELECT DISTINCT gm.scope_id, 'source', s.id, gm.memory_commit_id
+      FROM sources s
+      JOIN edges e ON
+        e.repo_id = s.repo_id AND (
+          (e.from_type = 'source' AND e.from_id = s.id) OR
+          (e.to_type = 'source' AND e.to_id = s.id)
+        )
+      JOIN graph_memberships gm ON gm.subject_type = 'edge' AND gm.subject_id = e.id
+      JOIN graph_scopes gs ON gs.id = gm.scope_id AND gs.repo_id = s.repo_id;
+    `);
+
+    const unscopedSources = db
+      .prepare(
+        `SELECT s.repo_id, s.id
+         FROM sources s
+         WHERE NOT EXISTS (
+           SELECT 1
+           FROM graph_memberships gm
+           JOIN graph_scopes gs ON gs.id = gm.scope_id
+           WHERE gs.repo_id = s.repo_id
+             AND gm.subject_type = 'source'
+             AND gm.subject_id = s.id
+         )
+         ORDER BY s.repo_id, s.id`,
+      )
+      .all() as Array<{ repo_id: string; id: string }>;
+
+    const recoveryTarget = db.prepare(
+      `SELECT gs.id AS scope_id, mc.id AS memory_commit_id
+       FROM graph_scopes gs
+       JOIN memory_commits mc ON mc.id = (
+         SELECT latest.id
+         FROM memory_commits latest
+         WHERE latest.scope_id = gs.id
+         ORDER BY latest.created_at DESC, latest.rowid DESC
+         LIMIT 1
+       )
+       WHERE gs.repo_id = ? AND gs.kind = 'working' AND gs.name = 'working'`,
+    );
+    const insertMembership = db.prepare(
+      `INSERT INTO graph_memberships (scope_id, subject_type, subject_id, memory_commit_id)
+       VALUES (?, 'source', ?, ?)`,
+    );
+
+    for (const source of unscopedSources) {
+      const target = recoveryTarget.get(source.repo_id) as
+        | { scope_id: string; memory_commit_id: string }
+        | undefined;
+      if (target === undefined) {
+        throw new Error(
+          `Cannot backfill membership for source ${source.id} in repository ${source.repo_id}: ` +
+            "no working memory commit is available. The source row was left unchanged.",
+        );
+      }
+      insertMembership.run(target.scope_id, source.id, target.memory_commit_id);
+    }
+  });
+
+  migrateMemberships();
 }
 
 // Stores, per claim, the baseline fingerprint of each code anchor so drift can

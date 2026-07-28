@@ -66,10 +66,10 @@ assert.equal(compactResult.valid, true, `compact edge must stay valid, got: ${JS
 
 const tmp = mkdtempSync(join(tmpdir(), "greplica-proposal-validate-test-"));
 const db = openDatabase(join(tmp, "graph.db"));
+const repository = new SqliteRepository(db);
+const service = new KnowledgeGraphService(repository);
 
 try {
-  const repository = new SqliteRepository(db);
-  const service = new KnowledgeGraphService(repository);
   const repoA = {
     repo_root: join(tmp, "repo-a"),
     repo_name: "repo-a",
@@ -154,7 +154,43 @@ try {
   assert.deepEqual(repoBGraph.components.map((component) => component.name), ["Repo B CLI"]);
   assert.equal(initializedB.repo_id === initializedA.repo_id, false, "test repos must be distinct");
 } finally {
-  db.close();
+  service.close();
+}
+assert.equal(db.open, false, "closing the knowledge graph service must close its SQLite connection");
+
+// Compact relationship fields must report malformed owner/target ids through
+// validation instead of throwing while generating an edge id.
+const malformedCompactRelationshipCases = [
+  {
+    name: "component missing id with contains",
+    proposal: { title: "t", creates: { components: [{ contains: ["component.b"] }, { id: "component.b", name: "B" }] } },
+  },
+  {
+    name: "flow missing id with touches",
+    proposal: { title: "t", creates: { flows: [{ touches: ["component.a"] }], components: [{ id: "component.a", name: "A" }] } },
+  },
+  {
+    name: "claim missing id with about",
+    proposal: { title: "t", creates: { claims: [{ about: "component.a" }], components: [{ id: "component.a", name: "A" }] } },
+  },
+  {
+    name: "contains target is not a string",
+    proposal: { title: "t", creates: { components: [{ id: "component.a", name: "A", contains: [123] }] } },
+  },
+];
+
+for (const { name, proposal } of malformedCompactRelationshipCases) {
+  let normalizedCase;
+  assert.doesNotThrow(() => {
+    normalizedCase = normalizeProposal(proposal);
+  }, `normalizeProposal must not throw for: ${name}`);
+
+  const result = validateProposal(normalizedCase);
+  assert.equal(result.valid, false, `expected invalid for: ${name}, got valid with ${JSON.stringify(normalizedCase)}`);
+  assert.ok(
+    result.errors.some((error) => error.includes("missing subject references")),
+    `expected a missing subject references error for: ${name}, got: ${JSON.stringify(result.errors)}`,
+  );
 }
 
 console.log("check-proposal-validate: ok");

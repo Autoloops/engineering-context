@@ -1,0 +1,455 @@
+{
+  "title": "Bootstrap Gemini Voyager repository memory",
+  "summary": "Baseline orientation for the Gemini Voyager browser extension: public runtime surfaces, build workflow, storage contracts, sync boundaries, and localization expectations.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.repository",
+        "name": "Repository",
+        "code_anchor": "README.md"
+      },
+      {
+        "id": "component.extension_manifest",
+        "name": "Extension Manifest",
+        "code_anchor": "manifest.json"
+      },
+      {
+        "id": "component.build_config",
+        "name": "Build And Tooling Config",
+        "code_anchor": "package.json"
+      },
+      {
+        "id": "component.content_bootstrap",
+        "name": "Content Script Bootstrap",
+        "code_anchor": "src/pages/content/index.tsx"
+      },
+      {
+        "id": "component.background_worker",
+        "name": "Background Worker",
+        "code_anchor": "src/pages/background/index.ts"
+      },
+      {
+        "id": "component.storage_contracts",
+        "name": "Storage Contracts",
+        "code_anchor": "src/core/types/common.ts"
+      },
+      {
+        "id": "component.storage_service",
+        "name": "Storage Service",
+        "code_anchor": "src/core/services/StorageService.ts"
+      },
+      {
+        "id": "component.google_drive_sync",
+        "name": "Google Drive Sync",
+        "code_anchor": "src/core/services/GoogleDriveSyncService.ts"
+      },
+      {
+        "id": "component.sync_types",
+        "name": "Sync Payload Types",
+        "code_anchor": "src/core/types/sync.ts"
+      },
+      {
+        "id": "component.account_isolation",
+        "name": "Account Isolation",
+        "code_anchor": "src/core/services/AccountIsolationService.ts"
+      },
+      {
+        "id": "component.popup_settings",
+        "name": "Popup Settings UI",
+        "code_anchor": "src/pages/popup/Popup.tsx"
+      },
+      {
+        "id": "component.i18n",
+        "name": "Internationalization Runtime",
+        "code_anchor": "src/utils/i18n.ts"
+      },
+      {
+        "id": "component.docs_site",
+        "name": "Documentation Site",
+        "code_anchor": "docs/en/index.md"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.extension_runtime",
+        "name": "Manifest V3 Runtime Wiring",
+        "touches": [
+          "component.extension_manifest",
+          "component.content_bootstrap",
+          "component.background_worker",
+          "component.popup_settings"
+        ]
+      },
+      {
+        "id": "flow.content_feature_initialization",
+        "name": "Content Feature Initialization",
+        "touches": [
+          "component.content_bootstrap",
+          "component.storage_contracts",
+          "component.i18n"
+        ]
+      },
+      {
+        "id": "flow.cloud_sync",
+        "name": "Cloud Sync Data Flow",
+        "touches": [
+          "component.google_drive_sync",
+          "component.sync_types",
+          "component.background_worker",
+          "component.account_isolation"
+        ]
+      },
+      {
+        "id": "flow.development_workflow",
+        "name": "Development Build And Verification Workflow",
+        "touches": [
+          "component.repository",
+          "component.build_config"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.repository.identity",
+        "kind": "fact",
+        "text": "Gemini Voyager is a browser extension for Google Gemini and AI Studio that adds timeline navigation, folder organization, prompt vault, Google Drive cloud sync, export, rendering, and interface customization features.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.repository"
+        ],
+        "code_anchors": [
+          {
+            "file": "README.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.manifest.runtime_surfaces",
+        "kind": "fact",
+        "text": "The production extension manifest is Manifest V3, declares a popup and options page, a module background service worker, and a content script with contentStyle.css for Gemini, Gemini Business, and AI Studio hosts.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.extension_manifest",
+          "flow.extension_runtime"
+        ],
+        "code_anchors": [
+          {
+            "file": "manifest.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.manifest.permissions_and_oauth",
+        "kind": "fact",
+        "text": "The manifest requests storage, identity, and scripting permissions, Google Drive file OAuth scope, Google/Gemini host permissions, and optional host permissions for custom prompt websites.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.extension_manifest",
+          "component.google_drive_sync"
+        ],
+        "code_anchors": [
+          {
+            "file": "manifest.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.build.commands",
+        "kind": "fact",
+        "text": "The documented local workflow uses Bun, Nodemon, Vite, Vitest, ESLint, TypeScript, and VitePress: install with bun i/install, run browser-specific dev scripts, build Chrome/Firefox/Safari/all targets, test with vitest, typecheck with tsc --noEmit, and build docs with vitepress.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.build_config",
+          "flow.development_workflow"
+        ],
+        "code_anchors": [
+          {
+            "file": "package.json"
+          },
+          {
+            "file": "README.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.build.browser_configs",
+        "kind": "fact",
+        "text": "The shared Vite config localizes the manifest from src/locales and disables modulepreload for content scripts; Chrome builds to dist_chrome, Firefox builds to dist_firefox with mermaid-legacy aliasing and Gecko manifest changes, and Safari builds to dist_safari with a Safari update-check define and safari14 target.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.build_config"
+        ],
+        "code_anchors": [
+          {
+            "file": "vite.config.base.ts",
+            "symbol": "baseManifest"
+          },
+          {
+            "file": "vite.config.firefox.ts",
+            "symbol": "appendFirefoxChangelogResources"
+          }
+        ]
+      },
+      {
+        "id": "claim.content.bootstrap_site_split",
+        "kind": "fact",
+        "text": "The content bootstrap initializes only Prompt Manager for configured custom websites and Gemini Enterprise, initializes Gemini-specific features on gemini.google.com, and initializes AI Studio folder/formula support only when the AI Studio toggle allows it.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.content_bootstrap",
+          "flow.content_feature_initialization"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/index.tsx",
+            "symbol": "initializeFeatures"
+          }
+        ]
+      },
+      {
+        "id": "claim.content.startup_throttling",
+        "kind": "fact",
+        "text": "Content feature startup is staggered and background tabs get a randomized delay, with visibility changes cancelling pending delayed initialization so foreground tabs initialize immediately.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.content_bootstrap",
+          "flow.content_feature_initialization"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/index.tsx",
+            "symbol": "getInitializationDelay"
+          },
+          {
+            "file": "src/pages/content/index.tsx",
+            "symbol": "handleVisibilityChange"
+          }
+        ]
+      },
+      {
+        "id": "claim.storage.keys_are_centralized",
+        "kind": "requirement",
+        "text": "Feature storage keys are centralized in StorageKeys, including folders, timeline, prompt manager, UI customization, account isolation, cloud-related feature data, fork nodes, and AI Studio enablement.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.storage_contracts"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/types/common.ts",
+            "symbol": "StorageKeys"
+          }
+        ]
+      },
+      {
+        "id": "claim.storage.service_factory",
+        "kind": "fact",
+        "text": "StorageFactory chooses chrome.storage.local for local large-data storage when requested, chrome.storage.sync for sync storage when available, and LocalStorageService as a fallback; exported singleton instances use sync storage for folders/settings and local storage for prompts.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.storage_service",
+          "component.storage_contracts"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/services/StorageService.ts",
+            "symbol": "StorageFactory"
+          },
+          {
+            "file": "src/core/services/StorageService.ts",
+            "symbol": "storageService"
+          },
+          {
+            "file": "src/core/services/StorageService.ts",
+            "symbol": "promptStorageService"
+          }
+        ]
+      },
+      {
+        "id": "claim.sync.payload_contracts",
+        "kind": "fact",
+        "text": "Google Drive sync payload contracts are versioned format objects for folders, prompts, starred messages, forks, and the aggregate sync envelope, with separate platform timestamps and authenticated sync state.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.sync_types",
+          "flow.cloud_sync"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/types/sync.ts",
+            "symbol": "FolderExportPayload"
+          },
+          {
+            "file": "src/core/types/sync.ts",
+            "symbol": "SyncState"
+          },
+          {
+            "file": "src/core/types/sync.ts",
+            "symbol": "SyncData"
+          }
+        ]
+      },
+      {
+        "id": "claim.sync.drive_file_boundaries",
+        "kind": "fact",
+        "text": "GoogleDriveSyncService authenticates with Chrome Identity and syncs folders, AI Studio folders, prompts, starred messages, and fork nodes to Google Drive as separate JSON files under the Gemini Voyager Data folder.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.google_drive_sync",
+          "flow.cloud_sync"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/services/GoogleDriveSyncService.ts",
+            "symbol": "GoogleDriveSyncService"
+          }
+        ]
+      },
+      {
+        "id": "claim.account.isolation_scope",
+        "kind": "fact",
+        "text": "AccountIsolationService detects Gemini versus AI Studio from page URLs, supports platform-specific isolation toggles with a legacy fallback flag, hashes normalized email addresses, maps route/email aliases to stable account profiles, and stores the profile map in chrome.storage.local.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.account_isolation",
+          "flow.cloud_sync"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/services/AccountIsolationService.ts",
+            "symbol": "detectAccountPlatformFromUrl"
+          },
+          {
+            "file": "src/core/services/AccountIsolationService.ts",
+            "symbol": "AccountIsolationService"
+          }
+        ]
+      },
+      {
+        "id": "claim.background.custom_scripts_and_watermark",
+        "kind": "fact",
+        "text": "The background worker keeps custom prompt-website content script registrations in sync with granted optional origins and registers a MAIN-world fetchInterceptor.js script for supported Gemini hosts when watermark removal is enabled.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.background_worker",
+          "flow.extension_runtime"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/background/index.ts",
+            "symbol": "syncCustomContentScripts"
+          },
+          {
+            "file": "src/pages/background/index.ts",
+            "symbol": "registerFetchInterceptor"
+          }
+        ]
+      },
+      {
+        "id": "claim.background.serialized_user_data",
+        "kind": "fact",
+        "text": "The background worker centralizes starred message and fork node read-modify-write operations through serialized managers to avoid storage races.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.background_worker",
+          "component.storage_contracts"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/background/index.ts",
+            "symbol": "StarredMessagesManager"
+          },
+          {
+            "file": "src/pages/background/index.ts",
+            "symbol": "ForkNodesManager"
+          }
+        ]
+      },
+      {
+        "id": "claim.popup.folder_prompt_incremental",
+        "kind": "decision",
+        "text": "The popup's AI folder-organization prompt intentionally asks for incremental JSON only: new folders and assignments for currently unfiled conversations, so merge import will not re-output or disturb existing curated folders.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.popup_settings"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/popup/Popup.tsx",
+            "symbol": "formatFolderStructurePrompt"
+          }
+        ]
+      },
+      {
+        "id": "claim.i18n.language_resolution",
+        "kind": "fact",
+        "text": "The i18n runtime reads the saved language from sync then local storage, falls back to browser UI language and then English, caches the active language, and updates the cache on storage changes.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.i18n"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/utils/i18n.ts",
+            "symbol": "getCurrentLanguage"
+          },
+          {
+            "file": "src/utils/i18n.ts",
+            "symbol": "initI18n"
+          }
+        ]
+      },
+      {
+        "id": "claim.docs.public_site",
+        "kind": "fact",
+        "text": "The documentation site is VitePress-based and presents Gemini Voyager as a user-facing extension with installation, getting-started, and feature guide pages.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.docs_site"
+        ],
+        "code_anchors": [
+          {
+            "file": "docs/en/index.md"
+          },
+          {
+            "file": "package.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.repo.agent_constraints",
+        "kind": "requirement",
+        "text": "Repository guidance requires following Services/Stores/functional React patterns, avoiding direct chrome.storage access in UI components, using no any types, keeping translations synchronized, avoiding direct edits to dist_* folders, and running typecheck and lint after relevant changes.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.repository",
+          "flow.development_workflow"
+        ],
+        "code_anchors": [
+          {
+            "file": "AGENTS.md"
+          }
+        ]
+      }
+    ],
+    "edges": []
+  }
+}

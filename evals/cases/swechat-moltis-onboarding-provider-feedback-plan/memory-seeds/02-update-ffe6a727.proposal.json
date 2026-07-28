@@ -1,0 +1,160 @@
+{
+  "title": "Update working memory from PR 356 auth setup session",
+  "summary": "Durable auth setup routing, setup-required page, and E2E context learned during session ffe6a727.",
+  "creates": {
+    "components": [],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.auth_setup_required_remote_pages_onboarding_exception",
+        "kind": "fact",
+        "text": "When credentials are missing and check_auth returns SetupRequired, auth_gate keeps API and WebSocket requests at 401 AUTH_SETUP_REQUIRED, passes local page requests and /onboarding or /onboarding/ page requests through with loopback identity, and redirects other page requests to /setup-required.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.auth_gate"
+        ],
+        "supersedes": [
+          "claim.auth_setup_required_remote_pages_redirect"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/gateway/src/auth_middleware.rs",
+            "symbol": "auth_gate"
+          }
+        ]
+      },
+      {
+        "id": "claim.setup_required_redirects_after_auth_setup",
+        "kind": "fact",
+        "text": "/setup-required still renders the setup-required template before credentials exist, but setup_required_handler redirects to /login once the credential store reports setup complete so stale bookmarks do not show Authentication Not Configured.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.web_ui",
+          "flow.auth_gate"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/web/src/spa.rs",
+            "symbol": "setup_required_handler"
+          }
+        ]
+      },
+      {
+        "id": "claim.remote_onboarding_setup_code_exception_rationale",
+        "kind": "decision",
+        "text": "The session kept remote /onboarding reachable during setup because the onboarding page step 0 requires a setup code; blocking it at the auth gate broke the forced-auth onboarding flow, while other remote page paths should still land on /setup-required.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.auth_gate",
+          "component.web_ui"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/gateway/src/auth_middleware.rs",
+            "symbol": "auth_gate"
+          },
+          {
+            "file": "crates/web/ui/e2e/specs/onboarding-auth.spec.js"
+          }
+        ]
+      },
+      {
+        "id": "claim.setup_required_public_path_guard_rule",
+        "kind": "decision",
+        "text": "The session kept /setup-required as an auth public path to avoid setup redirect loops, but added the handler guard so the public route cannot display stale setup-required content after auth is configured.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.auth_gate",
+          "component.web_ui"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/gateway/src/auth_middleware.rs",
+            "symbol": "is_public_path"
+          },
+          {
+            "file": "crates/web/src/spa.rs",
+            "symbol": "setup_required_handler"
+          }
+        ]
+      },
+      {
+        "id": "claim.greptile_auth_setup_pending_comments_rejected",
+        "kind": "decision",
+        "text": "For PR 356, review comments that proposed fixes around auth_setup_pending or authOnly were rejected because those symbols are not part of the onboarding implementation; the onboarding view derives its auth step from /api/auth/status and auth?.setup_required.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.web_ui"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/web/src/assets/js/onboarding-view.js",
+            "symbol": "OnboardingPage"
+          }
+        ]
+      },
+      {
+        "id": "claim.auth_runtime_status_logout_e2e_flake_risk",
+        "kind": "risk",
+        "text": "The logout button updates after runtime auth status change E2E test may be flaky or have a separate runtime-auth-status bug: local validation for PR 356 observed #logoutBtn present but hidden after dispatching moltis:auth-status-changed, and this session did not fix it.",
+        "truth": "unknown",
+        "intent": "unknown",
+        "about": [
+          "component.web_ui"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/web/ui/e2e/specs/auth.spec.js"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.ffe6a727_d13c_409c_9a1d_81538d8916e0",
+        "kind": "session",
+        "ref": "claude-code-session:ffe6a727-d13c-409c-9a1d-81538d8916e0",
+        "title": "SWE-chat Claude Code session ffe6a727: Improve coverage from PR checks"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.remote_onboarding_setup_code_exception_rationale",
+        "to": "source.claude_code_session.ffe6a727_d13c_409c_9a1d_81538d8916e0",
+        "metadata": {
+          "reason": "The session changed the initial remote redirect fix after the onboarding-auth E2E failed on /setup-required and concluded that remote /onboarding must remain reachable for the setup-code auth flow."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.setup_required_public_path_guard_rule",
+        "to": "source.claude_code_session.ffe6a727_d13c_409c_9a1d_81538d8916e0",
+        "metadata": {
+          "reason": "The session accepted the Greptile concern that stale /setup-required content was misleading after setup while preserving the public route to prevent setup-time redirect loops."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.greptile_auth_setup_pending_comments_rejected",
+        "to": "source.claude_code_session.ffe6a727_d13c_409c_9a1d_81538d8916e0",
+        "metadata": {
+          "reason": "The session reviewed the PR comments and explicitly rejected the auth_setup_pending/authOnly suggestions as hallucinated against the actual onboarding implementation."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.auth_runtime_status_logout_e2e_flake_risk",
+        "to": "source.claude_code_session.ffe6a727_d13c_409c_9a1d_81538d8916e0",
+        "metadata": {
+          "reason": "The session transcript includes a local E2E failure for the runtime auth-status logout button test and records that it was treated as unrelated and left unresolved."
+        }
+      }
+    ]
+  }
+}

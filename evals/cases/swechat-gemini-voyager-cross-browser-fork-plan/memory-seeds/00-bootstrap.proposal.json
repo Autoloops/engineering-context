@@ -1,0 +1,316 @@
+{
+  "title": "Bootstrap Gemini Voyager repository memory",
+  "summary": "Shallow orientation for the Gemini Voyager browser extension: repository identity, build/test workflows, extension entrypoints, storage boundaries, content initialization, and Google Drive sync.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.repository",
+        "name": "Repository",
+        "code_anchor": "README.md",
+        "contains": [
+          "component.extension-manifest",
+          "component.build-config",
+          "component.content-script",
+          "component.background-worker",
+          "component.popup-ui",
+          "component.storage-service",
+          "component.google-drive-sync",
+          "component.account-isolation"
+        ]
+      },
+      {
+        "id": "component.extension-manifest",
+        "name": "Extension Manifest",
+        "code_anchor": "manifest.json"
+      },
+      {
+        "id": "component.build-config",
+        "name": "Build Configuration",
+        "code_anchor": "vite.config.base.ts"
+      },
+      {
+        "id": "component.content-script",
+        "name": "Content Script Entry",
+        "code_anchor": "src/pages/content/index.tsx"
+      },
+      {
+        "id": "component.background-worker",
+        "name": "Background Service Worker",
+        "code_anchor": "src/pages/background/index.ts"
+      },
+      {
+        "id": "component.popup-ui",
+        "name": "Popup UI",
+        "code_anchor": "src/pages/popup/index.tsx"
+      },
+      {
+        "id": "component.storage-service",
+        "name": "Storage Service",
+        "code_anchor": "src/core/services/StorageService.ts"
+      },
+      {
+        "id": "component.google-drive-sync",
+        "name": "Google Drive Sync Service",
+        "code_anchor": "src/core/services/GoogleDriveSyncService.ts"
+      },
+      {
+        "id": "component.account-isolation",
+        "name": "Account Isolation Service",
+        "code_anchor": "src/core/services/AccountIsolationService.ts"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.dev-build-test",
+        "name": "Development, Build, And Verification Commands",
+        "touches": [
+          "component.repository",
+          "component.build-config"
+        ]
+      },
+      {
+        "id": "flow.extension-entrypoints",
+        "name": "Browser Extension Entrypoints",
+        "touches": [
+          "component.extension-manifest",
+          "component.content-script",
+          "component.background-worker",
+          "component.popup-ui"
+        ]
+      },
+      {
+        "id": "flow.content-feature-initialization",
+        "name": "Content Feature Initialization",
+        "touches": [
+          "component.content-script",
+          "component.storage-service"
+        ]
+      },
+      {
+        "id": "flow.cloud-sync-account-scope",
+        "name": "Cloud Sync With Account Scope",
+        "touches": [
+          "component.google-drive-sync",
+          "component.account-isolation",
+          "component.background-worker",
+          "component.storage-service"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.repo-identity",
+        "kind": "fact",
+        "text": "Gemini Voyager is a GPL-3.0 browser extension for Google Gemini and AI Studio that adds organization and productivity features such as folders, prompt vault, timeline navigation, export, formula copy, Mermaid rendering, and Google Drive sync.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.repository",
+        "code_anchors": [
+          {
+            "file": "README.md"
+          },
+          {
+            "file": "package.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.dev-command-contract",
+        "kind": "fact",
+        "text": "The documented local workflow uses Bun for dependency installation, Nodemon-backed dev scripts for Chrome, Firefox, and Safari, Vite builds per browser, Vitest for tests, ESLint for linting, TypeScript no-emit typechecking, and VitePress for docs.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "flow.dev-build-test",
+        "code_anchors": [
+          {
+            "file": "README.md"
+          },
+          {
+            "file": "package.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.assistant-code-standards",
+        "kind": "requirement",
+        "text": "Repository guidance requires service/store-oriented architecture, functional React, no explicit any, StorageService instead of direct chrome.storage in UI components, tests for every feature or fix, synced docs/translations, typecheck after TypeScript definition changes, and lint before finishing.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.repository",
+        "code_anchors": [
+          {
+            "file": "CLAUDE.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.extension-manifest-surfaces",
+        "kind": "fact",
+        "text": "The MV3 manifest exposes a popup, options page, module background service worker, and content script on Gemini, Gemini Business, and AI Studio hosts; permissions include storage, identity, scripting, Google Drive file OAuth scope, Google API host access, and optional arbitrary host permissions for custom prompt websites.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.extension-manifest",
+          "flow.extension-entrypoints"
+        ],
+        "code_anchors": [
+          {
+            "file": "manifest.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.build-config-localized-crx",
+        "kind": "fact",
+        "text": "The shared Vite config builds a CRX manifest from package version plus optional dev manifest overrides, keeps localization enabled from src/locales, disables modulepreload for content-script CSP compatibility, and strips console.log/debug in production via esbuild pure settings.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.build-config",
+        "code_anchors": [
+          {
+            "file": "vite.config.base.ts",
+            "symbol": "baseManifest"
+          },
+          {
+            "file": "vite.config.base.ts",
+            "symbol": "baseBuildOptions"
+          }
+        ]
+      },
+      {
+        "id": "claim.storage-service-boundary",
+        "kind": "fact",
+        "text": "StorageService centralizes typed persistence behind IStorageService, provides Chrome sync, Chrome local, and localStorage implementations, and exports a sync storageService for small cross-device data plus a local promptStorageService for larger prompt data.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.storage-service",
+        "code_anchors": [
+          {
+            "file": "src/core/services/StorageService.ts",
+            "symbol": "IStorageService"
+          },
+          {
+            "file": "src/core/services/StorageService.ts",
+            "symbol": "StorageFactory"
+          },
+          {
+            "file": "src/core/services/StorageService.ts",
+            "symbol": "promptStorageService"
+          }
+        ]
+      },
+      {
+        "id": "claim.storage-keys-are-centralized",
+        "kind": "fact",
+        "text": "Storage keys for folders, timeline settings, prompt manager, global settings, account isolation, cloud-related feature state, fork nodes, and other extension settings are centralized in StorageKeys.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.storage-service",
+        "code_anchors": [
+          {
+            "file": "src/core/types/common.ts",
+            "symbol": "StorageKeys"
+          }
+        ]
+      },
+      {
+        "id": "claim.content-script-host-split",
+        "kind": "fact",
+        "text": "The content script initializes feature modules by host and context: custom websites and Gemini Enterprise get Prompt Manager only, gemini.google.com gets the full Gemini feature set, AI Studio gets its folder manager, folder spacing, formula copy, and shared prompt manager, and background tabs delay startup to reduce simultaneous load.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "flow.content-feature-initialization",
+        "code_anchors": [
+          {
+            "file": "src/pages/content/index.tsx",
+            "symbol": "initializeFeatures"
+          },
+          {
+            "file": "src/pages/content/index.tsx",
+            "symbol": "getInitializationDelay"
+          }
+        ]
+      },
+      {
+        "id": "claim.background-worker-runtime-bridges",
+        "kind": "fact",
+        "text": "The background worker owns runtime bridges that require extension privileges, including MAIN-world fetch-interceptor registration for watermark removal and dynamic content-script registration for user-granted custom prompt websites.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.background-worker",
+          "flow.extension-entrypoints"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/background/index.ts",
+            "symbol": "registerFetchInterceptor"
+          },
+          {
+            "file": "src/pages/background/index.ts",
+            "symbol": "syncCustomContentScripts"
+          }
+        ]
+      },
+      {
+        "id": "claim.google-drive-sync-files",
+        "kind": "fact",
+        "text": "GoogleDriveSyncService authenticates with Chrome Identity and Drive REST APIs, then syncs extension data to separate JSON files for Gemini folders, AI Studio folders, prompts, starred messages, and fork nodes under a Gemini Voyager Data folder, with account-scoped filenames when a scope is provided.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.google-drive-sync",
+          "flow.cloud-sync-account-scope"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/services/GoogleDriveSyncService.ts",
+            "symbol": "GoogleDriveSyncService"
+          },
+          {
+            "file": "src/core/services/GoogleDriveSyncService.ts",
+            "symbol": "upload"
+          }
+        ]
+      },
+      {
+        "id": "claim.account-isolation-scope",
+        "kind": "fact",
+        "text": "AccountIsolationService detects Gemini versus AI Studio from page URLs, derives account context from route user IDs and visible emails, normalizes/hash-scopes account identifiers, and exposes platform-specific storage keys for isolation settings.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.account-isolation",
+          "flow.cloud-sync-account-scope"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/services/AccountIsolationService.ts",
+            "symbol": "detectAccountPlatformFromUrl"
+          },
+          {
+            "file": "src/core/services/AccountIsolationService.ts",
+            "symbol": "detectAccountContextFromDocument"
+          },
+          {
+            "file": "src/core/services/AccountIsolationService.ts",
+            "symbol": "AccountIsolationService"
+          }
+        ]
+      },
+      {
+        "id": "claim.cloud-sync-user-contract",
+        "kind": "fact",
+        "text": "The user-facing cloud sync flow stores data in the user's Google Drive, supports manual upload and download-merge for folders and prompts, and the docs recommend separate local backup as additional protection.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "flow.cloud-sync-account-scope",
+        "code_anchors": [
+          {
+            "file": "docs/guide/cloud-sync.md"
+          }
+        ]
+      }
+    ]
+  }
+}

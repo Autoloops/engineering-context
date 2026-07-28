@@ -1,0 +1,175 @@
+{
+  "title": "Update working memory from issue 350 auth session",
+  "summary": "Durable context from the session that changed remote auth setup handling, rejected remote first-user auth setup, and added Entire/Biome repository workflow facts.",
+  "creates": {
+    "components": [],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.auth_setup_required_remote_pages_redirect",
+        "kind": "fact",
+        "text": "When no credentials are configured and check_auth returns SetupRequired, auth_gate keeps API and WebSocket requests at 401 AUTH_SETUP_REQUIRED, allows local page requests through with a loopback identity, and redirects non-local page requests to /setup-required instead of letting them reach the SPA.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.auth_gate"
+        ],
+        "supersedes": [
+          "claim.auth_documented_model"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/gateway/src/auth_middleware.rs",
+            "symbol": "auth_gate"
+          }
+        ]
+      },
+      {
+        "id": "claim.setup_required_page_web_route",
+        "kind": "fact",
+        "text": "The web UI registers /setup-required as a page route; setup_required_handler renders SpaTemplate::SetupRequired through the normal SPA template renderer.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.web_ui"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/web/src/lib.rs",
+            "symbol": "web_routes"
+          },
+          {
+            "file": "crates/web/src/spa.rs",
+            "symbol": "setup_required_handler"
+          },
+          {
+            "file": "crates/web/src/templates.rs",
+            "symbol": "render_spa_template"
+          }
+        ]
+      },
+      {
+        "id": "claim.remote_first_auth_setup_rejected",
+        "kind": "decision",
+        "text": "The session rejected the earlier auth-only onboarding approach for already-onboarded instances, including an auth_setup_pending Gon flag and onboarding-view authOnly mode, because it could let the first remote user on a Tailscale or bind deployment claim the instance.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.auth_gate",
+          "component.web_ui"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/gateway/src/auth_middleware.rs",
+            "symbol": "auth_gate"
+          }
+        ]
+      },
+      {
+        "id": "claim.auth_setup_local_only_after_onboarding",
+        "kind": "requirement",
+        "text": "After onboarding is complete but authentication is not configured, users should configure auth from localhost or the CLI; remote users should see access-denied/setup-required guidance rather than a password or passkey setup form.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.auth_gate"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/gateway/src/auth_middleware.rs",
+            "symbol": "auth_gate"
+          },
+          {
+            "file": "crates/web/src/spa.rs",
+            "symbol": "setup_required_handler"
+          }
+        ]
+      },
+      {
+        "id": "claim.entire_project_config_tracked",
+        "kind": "fact",
+        "text": "The repository tracks Entire project config in .entire/settings.json with enabled true, telemetry false, and session summarization enabled; .entire/.gitignore excludes local tmp, metadata, logs, and settings.local.json content.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.repository"
+        ],
+        "code_anchors": [
+          {
+            "file": ".entire/settings.json"
+          },
+          {
+            "file": ".entire/.gitignore"
+          }
+        ]
+      },
+      {
+        "id": "claim.entire_directory_not_root_ignored",
+        "kind": "decision",
+        "text": "The session decided not to add .entire/ to the root .gitignore; Entire local subpaths should be ignored by .entire/.gitignore so shared settings can still be committed.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.repository"
+        ],
+        "code_anchors": [
+          {
+            "file": ".entire/.gitignore"
+          },
+          {
+            "file": ".entire/settings.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.biome_2_4_6_rule_location",
+        "kind": "fact",
+        "text": "Biome is configured against schema 2.4.6, keeps noUnusedExpressions under linter.rules.suspicious, and formats JavaScript with tab indentation.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.repository"
+        ],
+        "code_anchors": [
+          {
+            "file": "biome.json"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.6ce656a2_a6ab_435f_aab9_e5eae5a484c0",
+        "kind": "session",
+        "ref": "claude-code-session:6ce656a2-a6ab-435f-aab9-e5eae5a484c0",
+        "title": "SWE-chat Claude Code session 6ce656a2 issue 350 investigation"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.remote_first_auth_setup_rejected",
+        "to": "source.claude_code_session.6ce656a2_a6ab_435f_aab9_e5eae5a484c0",
+        "metadata": {
+          "reason": "The user identified the security risk that a first remote visitor could set auth, and the assistant explicitly reverted the auth-only onboarding plan in favor of access denied guidance."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.auth_setup_local_only_after_onboarding",
+        "to": "source.claude_code_session.6ce656a2_a6ab_435f_aab9_e5eae5a484c0",
+        "metadata": {
+          "reason": "The user requested access denied for remote already-onboarded instances and said auth setup should happen via terminal CLI or localhost."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.entire_directory_not_root_ignored",
+        "to": "source.claude_code_session.6ce656a2_a6ab_435f_aab9_e5eae5a484c0",
+        "metadata": {
+          "reason": "The session checked Entire documentation and concluded that shared settings should be committed while local metadata is ignored by the nested .entire/.gitignore."
+        }
+      }
+    ]
+  }
+}

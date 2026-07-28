@@ -1,0 +1,24 @@
+diff --git a/libs/knowledge-graph/graph-context/config.ts b/libs/knowledge-graph/graph-context/config.ts
+index 3c0684b..3a9e99a 100644
+--- a/libs/knowledge-graph/graph-context/config.ts
++++ b/libs/knowledge-graph/graph-context/config.ts
+@@ -66,7 +66,7 @@ const rankingConfig: RankingConfig = {
+   selectionThreshold: 0.8,
+   packetMinimumScore: 0.15,
+   packetAdditionalDirectScoreFloor: 0.15,
+-  minimumSelectedClaims: 3,
++  minimumSelectedClaims: 5,
+   weights: {
+     semantic: 0.73,
+     bm25: 0.384,
+@@ -118,8 +118,8 @@ export const graphContextConfig: GraphContextConfig = {
+   version: "graph-context-v33-precision-anchors",
+   embedding: {
+     provider: "local",
+-    model: "all-mpnet-base-v2",
+-    dimensions: 768,
++    model: "all-MiniLM-L6-v2",
++    dimensions: 384,
+     batchSize: 16,
+   },
+   ranking: rankingConfig,

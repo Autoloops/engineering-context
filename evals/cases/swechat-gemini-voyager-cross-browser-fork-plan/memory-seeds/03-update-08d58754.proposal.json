@@ -1,0 +1,11 @@
+{
+  "title": "Update working memory from session",
+  "summary": "No durable memory changes were created: the filtered historical transcript contains only session metadata and no human or agent messages, and the target repository working tree has no diff for this replay.",
+  "creates": {
+    "components": [],
+    "flows": [],
+    "claims": [],
+    "sources": [],
+    "edges": []
+  }
+}

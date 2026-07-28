@@ -1,0 +1,268 @@
+{
+  "title": "Update working memory from extension rename session",
+  "summary": "Durable context from the session that renamed Chrome-visible extension copy to Voyager while deliberately leaving persistence, compatibility identifiers, GitHub docs, and sponsor artifacts on the legacy Gemini Voyager wording.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.locale_messages",
+        "name": "Locale Messages",
+        "code_anchor": "src/locales/en/messages.json"
+      },
+      {
+        "id": "component.prompt_manager_content",
+        "name": "Prompt Manager Content Module",
+        "code_anchor": "src/pages/content/prompt/index.ts"
+      },
+      {
+        "id": "component.export_services",
+        "name": "Export Services",
+        "code_anchor": "src/features/export/services/MarkdownFormatter.ts"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.extension_branding",
+        "name": "Extension Branding",
+        "touches": [
+          "component.extension_manifest",
+          "component.locale_messages",
+          "component.prompt_manager_content",
+          "component.export_services",
+          "component.google_drive_sync",
+          "component.build_and_tooling"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.extension_name_resolves_to_voyager",
+        "kind": "fact",
+        "text": "The packaged extension name is localized: `manifest.json` sets `name` to `__MSG_extName__`, and the default English locale resolves `extName` and `pm_title` to `Voyager`.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.extension_branding",
+          "component.extension_manifest",
+          "component.locale_messages"
+        ],
+        "code_anchors": [
+          {
+            "file": "manifest.json"
+          },
+          {
+            "file": "src/locales/en/messages.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.prompt_and_export_branding_use_voyager",
+        "kind": "fact",
+        "text": "The in-page Prompt Manager title and representative export footers use `Voyager` as the visible product name while still linking to the `gemini-voyager` GitHub repository.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.extension_branding",
+          "component.prompt_manager_content",
+          "component.export_services"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/prompt/index.ts",
+            "symbol": "startPromptManager"
+          },
+          {
+            "file": "src/features/export/services/MarkdownFormatter.ts",
+            "symbol": "MarkdownFormatter"
+          },
+          {
+            "file": "src/features/export/services/PDFPrintService.ts",
+            "symbol": "PDFPrintService"
+          }
+        ]
+      },
+      {
+        "id": "claim.drive_sync_keeps_legacy_branding_storage_names",
+        "kind": "fact",
+        "text": "Google Drive sync still uses the legacy Drive folder name `Gemini Voyager Data` and `gemini-voyager-*.json` filenames; the current service does not rename the backup folder to `Voyager Data`.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.extension_branding",
+          "flow.google_drive_sync",
+          "component.google_drive_sync"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/services/GoogleDriveSyncService.ts",
+            "symbol": "GoogleDriveSyncService"
+          }
+        ]
+      },
+      {
+        "id": "claim.compatibility_identifiers_keep_legacy_names",
+        "kind": "fact",
+        "text": "Compatibility identifiers were not renamed with the user-facing product copy: the Firefox add-on ID remains `gemini-voyager@nagi-ovo`, and Safari converter guidance still uses bundle identifier `com.nagi-ovo.Gemini-Voyager`.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.extension_branding",
+          "component.extension_manifest",
+          "component.build_and_tooling"
+        ],
+        "code_anchors": [
+          {
+            "file": "manifest.json"
+          },
+          {
+            "file": "scripts/build-safari.sh"
+          }
+        ]
+      },
+      {
+        "id": "claim.rename_scope_is_minimal_store_visible_surfaces",
+        "kind": "requirement",
+        "text": "For the trademark-complaint rename, keep the scope to the minimal store-visible and in-extension user-facing surfaces needed to present the extension as `Voyager`; do not treat this as a full GitHub/docs/repository rebrand.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.extension_branding",
+          "component.repository",
+          "component.extension_manifest",
+          "component.locale_messages"
+        ],
+        "code_anchors": [
+          {
+            "file": "README.md"
+          },
+          {
+            "file": "manifest.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.chrome_store_name_chain_uses_locale_extname",
+        "kind": "decision",
+        "text": "The session established that the Chrome Web Store display name should be changed through the manifest localization chain `manifest.name` -> `__MSG_extName__` -> locale `extName`; `manifest.json` itself does not need a literal `Voyager` name string.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.extension_branding",
+          "component.extension_manifest",
+          "component.locale_messages"
+        ],
+        "code_anchors": [
+          {
+            "file": "manifest.json"
+          },
+          {
+            "file": "src/locales/en/messages.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.drive_sync_rename_rejected",
+        "kind": "decision",
+        "text": "The session rejected renaming the Google Drive backup folder to `Voyager Data` or adding a migration from `Gemini Voyager Data`; Drive persistence names should stay stable for this rename.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.extension_branding",
+          "flow.google_drive_sync",
+          "component.google_drive_sync"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/services/GoogleDriveSyncService.ts",
+            "symbol": "GoogleDriveSyncService"
+          }
+        ]
+      },
+      {
+        "id": "claim.sponsor_generator_not_part_of_rename",
+        "kind": "decision",
+        "text": "The session explicitly excluded generated sponsor assets and sponsor-generation scripts from the rename, because the user wanted only the most necessary plugin-facing changes.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.extension_branding",
+          "component.build_and_tooling"
+        ],
+        "code_anchors": [
+          {
+            "file": "scripts/generate-sponsors.cjs"
+          }
+        ]
+      },
+      {
+        "id": "claim_legacy_ids_do_not_change_for_store_rename",
+        "kind": "decision",
+        "text": "The store-facing rename should not change stable extension identifiers such as the Chrome key-derived extension ID, Firefox add-on ID, or Safari bundle identifier, because those identifiers affect update continuity or signing rather than visible product naming.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.extension_branding",
+          "component.extension_manifest",
+          "component.build_and_tooling"
+        ],
+        "code_anchors": [
+          {
+            "file": "manifest.json"
+          },
+          {
+            "file": "scripts/build-safari.sh"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.16a5c736_9609_48fb_8a10_a4595c039b21",
+        "kind": "session",
+        "ref": "claude-code-session:16a5c736-9609-48fb-8a10-a4595c039b21",
+        "title": "Extension rename and UI copy session"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.rename_scope_is_minimal_store_visible_surfaces",
+        "to": "source.claude_code_session.16a5c736_9609_48fb_8a10_a4595c039b21",
+        "metadata": {
+          "reason": "The user asked to rename plugin-visible `Gemini Voyager` appearances to `Voyager` for a trademark complaint, explicitly said GitHub did not need changing, and later narrowed the work to only the most necessary changes."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.chrome_store_name_chain_uses_locale_extname",
+        "to": "source.claude_code_session.16a5c736_9609_48fb_8a10_a4595c039b21",
+        "metadata": {
+          "reason": "The user asked whether the manifest needed changing and later confirmed the manifest question; the accepted answer was that `manifest.json` already points at `__MSG_extName__`, so changing the locale message updates the store-visible name."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.drive_sync_rename_rejected",
+        "to": "source.claude_code_session.16a5c736_9609_48fb_8a10_a4595c039b21",
+        "metadata": {
+          "reason": "After an initial broader rename included `GoogleDriveSyncService`, the user asked whether Google Drive needed changing; the accepted follow-up restored `BACKUP_FOLDER_NAME` to `Gemini Voyager Data` and removed the migration."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.sponsor_generator_not_part_of_rename",
+        "to": "source.claude_code_session.16a5c736_9609_48fb_8a10_a4595c039b21",
+        "metadata": {
+          "reason": "The user explicitly said generated sponsor-related files did not need changing and that this session should do only the most necessary work."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim_legacy_ids_do_not_change_for_store_rename",
+        "to": "source.claude_code_session.16a5c736_9609_48fb_8a10_a4595c039b21",
+        "metadata": {
+          "reason": "The user asked whether the item ID would remain stable after renaming; the session preserved extension identifiers rather than treating them as visible branding copy."
+        }
+      }
+    ]
+  }
+}

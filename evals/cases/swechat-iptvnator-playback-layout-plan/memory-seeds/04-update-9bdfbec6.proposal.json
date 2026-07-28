@@ -1,0 +1,203 @@
+{
+  "title": "Update working memory from session",
+  "summary": "Durable context learned during the current coding session about active playlist refresh placement and Xtream account-info styling.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.workspace_shell_header",
+        "name": "Workspace shell header",
+        "code_anchor": "libs/workspace/shell/feature/src/lib/workspace-shell/components/workspace-shell-header/workspace-shell-header.component.ts"
+      },
+      {
+        "id": "component.playlist_refresh_action_service",
+        "name": "Playlist refresh action service",
+        "code_anchor": "libs/playlist/shared/util/src/lib/playlist-refresh-action.service.ts"
+      },
+      {
+        "id": "component.xtream_account_info_dialog",
+        "name": "Xtream account info dialog",
+        "code_anchor": "libs/portal/xtream/feature/src/lib/account-info/account-info.component.scss"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.active_playlist_refresh_action",
+        "name": "Active playlist refresh action",
+        "touches": [
+          "component.workspace_shell_header",
+          "component.playlist_refresh_action_service",
+          "component.m3u_playlist",
+          "component.xtream_portal"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.workspace_header_refresh_button",
+        "kind": "fact",
+        "text": "WorkspaceShellHeaderComponent exposes a dedicated refresh-playlist action: canRefreshPlaylist and isRefreshingPlaylist inputs control a sync icon button, and refreshPlaylistRequested emits when it is clicked.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.workspace_shell_header",
+          "flow.active_playlist_refresh_action"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/components/workspace-shell-header/workspace-shell-header.component.ts",
+            "symbol": "WorkspaceShellHeaderComponent"
+          },
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/components/workspace-shell-header/workspace-shell-header.component.html"
+          }
+        ]
+      },
+      {
+        "id": "claim.workspace_facade_delegates_playlist_refresh",
+        "kind": "fact",
+        "text": "WorkspaceShellFacade computes canRefreshPlaylist and isRefreshingPlaylist from PlaylistRefreshActionService for the active playlist, and refreshCurrentPlaylist delegates the active playlist to that service.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.workspace_shell_header",
+          "component.playlist_refresh_action_service",
+          "flow.active_playlist_refresh_action"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/services/workspace-shell.facade.ts",
+            "symbol": "WorkspaceShellFacade"
+          }
+        ]
+      },
+      {
+        "id": "claim.playlist_refresh_action_service_scope",
+        "kind": "fact",
+        "text": "PlaylistRefreshActionService only marks a playlist refreshable when window.electron is present and the playlist has serverUrl, url, or filePath; it routes Xtream refresh through confirmation, content deletion, restore-data persistence, metadata update, and workspace navigation, while M3U refresh uses PlaylistRefreshService and dispatches an NgRx playlist update.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.playlist_refresh_action_service",
+          "flow.active_playlist_refresh_action"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/playlist/shared/util/src/lib/playlist-refresh-action.service.ts",
+            "symbol": "PlaylistRefreshActionService"
+          }
+        ]
+      },
+      {
+        "id": "claim.sources_list_refresh_was_preexisting_entrypoint",
+        "kind": "fact",
+        "text": "The session identified that, before adding the active-playlist header action, M3U and Xtream refresh or reimport was reachable from the sources list, which forced users already browsing a playlist to navigate away to refresh stale content.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.active_playlist_refresh_action"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/playlist/shared/ui/src/lib/recent-playlists/recent-playlists.component.ts",
+            "symbol": "RecentPlaylistsComponent"
+          }
+        ]
+      },
+      {
+        "id": "claim.refresh_not_navigation_rail_decision",
+        "kind": "decision",
+        "text": "Playlist refresh should not be placed in the left navigation rail because the rail is a navigation surface, not an action bar, and a context-dependent refresh control there would make the rail semantics inconsistent.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.active_playlist_refresh_action"
+        ]
+      },
+      {
+        "id": "claim.refresh_dedicated_header_action_decision",
+        "kind": "decision",
+        "text": "Active playlist refresh uses a separate dedicated workspace-header action instead of overloading headerShortcut because headerShortcut is a single-action slot already used by the M3U video player for Open Multi EPG, and refresh needs to coexist with that shortcut.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.workspace_shell_header",
+          "flow.active_playlist_refresh_action"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/components/workspace-shell-header/workspace-shell-header.component.ts",
+            "symbol": "WorkspaceShellHeaderComponent"
+          }
+        ]
+      },
+      {
+        "id": "claim.refresh_playlist_switcher_secondary_unbuilt",
+        "kind": "decision",
+        "text": "Adding refresh to the playlist switcher's context-actions-section was discussed as a secondary discovery path, but this session deliberately left that placement unbuilt when the user chose the primary header option.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.active_playlist_refresh_action"
+        ]
+      },
+      {
+        "id": "claim.xtream_account_info_uses_app_theme_tokens",
+        "kind": "fact",
+        "text": "The Xtream account info dialog SCSS follows the app widget and provider theme tokens for its hero, panels, provider accent, shadows, and surfaces instead of a standalone hardcoded gradient-heavy style.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.xtream_account_info_dialog",
+          "component.xtream_portal"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/portal/xtream/feature/src/lib/account-info/account-info.component.scss"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.9bdfbec6_977a_410e_a1c3_97af564a811c",
+        "kind": "session",
+        "ref": "claude-code-session:9bdfbec6-977a-410e-a1c3-97af564a811c",
+        "title": "SWE-chat Claude Code session: Xtream account info design cleanup"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.sources_list_refresh_was_preexisting_entrypoint",
+        "to": "source.claude_code_session.9bdfbec6_977a_410e_a1c3_97af564a811c",
+        "metadata": {
+          "reason": "The user asked where to add refresh because it was only available from the sources list, and the session analysis recorded that as the pre-existing friction."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.refresh_not_navigation_rail_decision",
+        "to": "source.claude_code_session.9bdfbec6_977a_410e_a1c3_97af564a811c",
+        "metadata": {
+          "reason": "The brainstorm explicitly evaluated the navigation rail option and rejected it because it would mix actions into a navigation surface."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.refresh_dedicated_header_action_decision",
+        "to": "source.claude_code_session.9bdfbec6_977a_410e_a1c3_97af564a811c",
+        "metadata": {
+          "reason": "During implementation the session found headerShortcut was a single-action slot already used for Open Multi EPG and chose a dedicated refresh action so both controls can coexist."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.refresh_playlist_switcher_secondary_unbuilt",
+        "to": "source.claude_code_session.9bdfbec6_977a_410e_a1c3_97af564a811c",
+        "metadata": {
+          "reason": "The brainstorm recommended the playlist switcher as a secondary placement, but the user approved only the primary header option for implementation."
+        }
+      }
+    ]
+  }
+}

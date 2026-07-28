@@ -1,0 +1,49 @@
+{
+  "case_id": "swechat-iptvnator-favorites-context-navigation-plan",
+  "dataset": {
+    "name": "SALT-NLP/SWE-chat",
+    "held_out_session_id": "e340da8c-f607-4672-932d-2d6a9970d20e",
+    "held_out_created_at": "2026-03-25T18:14:55.608427Z",
+    "prior_sessions": [
+      {
+        "session_id": "8016a255-0828-4a01-ae11-a955eebf2fb8",
+        "created_at": "2026-02-21T07:40:56.659171Z",
+        "checkpoint_id": "4gray/iptvnator#815a29d0e5a4",
+        "title": "Local portal mock servers"
+      },
+      {
+        "session_id": "606f4961-fa58-49f9-b523-a5f0795a4e17",
+        "created_at": "2026-02-21T10:56:27.719048Z",
+        "checkpoint_id": "4gray/iptvnator#f35656857e95",
+        "title": "Portal channel/player error investigation"
+      },
+      {
+        "session_id": "72da01ff-064d-40bf-8443-254ceb0d5ab4",
+        "created_at": "2026-03-22T17:38:18.536562Z",
+        "checkpoint_id": "4gray/iptvnator#0e4488af6c76",
+        "title": "Workspace rail and playlist navigation review"
+      }
+    ],
+    "checkpoint_id": "4gray/iptvnator#130fa99dcbb4",
+    "base_commit_source": "Held-out public commit aa5e4097f120a5f2477b8fd927326919b9776056 refactors workspace shell utilities; eval base is its parent."
+  },
+  "repo": {
+    "full_name": "4gray/iptvnator",
+    "url": "https://github.com/4gray/iptvnator.git",
+    "base_commit": "eaaf634b17c9cb47d0dc62a9c74029a4577bedc5"
+  },
+  "task": {
+    "prompt_path": "prompt.md",
+    "judge_path": "judge.md",
+    "expected_relevant_areas": [
+      "workspace shell routing",
+      "favorites and recently viewed views",
+      "M3U, Xtream, and Stalker modules",
+      "playlist-local versus global actions",
+      "portal content type navigation"
+    ]
+  },
+  "memory": {
+    "manifest_path": "memory-seeds/manifest.json"
+  }
+}

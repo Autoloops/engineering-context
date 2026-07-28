@@ -53,4 +53,7 @@ export interface HookInput {
   event_type?: unknown;
   working_dir?: unknown;
   message?: unknown;
+  // Cursor variants of session_id / cwd.
+  conversation_id?: unknown;
+  workspace_roots?: unknown;
 }

@@ -89,35 +89,35 @@ export function normalizeProposal(input: unknown, lookup?: ProposalSubjectLookup
 
   for (const component of components) {
     for (const target of asArray(component.contains)) {
-      edges.push(makeEdge("contains", component.id, "component", target, "component"));
+      pushEdge(edges, "contains", component.id, "component", target, "component");
     }
     for (const target of asArray(component.supersedes)) {
-      edges.push(makeEdge("supersedes", component.id, "component", target, "component"));
+      pushEdge(edges, "supersedes", component.id, "component", target, "component");
     }
   }
 
   for (const flow of flows) {
     for (const target of asArray(flow.contains)) {
-      edges.push(makeEdge("contains", flow.id, "flow", target, "flow"));
+      pushEdge(edges, "contains", flow.id, "flow", target, "flow");
     }
     for (const target of asArray(flow.touches)) {
-      edges.push(makeEdge("touches", flow.id, "flow", target, "component"));
+      pushEdge(edges, "touches", flow.id, "flow", target, "component");
     }
     for (const target of asArray(flow.supersedes)) {
-      edges.push(makeEdge("supersedes", flow.id, "flow", target, "flow"));
+      pushEdge(edges, "supersedes", flow.id, "flow", target, "flow");
     }
   }
 
   for (const claim of claims) {
     for (const target of asArray(claim.about)) {
-      const targetType = resolveSubjectType(target, subjectTypes, lookup);
-      edges.push(makeEdge("about", claim.id, "claim", target, targetType ?? "component"));
+      const targetType = typeof target === "string" ? resolveSubjectType(target, subjectTypes, lookup) : undefined;
+      pushEdge(edges, "about", claim.id, "claim", target, targetType ?? "component");
     }
     for (const target of asArray(claim.evidenced_by)) {
-      edges.push(makeEdge("evidenced_by", claim.id, "claim", target, "source"));
+      pushEdge(edges, "evidenced_by", claim.id, "claim", target, "source");
     }
     for (const target of asArray(claim.supersedes)) {
-      edges.push(makeEdge("supersedes", claim.id, "claim", target, "claim"));
+      pushEdge(edges, "supersedes", claim.id, "claim", target, "claim");
     }
   }
 
@@ -152,6 +152,39 @@ export function normalizeProposal(input: unknown, lookup?: ProposalSubjectLookup
       edges: dedupeEdges(edges),
     },
   };
+}
+
+// Compact relationship fields (component.contains, flow.touches, claim.about,
+// etc.) are declared as string/string[] in the Compact*/Edge types, but this
+// function runs on untrusted proposal JSON before any validation -- the
+// owning subject's id, or an individual target, can be missing or a
+// non-string at runtime despite what the types claim. Building straight into
+// makeEdge/edgeId/slug in that case throws a raw TypeError (the same crash
+// class as #82, just reached via a subject/target id instead of an
+// explicit edge's from_id/to_id). Guard here instead: on a valid pair, build
+// the edge as before; otherwise push a placeholder with no from_type/to_type
+// so validateProposal's existing "missing subject references" check reports
+// it clearly instead of normalizeProposal crashing.
+function pushEdge(
+  edges: Edge[],
+  kind: EdgeKind,
+  fromId: unknown,
+  fromType: GraphObjectType,
+  toId: unknown,
+  toType: GraphObjectType,
+  metadata?: EdgeMetadata,
+): void {
+  if (typeof fromId === "string" && fromId.length > 0 && typeof toId === "string" && toId.length > 0) {
+    edges.push(makeEdge(kind, fromId, fromType, toId, toType, metadata));
+    return;
+  }
+
+  edges.push({
+    id: `edge_invalid_${edges.length}`,
+    kind,
+    from_id: fromId,
+    to_id: toId,
+  } as unknown as Edge);
 }
 
 function makeEdge(
