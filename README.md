@@ -1,6 +1,6 @@
 <div align="center">
 
-<img alt="Greplica" src="docs/assets/greplica-arcade-font2.png" width="420">
+<img alt="Greplica logo" src="docs/assets/greplica-logo.png" width="420">
 
 ### Persistent, searchable engineering memory for AI coding agents
 
@@ -20,7 +20,7 @@ Does your coding agent spend 5 minutes just grepping around when you give it a c
 
 That's because it is re-learning context. Every new session, your agent wastes tokens and time building context on work it already did. And still misses important facts.
 
-**Greplica** explores your repo structure, code and session transcripts (fully local, no telemetry) to give your agent a persistent, maintained memory it can query before exploring.
+**Greplica** explores your repo structure, code and session transcripts to give your agent a persistent, maintained memory it can query before exploring. Local mode stays fully local with no telemetry; managed mode connects an authorized repository to shared team memory.
 
 ---
 
@@ -36,7 +36,7 @@ Install Greplica for this repo using https://raw.githubusercontent.com/Autoloops
 
 Full prompt: [docs/agent-install-prompt.md](https://raw.githubusercontent.com/Autoloops/greplica/refs/heads/main/docs/agent-install-prompt.md)
 
-That prompt asks a short setup questionnaire, installs Greplica with your chosen hook mode, creates the first saved context from the repo, and can optionally pull durable learnings from recent sessions.
+That prompt asks a short setup questionnaire, installs Greplica in local or managed mode, and either creates the first local context or connects to existing shared memory.
 
 To visualise your current memory in browser, run:
 
@@ -46,17 +46,58 @@ greplica graph view
 
 ---
 
+## Shared Managed Memory
+
+Managed mode lets contributors on different clones and forks query the same repository memory. It requires Greplica `0.2.0` or later and access to a managed Greplica server.
+
+After an administrator invites your GitHub user to an organization or repository, run:
+
+```bash
+npm install -g greplica@latest
+cd /path/to/your/repository-or-fork
+greplica login --api-url https://memory.autoloops.ai
+greplica install --mode managed --platform codex
+greplica repo status
+greplica graph context "What should I know before changing this subsystem?"
+```
+
+An organization admin can instead create one reusable, repository-scoped reader link from a folder already connected to the memory:
+
+```bash
+greplica repo invite-link create
+```
+
+Give the printed link or command to an agent. It logs in when needed, claims access, installs Greplica, and upgrades local memory to the invited managed memory:
+
+```bash
+greplica install --invite-link <invite-url> --platform codex
+```
+
+The link works for multiple GitHub users until an admin revokes it. Greplica never creates a new managed-memory namespace through this link. When ordinary managed discovery finds no access or invite, creation requires the user to type `create managed memory`; an agent must ask rather than supply that confirmation itself.
+
+Replace `codex` with your agent platform. Login uses GitHub's browser device flow; do not share GitHub credentials or Greplica tokens. Interactive install can accept a matching invitation and automatically map a public fork to its upstream namespace. The GitHub App therefore does not need access to each contributor fork.
+
+Organization admins and members inherit read access to every organization repository. Guests can read only explicitly granted repositories. Repository writes always require an explicit `memory_admin` grant; ordinary contributors remain read-only. Managed graph data stays on the server, while local SQLite stores only the repository binding, role cache, hook policy, and runtime session metadata.
+
+Local mode remains independent and does not require login or a server:
+
+```bash
+greplica install --mode local --platform codex --embedding local
+```
+
+---
+
 ## How It Works
 
 Your past agent sessions contain repo context: decisions people made, constraints agents found, files behind workflows, gotchas, and approaches that failed. Greplica keeps the durable parts so the next agent can start with that history.
 
-| Step               | What happens                                                                             |
-| ------------------ | ---------------------------------------------------------------------------------------- |
-| Past sessions      | Agents uncover repo-specific decisions, constraints, workflows, and file anchors.        |
-| Greplica stores it | Greplica saves the durable parts as `components`, `flows`, `claims`.                     |
-| New agent asks     | The agent runs `greplica graph context "<question>"` before broad exploration.           |
-| Agent uses it      | The agent starts with facts, target files, subsystem boundaries, prior decisions.        |
-| Memory updates     | Hooks or `greplica-update-working-memory` save useful new learnings after work sessions. |
+| Step | What happens |
+| --- | --- |
+| Past sessions | Agents uncover repo-specific decisions, constraints, workflows, and file anchors. |
+| Greplica stores it | Greplica saves the durable parts as `components`, `flows`, `claims`. |
+| New agent asks | The agent runs `greplica graph context "<question>"` before broad exploration. |
+| Agent uses it | The agent starts with facts, target files, subsystem boundaries, prior decisions. |
+| Memory updates | Hooks or `greplica-update-working-memory` save useful new learnings after work sessions. |
 
 If you have old sessions, `greplica-fast-session-bootstrap` can ingest bundled transcripts during setup. That gives Greplica useful memory on day one.
 
@@ -74,13 +115,11 @@ Greplica returns a small Markdown packet the agent can act on:
 ## Best Claims
 
 ### claim.sync_auth_mode_startup
-
 The sync service checks auth mode during startup before enabling Google Drive sync.
 
 Anchor: `src/background/sync-service.ts`
 
 ### claim.edge_identity_gap
-
 Edge does not expose the same Google identity API behavior as Chrome.
 
 Anchor: `src/platform/browser-identity.ts`
@@ -109,18 +148,26 @@ In several showcased planning cases, Greplica cut token usage by 40-50%. Stronge
 
 Current showcase rows:
 
-| Case                              |        Score |                   Tokens |               Tokens Saved | Time Saved | Why It Helped                                                                              |
-| --------------------------------- | -----------: | -----------------------: | -------------------------: | ---------: | ------------------------------------------------------------------------------------------ |
-| Gemini Voyager sync/auth hardened | `100 -> 100` |   `1,925,152 -> 480,988` | `1,444,164` fewer, `75.0%` |   `140.4s` | Memory surfaced sync auth, startup, browser identity, and settings constraints.            |
-| IPTVnator playback layout         |  `64 -> 100` |   `1,592,080 -> 881,541` |   `710,539` fewer, `44.6%` |      `65s` | Memory pointed at player, workspace, playlist, and radio layout boundaries.                |
-| Marin Harbor SWE eval support     |   `6 -> 100` | `2,992,034 -> 2,193,023` |   `799,011` fewer, `26.7%` |    `80.2s` | Memory surfaced vendored Harbor, mini-swe-agent compatibility, and validation constraints. |
+| Case | Score | Tokens | Tokens Saved | Time Saved | Why It Helped |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Gemini Voyager sync/auth hardened | `100 -> 100` | `1,925,152 -> 480,988` | `1,444,164` fewer, `75.0%` | `140.4s` | Memory surfaced sync auth, startup, browser identity, and settings constraints. |
+| IPTVnator playback layout | `64 -> 100` | `1,592,080 -> 881,541` | `710,539` fewer, `44.6%` | `65s` | Memory pointed at player, workspace, playlist, and radio layout boundaries. |
+| Marin Harbor SWE eval support | `6 -> 100` | `2,992,034 -> 2,193,023` | `799,011` fewer, `26.7%` | `80.2s` | Memory surfaced vendored Harbor, mini-swe-agent compatibility, and validation constraints. |
 
 ---
 
 ## Commands
 
 ```bash
-greplica install --platform codex|claude|copilot|cursor|opencode|openhands|factory-droid|antigravity --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]
+greplica install --mode local --platform codex|claude|copilot|cursor|opencode|openhands|factory-droid|antigravity --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]
+greplica login [--api-url https://memory.autoloops.ai]
+greplica install --mode managed [--platform codex|claude|copilot|cursor|opencode|openhands|factory-droid|antigravity] [--managed-repo <uuid>] [--hooks enabled|disabled] [--auto-memory enabled|disabled]
+greplica install --invite-link <url> --platform codex|claude|copilot|cursor|opencode|openhands|factory-droid|antigravity
+greplica repo invite-link create|list
+greplica repo invite-link revoke --link <uuid>
+greplica logout
+greplica whoami
+greplica repo status
 greplica config
 greplica doctor [--check-embeddings]
 greplica embeddings prewarm
@@ -142,7 +189,8 @@ greplica transcript bundle --platform codex|claude|copilot|opencode --file <path
 - `greplica embeddings prewarm` - downloads and initializes the local embedding model ahead of the first query when local embeddings are configured.
 - `greplica session mark-memory-current` - marks a tracked agent session as already reflected in working memory.
 - `greplica doctor` - verifies installation and diagnoses configuration failures. Not a required preflight before every command.
-- `greplica install` prepares repo state, local storage, and agent integration; normal repo commands require install first.
+- `greplica install` prepares repo state, local storage, and agent integration; normal repo commands require install first. Local and managed mode are selected independently per repository.
+- `greplica login` authenticates managed mode through GitHub and stores the Greplica JWT separately in `~/.greplica/credentials.json`.
 
 For **OpenHands**, install is repo-local: skills are written to `.agents/skills/` and the `UserPromptSubmit`/`Stop` hooks to `.openhands/hooks.json` (Claude/Codex/Copilot install to the agent's home config instead). GitHub Copilot CLI installs personal skills under `~/.copilot/skills` (or `$COPILOT_HOME/skills`) and user hooks under `~/.copilot/hooks/greplica.json`. The hooks inject `graph context` guidance and trigger background working-memory updates; OpenHands must trust the repo hooks for the background save to run.
 

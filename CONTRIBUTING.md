@@ -13,12 +13,13 @@ Thanks for your interest in contributing to Greplica! This guide will help you g
 1. **Fork** the repository on GitHub
 2. **Clone** your fork:
    ```bash
-   git clone https://github.com/Autoloops/greplica.git
+   git clone https://github.com/<your-github-username>/greplica.git
    cd greplica
+   git remote add upstream https://github.com/Autoloops/greplica.git
    ```
 3. **Install dependencies**:
    ```bash
-   npm install
+   npm ci
    ```
 4. **Verify your setup** by running the full test suite:
    ```bash
@@ -56,6 +57,7 @@ greplica/
 │   │   ├── graph-context/ # Context retrieval (BM25, embeddings, ranking)
 │   │   ├── code-anchors/  # Code anchor resolution
 │   │   └── dedupe/        # Claim deduplication
+│   ├── managed/           # Shared managed API contracts
 │   ├── session-transcript/ # Transcript parsing
 │   └── storage/sqlite/    # SQLite storage layer
 ├── scripts/               # Test and build scripts
@@ -78,7 +80,7 @@ There is no formal test framework — tests are standalone Node.js scripts using
 
 | Command                                   | What it runs                              |
 | ----------------------------------------- | ----------------------------------------- |
-| `npm test`                                | Build + all 12 check scripts sequentially |
+| `npm test`                                | Build + all check scripts sequentially    |
 | `npm run test:transcript-bundle`          | Transcript bundle test                    |
 | `npm run test:repo-context`               | Repo context detection test               |
 | `npm run test:source-memberships`         | Source memberships test                   |
