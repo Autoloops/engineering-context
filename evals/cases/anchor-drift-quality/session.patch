@@ -1,0 +1,133 @@
+diff --git a/libs/hooks/session-state.ts b/libs/hooks/session-state.ts
+index c64e0a8..b4d3f8a 100644
+--- a/libs/hooks/session-state.ts
++++ b/libs/hooks/session-state.ts
+@@ -5,7 +5,7 @@ import type { InstallPlatform } from "../install/paths.js";
+ import type { AgentSession, ClaimedMemoryUpdateAttempt, MarkMemoryCurrentInput, RecordHookInput, RecordHookResult } from "./types.js";
+ 
+ const defaultStopThreshold = 7;
+-const defaultTimeThresholdMinutes = 40;
++const defaultTimeThresholdMinutes = 30;
+ const defaultCurrentGraceMinutes = 5;
+ 
+ export class HookSessionStore {
+diff --git a/libs/install/paths.ts b/libs/install/paths.ts
+index 503708f..5d81f6c 100644
+--- a/libs/install/paths.ts
++++ b/libs/install/paths.ts
+@@ -2,10 +2,10 @@ import { existsSync } from "node:fs";
+ import { dirname, join } from "node:path";
+ import { fileURLToPath } from "node:url";
+ 
+-export type InstallPlatform = "codex" | "claude" | "opencode" | "openhands" | "factory-droid" | "copilot" | "antigravity" | "cursor";
++export type InstallPlatform = "codex" | "claude" | "opencode" | "openhands" | "factory-droid" | "copilot" | "antigravity" | "cursor" | "windsurf";
+ export type InstallEmbedding = "local" | "openai";
+ 
+-export const installPlatforms = ["codex", "claude", "copilot", "cursor", "opencode", "openhands", "factory-droid", "antigravity"] as const satisfies readonly InstallPlatform[];
++export const installPlatforms = ["codex", "claude", "copilot", "cursor", "opencode", "openhands", "factory-droid", "antigravity", "windsurf"] as const satisfies readonly InstallPlatform[];
+ export const installPlatformUsage = installPlatforms.join("|");
+ export const installCommandSuggestion = `greplica install --platform <${installPlatformUsage}> --embedding local`;
+ 
+diff --git a/libs/knowledge-graph/graph-context/bm25.ts b/libs/knowledge-graph/graph-context/bm25.ts
+index 4c8d570..7b88008 100644
+--- a/libs/knowledge-graph/graph-context/bm25.ts
++++ b/libs/knowledge-graph/graph-context/bm25.ts
+@@ -40,10 +40,9 @@ export function scoreBm25(query: string, documents: ContextDocument[], config: G
+     .filter((entry) => entry.score > 0)
+     .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+ 
+-  const maxScore = scored[0]?.score ?? 1;
+   return scored.map((entry, index) => ({
+     id: entry.id,
+-    score: entry.score / maxScore,
++    score: entry.score,
+     raw_score: entry.score,
+     rank: index + 1,
+   }));
+@@ -60,7 +59,7 @@ export function tokenize(text: string): string[] {
+     .map((token) => token.toLowerCase())
+     .filter((token) => token.length > 1);
+ 
+-  return tokens.flatMap((token) => [token, ...tokenVariants(token)]);
++  return tokens.flatMap((token) => [token, ...stemVariants(token)]);
+ }
+ 
+ function expandIdentifierTokens(token: string): string[] {
+@@ -86,7 +85,7 @@ function splitCamelCase(identifier: string): string[] {
+     .filter((piece) => piece.length > 0);
+ }
+ 
+-function tokenVariants(token: string): string[] {
++function stemVariants(token: string): string[] {
+   if (!/^[a-z]+$/.test(token)) return [];
+   const variants: string[] = [];
+   if (token.endsWith("ing") && token.length > 5) variants.push(token.slice(0, -3));
+diff --git a/libs/knowledge-graph/graph-context/config.ts b/libs/knowledge-graph/graph-context/config.ts
+index 6903dbe..55b4936 100644
+--- a/libs/knowledge-graph/graph-context/config.ts
++++ b/libs/knowledge-graph/graph-context/config.ts
+@@ -66,7 +66,7 @@ const rankingConfig: RankingConfig = {
+   selectionThreshold: 0.8,
+   packetMinimumScore: 0.15,
+   packetAdditionalDirectScoreFloor: 0.15,
+-  minimumSelectedClaims: 3,
++  minimumSelectedClaims: 5,
+   weights: {
+     semantic: 0.73,
+     bm25: 0.384,
+@@ -127,8 +127,8 @@ export const graphContextConfig: GraphContextConfig = {
+   version: "graph-context-v33-precision-anchors",
+   embedding: {
+     provider: "local",
+-    model: "all-mpnet-base-v2",
+-    dimensions: 768,
++    model: "all-MiniLM-L6-v2",
++    dimensions: 384,
+     batchSize: 16,
+   },
+   ranking: rankingConfig,
+diff --git a/libs/knowledge-graph/graph-context/rank.ts b/libs/knowledge-graph/graph-context/rank.ts
+index 5f2f6e9..e4d2720 100644
+--- a/libs/knowledge-graph/graph-context/rank.ts
++++ b/libs/knowledge-graph/graph-context/rank.ts
+@@ -17,8 +17,8 @@ export function rankContextDocuments(
+   bm25: ScoreEntry[],
+   config: GraphContextConfig,
+ ): RankedContextDocument[] {
+-  const semanticById = indexScores(semantic);
+-  const bm25ById = indexScores(bm25);
++  const semanticById = new Map(semantic.map((score) => [score.id, score]));
++  const bm25ById = new Map(bm25.map((score) => [score.id, score]));
+ 
+   const ranked = documents
+     .map((document) => {
+@@ -78,7 +78,7 @@ export function selectRankedDocuments(
+ ): RankedContextDocument[] {
+   return ranked.filter(
+     (document, index) =>
+-      index < (options.minimumSelected ?? 0) ||
++      index < (options.minimumSelected ?? 0) &&
+       document.score >= config.ranking.selectionThreshold,
+   );
+ }
+@@ -86,7 +86,3 @@ export function selectRankedDocuments(
+ export function roundScore(value: number): number {
+   return Math.round(value * 1000) / 1000;
+ }
+-
+-function indexScores(scores: ScoreEntry[]): Map<string, ScoreEntry> {
+-  return new Map(scores.map((score) => [score.id, score]));
+-}
+diff --git a/libs/knowledge-graph/validate-proposal.ts b/libs/knowledge-graph/validate-proposal.ts
+index 7cdad63..50608de 100644
+--- a/libs/knowledge-graph/validate-proposal.ts
++++ b/libs/knowledge-graph/validate-proposal.ts
+@@ -9,7 +9,7 @@ const claimIntents = new Set(["intended", "accidental", "unknown"]);
+ const sourceKinds = new Set(["session"]);
+ const edgeKinds = new Set(["about", "contains", "touches", "supersedes", "evidenced_by"]);
+ const graphObjectTypes = new Set(["component", "flow", "claim", "edge", "source"]);
+-const maxCodeAnchorsPerClaim = 3;
++const maxCodeAnchorsPerClaim = 4;
+ 
+ export interface ExistingSubjectLookup {
+   subjectExists(type: GraphObjectType, id: string): boolean;
