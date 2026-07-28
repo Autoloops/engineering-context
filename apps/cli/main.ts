@@ -12,6 +12,7 @@ import {
   type EmbeddingConfig,
   type GreplicaConfig,
 } from "../../libs/config/greplica-config.js";
+import { resolveGreplicaHome } from "../../libs/config/greplica-home.js";
 import { createGraphMemoryProvider } from "../../libs/knowledge-graph/provider-factory.js";
 import type { GraphMemoryProvider } from "../../libs/knowledge-graph/provider.js";
 import { createEmbedder } from "../../libs/knowledge-graph/graph-context/embedder.js";
@@ -672,6 +673,11 @@ function parseHookPlatform(value: string | undefined): InstallPlatform {
 }
 
 async function runDoctor(args: string[], getContext: CommandContextProvider): Promise<void> {
+  console.log("Greplica doctor");
+  const greplicaHomeInfo = resolveGreplicaHome();
+  console.log(`Greplica home: ${resolve(greplicaHomeInfo.path)}`);
+  console.log(`Greplica home source: ${greplicaHomeInfo.source}`);
+
   let context: CommandContext;
   try {
     context = getContext();
@@ -683,7 +689,6 @@ async function runDoctor(args: string[], getContext: CommandContextProvider): Pr
   }
 
   let ready = true;
-  console.log("Greplica doctor");
   console.log(`Repo: ${context.repo.repo_name}`);
   console.log(`Repo root: ${context.repo.repo_root ?? ""}`);
   console.log(`Remote: ${context.repo.remote_url ?? "none"}`);
