@@ -1,3 +1,5 @@
+import { redactSecrets } from "./redact.js";
+
 export interface SessionTranscriptProjection {
   metadata: Record<string, string>;
   messages: SessionTranscriptMessage[];
@@ -15,7 +17,7 @@ export function renderSessionTranscriptMarkdown(projection: SessionTranscriptPro
 
   sections.push("## Metadata", "");
   for (const [key, value] of Object.entries(projection.metadata)) {
-    sections.push(`- ${key}: ${value}`);
+    sections.push(`- ${key}: ${redactSecrets(value)}`);
   }
   sections.push("", "## Messages", "");
 
@@ -28,11 +30,14 @@ export function renderSessionTranscriptMarkdown(projection: SessionTranscriptPro
   return `${sections.join("\n").trimEnd()}\n`;
 }
 
+/** Strips injected instruction tags and best-effort redacts secret-shaped strings. */
 export function sanitizeTranscriptMessage(message: string): string {
-  return message
+  const withoutInjectedInstructions = message
     .replace(/<system_instruction>[\s\S]*?<\/system_instruction>\s*/g, "")
     .replace(/<developer_instruction>[\s\S]*?<\/developer_instruction>\s*/g, "")
     .trim();
+
+  return redactSecrets(withoutInjectedInstructions);
 }
 
 export function copyStringField(
