@@ -84,4 +84,40 @@ await assertCommentInsensitive(
   "<!-- threshold -->\n<div data-limit=\"8\"></div>\n",
 );
 
+for (const fileName of ["settings.ex", "settings.exs"]) {
+  await assertCommentInsensitive(
+    fileName,
+    undefined,
+    "# threshold\nlimit = 3\n",
+    "# the configured threshold\nlimit = 3\n",
+    "# threshold\nlimit = 8\n",
+  );
+}
+
+await assertCommentInsensitive(
+  "Limits.sol",
+  undefined,
+  "// threshold\ncontract Limits { uint256 constant LIMIT = 3; }\n",
+  "// the configured threshold\ncontract Limits { uint256 constant LIMIT = 3; }\n",
+  "// threshold\ncontract Limits { uint256 constant LIMIT = 8; }\n",
+);
+
+await assertCommentInsensitive(
+  "limits.zig",
+  undefined,
+  "// threshold\nconst limit: u8 = 3;\n",
+  "// the configured threshold\nconst limit: u8 = 3;\n",
+  "// threshold\nconst limit: u8 = 8;\n",
+);
+
+for (const fileName of ["limits.hh", "limits.hxx"]) {
+  await assertCommentInsensitive(
+    fileName,
+    undefined,
+    "// threshold\nconstexpr int limit = 3;\n",
+    "// the configured threshold\nconstexpr int limit = 3;\n",
+    "// threshold\nconstexpr int limit = 8;\n",
+  );
+}
+
 console.log("check-anchor-drift: ok");
