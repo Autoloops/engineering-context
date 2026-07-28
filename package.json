@@ -1,6 +1,6 @@
 {
   "name": "greplica",
-  "version": "0.1.12",
+  "version": "0.2.1",
   "description": "Long-term, searchable AGENTS.md for coding agents.",
   "license": "MIT",
   "private": false,
@@ -66,6 +66,7 @@
   ],
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
+    "@sinclair/typebox": "^0.34.38",
     "better-sqlite3": "^12.11.1",
     "chart.js": "4.4.7",
     "chartjs-plugin-datalabels": "2.2.0",
@@ -76,5 +77,10 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.15.3",
     "typescript": "^5.8.3"
+  },
+  "overrides": {
+    "adm-zip": "0.6.0",
+    "protobufjs": "^7.6.5",
+    "sharp": "^0.35.3"
   }
 }

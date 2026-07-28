@@ -7,7 +7,7 @@ export type InstallEmbedding = "local" | "openai";
 
 export const installPlatforms = ["codex", "claude", "copilot", "cursor", "opencode", "openhands", "factory-droid", "antigravity"] as const satisfies readonly InstallPlatform[];
 export const installPlatformUsage = installPlatforms.join("|");
-export const installCommandSuggestion = `greplica install --platform <${installPlatformUsage}> --embedding local`;
+export const installCommandSuggestion = `greplica install --mode local --platform <${installPlatformUsage}> --embedding local`;
 
 export const skillNames = ["greplica-bootstrap", "greplica-update-working-memory", "greplica-fast-session-bootstrap"] as const;
 export type SkillName = (typeof skillNames)[number];

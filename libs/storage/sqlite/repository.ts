@@ -7,13 +7,31 @@ import type { Component, Flow, GraphObjectType, MembershipSubjectType, Source } 
 import type { Claim } from "../../knowledge-graph/claim.js";
 import type { GraphScope, GraphScopeKind } from "../../knowledge-graph/scope.js";
 import { installCommandSuggestion } from "../../install/paths.js";
+import { canonicalRepoKey, canonicalRepoPath } from "../../install/repo-identity.js";
+import type { ClaimProvenanceRecord, GraphReadRepository } from "../../knowledge-graph/repository.js";
+
+export type RepoStatus = "active" | "inactive";
+export type RepoMode = "local" | "managed";
+export type ManagedRepoRole = "reader" | "memory_admin";
+export type ManagedAccessStatus = "active" | "pending" | "suspended" | "revoked";
 
 export interface RepoRecord {
   id: string;
+  repo_key: string;
   remote_url: string | null;
   root_path: string | null;
   repo_name: string;
   default_branch: string;
+  status: RepoStatus;
+  active_mode: RepoMode;
+  managed_repo_id: string | null;
+  managed_role: ManagedRepoRole | null;
+  managed_access_status: ManagedAccessStatus | null;
+  managed_access_refreshed_at: string | null;
+  hooks_enabled: 0 | 1;
+  auto_memory_updates: 0 | 1;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface UpsertRepoInput {
@@ -73,13 +91,9 @@ export interface InsertGraphObjectEmbeddingInput {
   embedding: Buffer;
 }
 
-export interface ClaimProvenanceRecord {
-  claim_id: string;
-  created_at: string;
-  memory_commit_id: string;
-}
+export type { ClaimProvenanceRecord } from "../../knowledge-graph/repository.js";
 
-export class SqliteRepository {
+export class SqliteRepository implements GraphReadRepository {
   constructor(private readonly db: Database.Database) {}
 
   close(): void {
@@ -90,18 +104,37 @@ export class SqliteRepository {
     const existing = this.findRepo(input);
     if (existing) return { repo: this.updateRepo(existing.repo, input, existing.matchedBy), created: false };
 
+    const timestamp = now();
     const repo: RepoRecord = {
-      id: makeId("repo", identityKey(input)),
+      id: makeId("repo", canonicalRepoKey(input)),
+      repo_key: canonicalRepoKey(input),
       remote_url: input.remote_url ?? null,
-      root_path: input.repo_root ?? null,
+      root_path: input.repo_root === undefined ? null : canonicalRepoPath(input.repo_root),
       repo_name: input.repo_name,
       default_branch: input.default_branch,
+      status: "inactive",
+      active_mode: "local",
+      managed_repo_id: null,
+      managed_role: null,
+      managed_access_status: null,
+      managed_access_refreshed_at: null,
+      hooks_enabled: 1,
+      auto_memory_updates: 1,
+      created_at: timestamp,
+      updated_at: timestamp,
     };
 
     this.db
       .prepare(
-        `INSERT INTO repos (id, remote_url, root_path, repo_name, default_branch)
-         VALUES (@id, @remote_url, @root_path, @repo_name, @default_branch)`,
+        `INSERT INTO repos (
+           id, repo_key, remote_url, root_path, repo_name, default_branch,
+           status, active_mode, managed_repo_id, managed_role, managed_access_status,
+           managed_access_refreshed_at, hooks_enabled, auto_memory_updates, created_at, updated_at
+         ) VALUES (
+           @id, @repo_key, @remote_url, @root_path, @repo_name, @default_branch,
+           @status, @active_mode, @managed_repo_id, @managed_role, @managed_access_status,
+           @managed_access_refreshed_at, @hooks_enabled, @auto_memory_updates, @created_at, @updated_at
+         )`,
       )
       .run(repo);
 
@@ -110,6 +143,10 @@ export class SqliteRepository {
 
   getRepoByRemote(remoteUrl: string): RepoRecord | undefined {
     return this.db.prepare("SELECT * FROM repos WHERE remote_url = ?").get(remoteUrl) as RepoRecord | undefined;
+  }
+
+  getRepoByKey(repoKey: string): RepoRecord | undefined {
+    return this.db.prepare("SELECT * FROM repos WHERE repo_key = ?").get(repoKey) as RepoRecord | undefined;
   }
 
   getRepoByRootPath(rootPath: string): RepoRecord | undefined {
@@ -129,6 +166,8 @@ export class SqliteRepository {
   }
 
   private findRepo(input: UpsertRepoInput): RepoMatch | undefined {
+    const byKey = this.getRepoByKey(canonicalRepoKey(input));
+    if (byKey !== undefined) return { repo: byKey, matchedBy: input.remote_url === undefined ? "root" : "remote" };
     if (input.remote_url !== undefined) {
       const byRemote = this.getRepoByRemote(input.remote_url);
       if (byRemote !== undefined) return { repo: byRemote, matchedBy: "remote" };
@@ -147,19 +186,36 @@ export class SqliteRepository {
       matchedBy === "root" || existing.root_path === null || existing.root_path === input.repo_root;
     const repo: RepoRecord = {
       id: existing.id,
+      repo_key: matchedBy === "root" && input.remote_url !== undefined
+        ? canonicalRepoKey(input)
+        : existing.repo_key,
       remote_url: input.remote_url ?? existing.remote_url,
-      root_path: shouldUpdateRootPath ? (input.repo_root ?? existing.root_path) : existing.root_path,
+      root_path: shouldUpdateRootPath
+        ? (input.repo_root === undefined ? existing.root_path : canonicalRepoPath(input.repo_root))
+        : existing.root_path,
       repo_name: input.repo_name,
       default_branch: input.default_branch,
+      status: existing.status,
+      active_mode: existing.active_mode,
+      managed_repo_id: existing.managed_repo_id,
+      managed_role: existing.managed_role,
+      managed_access_status: existing.managed_access_status,
+      managed_access_refreshed_at: existing.managed_access_refreshed_at,
+      hooks_enabled: existing.hooks_enabled,
+      auto_memory_updates: existing.auto_memory_updates,
+      created_at: existing.created_at,
+      updated_at: now(),
     };
 
     this.db
       .prepare(
         `UPDATE repos
-         SET remote_url = @remote_url,
+         SET repo_key = @repo_key,
+             remote_url = @remote_url,
              root_path = @root_path,
              repo_name = @repo_name,
-             default_branch = @default_branch
+             default_branch = @default_branch,
+             updated_at = @updated_at
          WHERE id = @id`,
       )
       .run(repo);
@@ -547,16 +603,11 @@ function makeId(prefix: string, value: string): string {
   return `${prefix}_${hash}`;
 }
 
-function identityKey(input: UpsertRepoInput): string {
-  if (input.remote_url !== undefined) return input.remote_url;
-  if (input.repo_root !== undefined) return `root:${input.repo_root}`;
-  throw new Error("Repo memory needs either a remote URL or a root path.");
-}
-
 function rootPathCandidates(rootPath: string): string[] {
-  const candidates = [rootPath];
-  if (rootPath.startsWith("/private/var/")) candidates.push(rootPath.slice("/private".length));
-  if (rootPath.startsWith("/var/")) candidates.push(`/private${rootPath}`);
+  const canonical = canonicalRepoPath(rootPath);
+  const candidates = [canonical];
+  if (canonical.startsWith("/private/var/")) candidates.push(canonical.slice("/private".length));
+  if (canonical.startsWith("/var/")) candidates.push(`/private${canonical}`);
   return candidates;
 }
 
