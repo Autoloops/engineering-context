@@ -21,6 +21,18 @@ const action = readFileSync(fileURLToPath(new URL("../action.yml", import.meta.u
 assert.match(action, /npm ci --prefix "\$GITHUB_ACTION_PATH" --include=dev/);
 assert.match(action, /node "\$GITHUB_ACTION_PATH\/dist\/apps\/cli\/main\.js" memory reconcile/);
 assert.doesNotMatch(action, /greplica@latest/);
+const reusableWorkflow = readFileSync(
+  fileURLToPath(new URL("../.github/workflows/reconcile.yml", import.meta.url)),
+  "utf8",
+);
+assert.match(reusableWorkflow, /workflow_call:/);
+assert.match(reusableWorkflow, /contents: read/);
+assert.match(reusableWorkflow, /id-token: write/);
+assert.match(
+  reusableWorkflow,
+  /uses: Autoloops\/greplica@38e477bbc10ac01ff01d497e2011cfecb5e33897/,
+);
+assert.doesNotMatch(reusableWorkflow, /uses: Autoloops\/greplica@(main|refs\/heads\/|v\d)/);
 
 const repoRoot = join(temporary, "repo");
 exec("git", ["init", "--quiet", repoRoot]);
