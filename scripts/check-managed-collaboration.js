@@ -85,8 +85,10 @@ exec("git", ["-C", repoRoot, "remote", "add", "origin", originRoot]);
 exec("git", ["-C", repoRoot, "push", "--quiet", "origin", `${defaultBranch}:refs/heads/${defaultBranch}`]);
 exec("git", ["-C", repoRoot, "push", "--quiet", "origin", `${featureSha}:refs/pull/7/head`]);
 const versionOneAnchor = { file: "example.ts", symbol: "example" };
+const componentAnchor = { file: "example.ts" };
 exec("git", ["-C", repoRoot, "checkout", "--quiet", "--detach", featureSha]);
 const versionOneBaseline = await fingerprintClaimAnchors(repoRoot, [versionOneAnchor]);
+const componentBaseline = await fingerprintClaimAnchors(repoRoot, [componentAnchor]);
 exec("git", ["-C", repoRoot, "checkout", "--quiet", "--detach", mergeSha]);
 assert.notEqual(
   (await fingerprintClaimAnchors(repoRoot, [versionOneAnchor]))["example.ts#example"],
@@ -153,13 +155,32 @@ const fetchImpl = async (input, init) => {
             session_refs: [{ id: "codex-session:context-1", agent_platform: "codex" }],
             agent_platform: "codex",
             git_head: mergeSha,
+            head_repository: "example/project",
+            head_ref: "feature",
             branch: "feature",
+            dirty: false,
             code_pr_number: 7,
             memory_pr_id: "memory-pr-1",
             commit_role: "repair",
             memory_commit_state: "active",
             promotion_id: "promotion-1",
             quarantine_reason: "superseded repair",
+            origins: [{
+              version_id: "source-version-bob",
+              scope_kind: "working",
+              author_user_id: "22222222-2222-4222-8222-222222222222",
+              author_github_login: "bob",
+              author_github_login_snapshot: "bob-old",
+              proposal_id: "origin-proposal-bob",
+              memory_commit_id: "origin-commit-bob",
+              session_refs: [{ id: "claude-session:origin-bob", agent_platform: "claude" }],
+              agent_platform: "claude",
+              git_head: featureSha,
+              head_repository: "bob/project",
+              head_ref: "feature",
+              branch: "feature",
+              dirty: true,
+            }],
           },
         },
         code_anchors: [],
@@ -204,13 +225,32 @@ const fetchImpl = async (input, init) => {
             session_refs: [{ id: "codex-session:context-1", agent_platform: "codex" }],
             agent_platform: "codex",
             git_head: mergeSha,
+            head_repository: "example/project",
+            head_ref: "feature",
             branch: "feature",
+            dirty: false,
             code_pr_number: 7,
             memory_pr_id: "memory-pr-1",
             commit_role: "repair",
             memory_commit_state: "active",
             promotion_id: "promotion-1",
             quarantine_reason: "superseded repair",
+            origins: [{
+              version_id: "source-version-bob",
+              scope_kind: "working",
+              author_user_id: "22222222-2222-4222-8222-222222222222",
+              author_github_login: "bob",
+              author_github_login_snapshot: "bob-old",
+              proposal_id: "origin-proposal-bob",
+              memory_commit_id: "origin-commit-bob",
+              session_refs: [{ id: "claude-session:origin-bob", agent_platform: "claude" }],
+              agent_platform: "claude",
+              git_head: featureSha,
+              head_repository: "bob/project",
+              head_ref: "feature",
+              branch: "feature",
+              dirty: true,
+            }],
           },
         },
         code_anchors: [],
@@ -306,9 +346,17 @@ assert.match(contextMarkdown, /formerly @alice-old/);
 assert.match(contextMarkdown, /proposal context-proposal-1/);
 assert.match(contextMarkdown, /session codex-session:context-1/);
 assert.match(contextMarkdown, /branch feature/);
+assert.match(contextMarkdown, /head repository example\/project/);
+assert.match(contextMarkdown, /head ref feature/);
+assert.match(contextMarkdown, /clean working tree/);
 assert.match(contextMarkdown, /code PR #7/);
 assert.match(contextMarkdown, /promotion promotion-1/);
 assert.match(contextMarkdown, /quarantine superseded repair/);
+assert.match(contextMarkdown, /Origins: \[working; version source-version-bob; @bob; formerly @bob-old/);
+assert.match(contextMarkdown, /origin-proposal-bob/);
+assert.match(contextMarkdown, /claude-session:origin-bob/);
+assert.match(contextMarkdown, /head repository bob\/project/);
+assert.match(contextMarkdown, /dirty working tree/);
 await client.viewData({ base: "main", memory_pr_id: "memory-pr-1" });
 request = new URL(calls.at(-1).url);
 assert.equal(request.searchParams.get("memory_pr_id"), "memory-pr-1");
@@ -385,7 +433,35 @@ legacyDb.close();
 
 const html = buildGraphViewHtmlFromData({
   ...viewData,
-  counts: { ...viewData.counts, claims: 1 },
+  counts: { ...viewData.counts, components: 1, flows: 1, claims: 1 },
+  components: [{
+    id: "component.provenance",
+    name: "Provenance component",
+    folder: "provenance",
+    anchors: ["example.ts"],
+    flowCount: 1,
+    claimCount: 1,
+    subcomponentCount: 0,
+    provenance: {
+      version_id: "component-version",
+      scope_kind: "working",
+      author_github_login: "component-author",
+      memory_commit_id: "component-commit",
+    },
+  }],
+  flows: [{
+    id: "flow.provenance",
+    name: "Provenance flow",
+    folder: "provenance",
+    touchedComponentFolders: ["provenance"],
+    claimCount: 1,
+    provenance: {
+      version_id: "flow-version",
+      scope_kind: "working",
+      author_github_login: "flow-author",
+      memory_commit_id: "flow-commit",
+    },
+  }],
   claims: [{
     id: "claim.logical",
     text: "A personal draft",
@@ -407,12 +483,28 @@ const html = buildGraphViewHtmlFromData({
       session_refs: [{ id: "codex-session:session-1", agent_platform: "codex" }],
       agent_platform: "codex",
       git_head: mergeSha,
+      head_repository: "example/project",
+      head_ref: "feature",
       branch: "feature",
+      dirty: false,
       code_pr_number: 7,
       memory_commit_state: "active",
       memory_pr_id: "memory-pr-1",
       commit_role: "repair",
       promotion_id: "promotion-1",
+      origins: [{
+        version_id: "origin-version-1",
+        scope_kind: "working",
+        author_github_login: "carol",
+        author_github_login_snapshot: "carol-old",
+        proposal_id: "origin-proposal-1",
+        memory_commit_id: "origin-commit-1",
+        session_refs: [{ id: "origin-session-1", agent_platform: "claude" }],
+        head_repository: "carol/project",
+        head_ref: "memory",
+        branch: "memory",
+        dirty: true,
+      }],
     },
   }, {
     id: "claim.logical",
@@ -441,10 +533,20 @@ const html = buildGraphViewHtmlFromData({
 });
 assert.match(html, /data-version-id="version-1"/);
 assert.match(html, /data-version-id="version-2"/);
-assert.match(html, /data-author="alice"/);
+assert.match(html, /data-author="alice,carol"/);
 assert.match(html, /provenance-badge[^>]*>repair</);
 assert.match(html, /formerly @alice-old/);
+assert.match(html, /origin @carol/);
+assert.match(html, /origin formerly @carol-old/);
+assert.match(html, /origin proposal origin-proposal-1/);
+assert.match(html, /head repository example\/project/);
+assert.match(html, /head ref feature/);
+assert.match(html, /provenance-badge[^>]*>clean</);
 assert.match(html, /code PR #7/);
+assert.match(html, /data-id="component\.provenance"[^>]*data-author="component-author"/);
+assert.match(html, /data-id="flow\.provenance"[^>]*data-author="flow-author"/);
+assert.match(html, /id="components-filter-author"/);
+assert.match(html, /id="flows-filter-author"/);
 assert.match(html, /claimTextByVersion/);
 assert.match(html, /componentIdsByClaimVersion/);
 assert.match(html, /id="claims-filter-scope"/);
@@ -454,15 +556,35 @@ assert.match(html, /id="claims-filter-proposal"/);
 assert.match(html, /id="claims-filter-memory-commit"/);
 assert.match(html, /id="claims-filter-agent"/);
 assert.match(html, /id="claims-filter-branch"/);
+assert.match(html, /id="claims-filter-head-repository"/);
+assert.match(html, /id="claims-filter-head-ref"/);
+assert.match(html, /id="claims-filter-dirty"/);
 assert.match(html, /id="claims-filter-code-pr"/);
 assert.match(html, /id="claims-filter-memory-state"/);
 assert.match(html, /id="claims-filter-memory-pr"/);
 assert.match(html, /id="claims-filter-commit-role"/);
 assert.match(html, /id="claims-filter-promotion"/);
+assert.match(html, /provenance\.origins/);
 
 const builtViewData = buildGraphViewData({
-  components: [],
-  flows: [],
+  components: [{
+    id: "component.built",
+    name: "Built component",
+    provenance: {
+      version_id: "component-version-built",
+      scope_kind: "working",
+      author_github_login: "component-builder",
+    },
+  }],
+  flows: [{
+    id: "flow.built",
+    name: "Built flow",
+    provenance: {
+      version_id: "flow-version-built",
+      scope_kind: "working",
+      author_github_login: "flow-builder",
+    },
+  }],
   claims: [{
     id: "claim.provenance",
     kind: "fact",
@@ -479,6 +601,8 @@ const builtViewData = buildGraphViewData({
   edges: [],
 }, [], []);
 assert.equal(builtViewData.claims[0].provenance.version_id, "version-built");
+assert.equal(builtViewData.components[0].provenance.version_id, "component-version-built");
+assert.equal(builtViewData.flows[0].provenance.version_id, "flow-version-built");
 
 const attestations = [];
 const rejections = [];
@@ -642,6 +766,23 @@ const server = createServer(async (incoming, response) => {
           code_anchors: [versionOneAnchor],
         },
       }],
+      component_versions: [{
+        version_id: "version-component-1",
+        baseline_fingerprints: componentBaseline,
+        component: {
+          id: "component.logical",
+          name: "Version-keyed component audit",
+          code_anchor: "example.ts",
+        },
+      }, {
+        version_id: "version-component-missing",
+        baseline_fingerprints: {},
+        component: {
+          id: "component.missing",
+          name: "Missing component anchor",
+          code_anchor: "missing-component.ts",
+        },
+      }],
     });
     return;
   }
@@ -698,6 +839,7 @@ try {
   });
   assert.match(result.stdout, /"accepted": true/);
   assert.match(result.stdout, /"reconciliation_count": 2/);
+  assert.match(result.stdout, /"audited_component_versions": 2/);
   assert.match(result.stdout, /"skipped_count": 2/);
   assert.match(result.stdout, /"reason": "git_head_not_in_pr_delta"/);
   assert.equal(candidateCalls, 5);
@@ -731,10 +873,22 @@ try {
   assert.equal(attestations[0].code_merge_is_ancestor, true,
     "the Action must attest that the code PR merge is an ancestor of the later exact checkout");
   assert.equal(attestations[0].anchor_audit.result.drifted[0].claim_id, "version-1");
+  assert.ok(attestations[0].anchor_audit.result.drifted.some((issue) =>
+    issue.claim_id === "version-component-1"
+  ), "component anchors must be audited under immutable component version IDs");
   assert.notEqual(
     attestations[0].anchor_audit.fingerprints["version-1"]["example.ts#example"],
     versionOneBaseline["example.ts#example"],
   );
+  assert.notEqual(
+    attestations[0].anchor_audit.fingerprints["version-component-1"]["example.ts"],
+    componentBaseline["example.ts"],
+  );
+  assert.ok(attestations[0].anchor_audit.result.missing_files.some((issue) =>
+    issue.claim_id === "version-component-missing" &&
+    issue.anchor.file === "missing-component.ts"
+  ), "missing component anchors must fail under immutable component version IDs");
+  assert.deepEqual(attestations[0].anchor_audit.fingerprints["version-component-missing"], {});
   assert.equal(attestations[0].repository, "example/project");
   assert.deepEqual(attestations[1].ancestry, [{
     memory_commit_id: "commit-2",

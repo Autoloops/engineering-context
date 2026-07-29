@@ -1432,10 +1432,15 @@ function positionalWithJson(args: string[], command: CommandKey): { positional: 
 function printProposalSummary(proposal: ManagedProposal): void {
   const commit = proposal.memory_commit;
   const sessions = commit.session_refs.map((session) => session.id).join(",") || "-";
+  const currentLogin = commit.author.github_login;
+  const historicalLogin = commit.author_github_login_snapshot;
+  const author = historicalLogin === undefined || historicalLogin === currentLogin
+    ? currentLogin
+    : `${currentLogin} (formerly ${historicalLogin})`;
   console.log([
     proposal.id,
     commit.state,
-    commit.author.github_login,
+    author,
     commit.git?.branch ?? "-",
     commit.code_pr?.number === undefined ? "-" : `#${commit.code_pr.number}`,
     commit.memory_pr_id ?? "-",
@@ -1462,9 +1467,22 @@ function printPromotionCleanup(memoryPr: ManagedMemoryPr): void {
   console.log(`Cleared commits: ${promotion.cleared_commit_ids.join(", ") || "none"}`);
   console.log(`Already canonical: ${promotion.already_canonical_commit_ids.join(", ") || "none"}`);
   console.log(`Quarantined: ${promotion.quarantined_commit_ids.join(", ") || "none"}`);
-  for (const [login, cleanup] of Object.entries(promotion.cleared_by_user)) {
+  for (const [stableKey, cleanup] of Object.entries(promotion.cleared_by_user)) {
+    const currentLogin = cleanup.github_login;
+    const formerLogins = (cleanup.github_login_snapshots ?? [])
+      .filter((login) => login !== currentLogin);
+    const userLabel = currentLogin ?? stableKey;
+    const identity = [
+      userLabel,
+      formerLogins.length === 0 ? undefined : `(formerly ${formerLogins.join(", ")})`,
+      cleanup.user_id === undefined || cleanup.user_id === userLabel ? undefined : `[${cleanup.user_id}]`,
+    ].filter((value): value is string => value !== undefined).join(" ");
+    const remainingCommits = cleanup.remaining_active_commits === undefined
+      ? ""
+      : `; ${cleanup.remaining_active_commits} active working commits remain`;
     console.log(
-      `${login}: cleared ${cleanup.cleared_objects} objects; ${cleanup.remaining_active_objects} active working objects remain`,
+      `${identity}: cleared ${cleanup.cleared_objects} objects` +
+      `${remainingCommits}; ${cleanup.remaining_active_objects} active working objects remain`,
     );
   }
 }

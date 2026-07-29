@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -12,6 +12,13 @@ const repo = mkdtempSync(join(tmpdir(), "greplica-anchor-drift-test-"));
 const file = join(repo, "mod.py");
 const anchor = { file: "mod.py", symbol: "foo" };
 const claim = { id: "claim.foo", kind: "fact", text: "foo returns 3", truth: "code_verified", intent: "intended", code_anchors: [anchor] };
+
+mkdirSync(join(repo, "src"));
+assert.deepEqual(
+  await fingerprintClaimAnchors(repo, [{ file: "src" }], new CodeAnchorResolver()),
+  {},
+  "directory component anchors remain valid navigation targets without crashing fingerprinting",
+);
 
 // Baseline fingerprint captured when the fact was "written".
 writeFileSync(file, "def foo():\n    # returns the threshold\n    return 3\n");

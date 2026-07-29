@@ -186,6 +186,42 @@ export const ReconciliationJobStateSchema = Type.Union([
   Type.Literal("failed"),
 ]);
 
+export const ManagedObjectOriginSchema = Type.Object({
+  version_id: Type.String(),
+  scope_kind: Type.Optional(Type.Union([
+    Type.Literal("main"),
+    Type.Literal("working"),
+    Type.Literal("memory_pr"),
+    Type.Literal("quarantine"),
+  ])),
+  scope_name: Type.Optional(Type.String()),
+  author_user_id: Type.Optional(Type.String({ format: "uuid" })),
+  author_github_login: Type.Optional(Type.String()),
+  author_github_login_snapshot: Type.Optional(Type.String()),
+  proposal_id: Type.Optional(Type.String()),
+  memory_commit_id: Type.Optional(Type.String()),
+  memory_commit_state: Type.Optional(MemoryCommitStateSchema),
+  session_refs: Type.Optional(Type.Array(Type.Object({
+    id: Type.String(),
+    agent_platform: Type.Optional(Type.String()),
+  }))),
+  agent_platform: Type.Optional(Type.String()),
+  git_head: Type.Optional(Type.String()),
+  head_repository: Type.Optional(Type.String()),
+  head_ref: Type.Optional(Type.String()),
+  branch: Type.Optional(Type.String()),
+  dirty: Type.Optional(Type.Boolean()),
+  code_pr_number: Type.Optional(Type.Integer({ minimum: 1 })),
+  memory_pr_id: Type.Optional(Type.String()),
+  commit_role: Type.Optional(Type.Union([
+    Type.Literal("direct"),
+    Type.Literal("dependency"),
+    Type.Literal("repair"),
+  ])),
+  promotion_id: Type.Optional(Type.String()),
+  quarantine_reason: Type.Optional(Type.String()),
+});
+
 export const ManagedObjectProvenanceSchema = Type.Object({
   version_id: Type.String(),
   scope_kind: Type.Union([
@@ -207,7 +243,10 @@ export const ManagedObjectProvenanceSchema = Type.Object({
   }))),
   agent_platform: Type.Optional(Type.String()),
   git_head: Type.Optional(Type.String()),
+  head_repository: Type.Optional(Type.String()),
+  head_ref: Type.Optional(Type.String()),
   branch: Type.Optional(Type.String()),
+  dirty: Type.Optional(Type.Boolean()),
   code_pr_number: Type.Optional(Type.Integer({ minimum: 1 })),
   memory_pr_id: Type.Optional(Type.String()),
   commit_role: Type.Optional(Type.Union([
@@ -217,6 +256,7 @@ export const ManagedObjectProvenanceSchema = Type.Object({
   ])),
   promotion_id: Type.Optional(Type.String()),
   quarantine_reason: Type.Optional(Type.String()),
+  origins: Type.Optional(Type.Array(ManagedObjectOriginSchema)),
 });
 
 export const CodeAnchorSchema = Type.Object({
@@ -496,6 +536,7 @@ export const GraphViewDataSchema = Type.Object({
     flowCount: Type.Integer({ minimum: 0 }),
     claimCount: Type.Integer({ minimum: 0 }),
     subcomponentCount: Type.Integer({ minimum: 0 }),
+    provenance: Type.Optional(ManagedObjectProvenanceSchema),
   })),
   flows: Type.Array(Type.Object({
     id: Type.String(),
@@ -503,6 +544,7 @@ export const GraphViewDataSchema = Type.Object({
     folder: Type.String(),
     touchedComponentFolders: Type.Array(Type.String()),
     claimCount: Type.Integer({ minimum: 0 }),
+    provenance: Type.Optional(ManagedObjectProvenanceSchema),
   })),
   claims: Type.Array(GraphViewClaimRowSchema),
   supersededClaims: Type.Array(GraphViewClaimRowSchema),
@@ -555,6 +597,7 @@ export const MemoryCommitRecordSchema = Type.Object({
   scope_name: Type.String(),
   state: MemoryCommitStateSchema,
   author: UserSchema,
+  author_github_login_snapshot: Type.Optional(Type.String()),
   session_refs: Type.Array(Type.Object({
     id: Type.String(),
     agent_platform: Type.Optional(Type.String()),
@@ -586,6 +629,9 @@ export const PromotionCleanupSchema = Type.Object({
   already_canonical_commit_ids: Type.Array(Type.String()),
   quarantined_commit_ids: Type.Array(Type.String()),
   cleared_by_user: Type.Record(Type.String(), Type.Object({
+    user_id: Type.Optional(Type.String({ format: "uuid" })),
+    github_login: Type.Optional(Type.String()),
+    github_login_snapshots: Type.Optional(Type.Array(Type.String(), { uniqueItems: true })),
     cleared_objects: Type.Integer({ minimum: 0 }),
     remaining_active_commits: Type.Optional(Type.Integer({ minimum: 0 })),
     remaining_active_objects: Type.Integer({ minimum: 0 }),
@@ -653,6 +699,11 @@ export const ReconciliationCandidateSchema = Type.Object({
     claim: ClaimSchema,
     baseline_fingerprints: Type.Optional(Type.Record(Type.String(), Type.String())),
   })),
+  component_versions: Type.Optional(Type.Array(Type.Object({
+    version_id: Type.String(),
+    component: ComponentSchema,
+    baseline_fingerprints: Type.Optional(Type.Record(Type.String(), Type.String())),
+  }))),
 });
 
 export const ReconciliationProofSchema = Type.Object({
@@ -839,6 +890,7 @@ export type ManagedGraphContext = Static<typeof GraphContextSchema>;
 export type ManagedGraphViewData = Static<typeof GraphViewDataSchema>;
 export type ManagedProposalReview = Static<typeof ProposalReviewSchema>;
 export type ManagedGraphView = Static<typeof ManagedGraphViewSchema>;
+export type ManagedObjectOrigin = Static<typeof ManagedObjectOriginSchema>;
 export type ManagedObjectProvenance = Static<typeof ManagedObjectProvenanceSchema>;
 export type ManagedMemoryCommit = Static<typeof MemoryCommitRecordSchema>;
 export type ManagedProposal = Static<typeof ProposalRecordSchema>;

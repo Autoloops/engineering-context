@@ -42,6 +42,7 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
     response: ManagedReconciliationAttestationResult;
     memory_pr_id: string;
     audited_claim_versions: number;
+    audited_component_versions: number;
     memory_commit_ids: string[];
   }> = [];
   const skipped: Array<{
@@ -198,14 +199,27 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
       continue;
     }
     const auditClaims = candidate.claim_versions.map(({ version_id, claim }) => ({ ...claim, id: version_id }));
+    const componentAuditClaims = (candidate.component_versions ?? []).flatMap(({ version_id, component }) => {
+      const anchors = componentCodeAnchors(component.code_anchor);
+      if (anchors.length === 0) return [];
+      return [{
+        id: version_id,
+        kind: "fact" as const,
+        text: `Component anchor for ${component.name}`,
+        truth: "code_verified" as const,
+        intent: "intended" as const,
+        code_anchors: anchors,
+      }];
+    });
+    const auditedObjects = [...auditClaims, ...componentAuditClaims];
     const baselineFingerprints = new Map(
-      candidate.claim_versions
+      [...candidate.claim_versions, ...(candidate.component_versions ?? [])]
         .filter(({ baseline_fingerprints }) => baseline_fingerprints !== undefined)
         .map(({ version_id, baseline_fingerprints }) => [version_id, baseline_fingerprints!]),
     );
     const result = await auditClaimCodeAnchors(
       repoRoot,
-      auditClaims,
+      auditedObjects,
       undefined,
       baselineFingerprints,
     );
@@ -214,6 +228,9 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
       if (claim.code_anchors === undefined || claim.code_anchors.length === 0) continue;
       const values = await fingerprintClaimAnchors(repoRoot, claim.code_anchors);
       if (Object.keys(values).length > 0) fingerprints[claim.id] = values;
+    }
+    for (const component of componentAuditClaims) {
+      fingerprints[component.id] = await fingerprintClaimAnchors(repoRoot, component.code_anchors);
     }
     const observedDefaultHeadSha = assertCurrentRemoteDefaultHead(
       repoRoot,
@@ -248,6 +265,7 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
       response,
       memory_pr_id: response.memory_pr_id ?? candidate.memory_pr_id,
       audited_claim_versions: candidate.claim_versions.length,
+      audited_component_versions: candidate.component_versions?.length ?? 0,
       memory_commit_ids: candidate.memory_commit_ids,
     });
     excludedMemoryPrIds.push(candidate.memory_pr_id);
@@ -297,6 +315,21 @@ function verifyCandidate(candidate: ManagedReconciliationCandidate, mergeSha: st
   if (JSON.stringify(candidateIds) !== JSON.stringify(commitIds)) {
     throw new Error("Managed reconciliation candidate commit metadata does not match its selected commit IDs.");
   }
+  const objectVersionIds = [
+    ...candidate.claim_versions.map((version) => version.version_id),
+    ...(candidate.component_versions ?? []).map((version) => version.version_id),
+  ];
+  if (new Set(objectVersionIds).size !== objectVersionIds.length) {
+    throw new Error("Managed reconciliation candidate has duplicate graph object version IDs.");
+  }
+  for (const version of candidate.component_versions ?? []) {
+    if (
+      version.component.code_anchor !== undefined &&
+      typeof version.component.code_anchor !== "string"
+    ) {
+      throw new Error(`Component version ${version.version_id} has an invalid code anchor.`);
+    }
+  }
   for (const commit of candidate.commits) {
     if (!/^[0-9a-f]{40}$/i.test(commit.git_head)) {
       throw new Error(`Memory commit ${commit.memory_commit_id} has an invalid Git head.`);
@@ -309,6 +342,15 @@ function verifyCandidate(candidate: ManagedReconciliationCandidate, mergeSha: st
       throw new Error(`Memory commit ${commit.memory_commit_id} has an invalid verified PR base SHA.`);
     }
   }
+}
+
+function componentCodeAnchors(codeAnchor: string | undefined): Array<{ file: string }> {
+  if (codeAnchor === undefined) return [];
+  return codeAnchor
+    .split(",")
+    .map((file) => file.trim())
+    .filter((file) => file.length > 0)
+    .map((file) => ({ file }));
 }
 
 function isAncestor(repoRoot: string, gitHead: string, mergeSha: string): boolean {

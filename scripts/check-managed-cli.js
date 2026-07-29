@@ -169,6 +169,30 @@ const server = createServer(async (request, response) => {
     });
     return;
   }
+  if (request.method === "GET" && request.url === `/v1/repos/${managedRepoId}/proposals`) {
+    send(200, [{
+      id: "proposal-renamed-author",
+      memory_commit: {
+        id: "memory-commit-renamed-author",
+        proposal_id: "proposal-renamed-author",
+        scope_id: "working-user-1",
+        scope_name: "working/contributor-1",
+        state: "active",
+        author: {
+          id: "10000000-0000-4000-8000-000000000000",
+          github_user_id: "1",
+          github_login: "contributor-current",
+          created_at: now,
+        },
+        author_github_login_snapshot: "contributor-old",
+        session_refs: [],
+        created_at: now,
+      },
+      proposal: { title: "Rename-safe provenance" },
+      created_at: now,
+    }]);
+    return;
+  }
   if (request.method === "GET" && request.url === `/v1/repos/${managedRepoId}/memory-prs`) {
     send(200, [{
       id: "direct-default-memory-pr",
@@ -180,6 +204,41 @@ const server = createServer(async (request, response) => {
       created_at: now,
       updated_at: now,
     }]);
+    return;
+  }
+  if (
+    request.method === "GET" &&
+    request.url === `/v1/repos/${managedRepoId}/memory-prs/cleanup-memory-pr`
+  ) {
+    send(200, {
+      id: "cleanup-memory-pr",
+      state: "merged",
+      direct_commit_ids: ["cleared-commit"],
+      dependency_commit_ids: [],
+      repair_commit_ids: [],
+      contributor_logins: ["contributor-current"],
+      promotion: {
+        id: "promotion-cleanup",
+        status: "merged",
+        new_main_head: "main-head",
+        cleared_commit_ids: ["cleared-commit"],
+        already_canonical_commit_ids: [],
+        quarantined_commit_ids: [],
+        cleared_by_user: {
+          "10000000-0000-4000-8000-000000000000": {
+            user_id: "10000000-0000-4000-8000-000000000000",
+            github_login: "contributor-current",
+            github_login_snapshots: ["contributor-old", "contributor-current"],
+            cleared_objects: 3,
+            remaining_active_commits: 2,
+            remaining_active_objects: 4,
+          },
+        },
+        promoted_at: now,
+      },
+      created_at: now,
+      updated_at: now,
+    });
     return;
   }
   if (request.method === "POST" && request.url === `/v1/repos/${managedRepoId}/import`) {
@@ -306,6 +365,14 @@ try {
   assert.match(memoryStatus.stdout, /Action workflow ref: Autoloops\/greplica\/\.github\/workflows\/reconcile\.yml@/);
   assert.match(memoryStatus.stdout, new RegExp(`Action workflow SHA: ${"a".repeat(40)}`));
   assert.match(memoryStatus.stdout, /Repair service: degraded \(repair proxy is not configured\)/);
+  const proposalList = await run(
+    process.execPath,
+    [cliPath, "proposal", "list"],
+    managedRepo,
+    env,
+  );
+  assert.match(proposalList.stdout, /contributor-current \(formerly contributor-old\)/,
+    "proposal summaries must preserve both current and historical GitHub logins");
   const directDefaultMemoryPr = await run(
     process.execPath,
     [cliPath, "memory", "pr", "list"],
@@ -313,6 +380,17 @@ try {
     env,
   );
   assert.match(directDefaultMemoryPr.stdout, /direct-default-memory-pr\s+reconciling\s+direct-default/);
+  const cleanupMemoryPr = await run(
+    process.execPath,
+    [cliPath, "memory", "pr", "show", "cleanup-memory-pr"],
+    managedRepo,
+    env,
+  );
+  assert.match(
+    cleanupMemoryPr.stdout,
+    /contributor-current \(formerly contributor-old\) \[10000000-0000-4000-8000-000000000000\]: cleared 3 objects; 2 active working commits remain; 4 active working objects remain/,
+    "cleanup output must use the friendly current login while retaining stable user identity and rename history",
+  );
 
   const requestsBeforeHook = requestCount;
   const hook = await run(process.execPath, [cliPath, "hook", "ingest", "--platform", "codex"], managedRepo, env, JSON.stringify({

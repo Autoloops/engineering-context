@@ -87,6 +87,8 @@ greplica graph context "How does authentication work?" \
   --with-working bob
 ```
 
+Context and generated graph views retain stable user IDs, current and historical GitHub logins, the full Git head/ref/dirty envelope, and every source origin when identical contributor drafts coalesce into one canonical object. Components, flows, and claims expose the same provenance badges and filters.
+
 Managed GitHub repositories reconcile Memory PRs against exact default-branch code through the official reusable workflow. Pin the reusable workflow to a full commit SHA; do not use a branch or movable tag:
 
 ```yaml
@@ -114,7 +116,7 @@ jobs:
       merge-sha: ${{ github.sha }}
 ```
 
-The push trigger reconciles immediately after default-branch updates; the hourly schedule retries unmatched and stalled work without a human memory-admin step. The workflow checks out `merge-sha` with full history, installs an immutable Greplica Action revision, proves that each code PR's recorded merge commit is contained in that exact checkout, audits every eligible Memory PR and its version-keyed anchors (including code drift from stored baselines), and attests through GitHub OIDC. It does not use a repository or model secret. Managed Greplica must allowlist both signed reusable-workflow claims for the pinned revision:
+The push trigger reconciles immediately after default-branch updates; the hourly schedule retries unmatched and stalled work without a human memory-admin step. The workflow checks out `merge-sha` with full history, installs an immutable Greplica Action revision, proves that each code PR's recorded merge commit is contained in that exact checkout, audits every eligible Memory PR's version-keyed claim and component anchors (including code drift from stored baselines), and attests through GitHub OIDC. It does not use a repository or model secret. Managed Greplica must allowlist both signed reusable-workflow claims for the pinned revision:
 
 - `job_workflow_ref=Autoloops/greplica/.github/workflows/reconcile.yml@<full-40-character-commit-sha>`
 - `job_workflow_sha=<the-same-full-40-character-commit-sha>`

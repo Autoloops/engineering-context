@@ -6,7 +6,11 @@ import type { Edge } from "../edge.js";
 import type { GraphReadResult } from "../service.js";
 import type { Component, Flow, Source } from "../schema.js";
 import type { ClaimProvenanceRecord } from "../repository.js";
-import type { ManagedGraphView, ManagedObjectProvenance } from "../../managed/protocol.js";
+import type {
+  ManagedGraphView,
+  ManagedObjectOrigin,
+  ManagedObjectProvenance,
+} from "../../managed/protocol.js";
 
 const require = createRequire(import.meta.url);
 
@@ -35,6 +39,7 @@ export interface GraphViewComponentRow {
   flowCount: number;
   claimCount: number;
   subcomponentCount: number;
+  provenance?: ManagedObjectProvenance;
 }
 
 export interface GraphViewFlowRow {
@@ -43,6 +48,7 @@ export interface GraphViewFlowRow {
   folder: string;
   touchedComponentFolders: string[];
   claimCount: number;
+  provenance?: ManagedObjectProvenance;
 }
 
 export interface GraphViewClaimRow {
@@ -91,6 +97,23 @@ export interface BuildGraphViewOptions {
 }
 
 const CLAIM_KIND_ORDER = ["fact", "decision", "requirement", "task", "risk", "question"];
+const PROVENANCE_FILTERS = [
+  { key: "scope", slug: "scope", label: "Scope", all: "All scopes" },
+  { key: "author", slug: "author", label: "Author", all: "All authors" },
+  { key: "authorSnapshot", slug: "author-snapshot", label: "Historical author", all: "All historical authors" },
+  { key: "proposalId", slug: "proposal", label: "Proposal", all: "All proposals" },
+  { key: "memoryCommitId", slug: "memory-commit", label: "Memory commit", all: "All commits" },
+  { key: "agent", slug: "agent", label: "Agent", all: "All agents" },
+  { key: "branch", slug: "branch", label: "Branch", all: "All branches" },
+  { key: "headRepository", slug: "head-repository", label: "Head repository", all: "All head repositories" },
+  { key: "headRef", slug: "head-ref", label: "Head ref", all: "All head refs" },
+  { key: "dirty", slug: "dirty", label: "Working tree", all: "All working tree states" },
+  { key: "codePr", slug: "code-pr", label: "Code PR", all: "All code PRs" },
+  { key: "memoryState", slug: "memory-state", label: "Memory state", all: "All states" },
+  { key: "memoryPrId", slug: "memory-pr", label: "Memory PR", all: "All Memory PRs" },
+  { key: "commitRole", slug: "commit-role", label: "Commit role", all: "All roles" },
+  { key: "promotion", slug: "promotion", label: "Promotion", all: "All promotions" },
+] as const;
 
 const CLAIM_KIND_COLORS: Record<string, string> = {
   fact: "#4e79a7",
@@ -117,6 +140,7 @@ export function buildGraphViewData(
     flowCount: countFlowsForComponent(component.id, graph.edges),
     claimCount: countClaimsForComponent(component.id, graph.edges),
     subcomponentCount: countSubcomponents(component.id, graph.edges),
+    provenance: managedProvenance(component),
   }));
 
   const topLevelFlows = selectTopLevelFlows(graph.flows, graph.edges);
@@ -130,6 +154,7 @@ export function buildGraphViewData(
         .map((componentId) => segmentForComponentId(componentId))
         .sort((left, right) => left.localeCompare(right)),
       claimCount: countClaimsForFlow(flow.id, graph.edges),
+      provenance: managedProvenance(flow),
     };
   });
 
@@ -398,36 +423,127 @@ function kindColor(kind: string): string {
   return CLAIM_KIND_COLORS[kind] ?? "#cdd2da";
 }
 
+type ProvenanceEntry = ManagedObjectProvenance | ManagedObjectOrigin;
+
+function provenanceEntries(provenance: ManagedObjectProvenance | undefined): ProvenanceEntry[] {
+  return provenance === undefined ? [] : [provenance, ...(provenance.origins ?? [])];
+}
+
+function provenanceEntryValue(entry: ProvenanceEntry, key: string): string | undefined {
+  if (key === "scope") return entry.scope_kind;
+  if (key === "author") return entry.author_github_login ?? entry.author_github_login_snapshot;
+  if (key === "authorSnapshot") return entry.author_github_login_snapshot;
+  if (key === "proposalId") return entry.proposal_id;
+  if (key === "memoryCommitId") return entry.memory_commit_id;
+  if (key === "agent") return entry.agent_platform;
+  if (key === "branch") return entry.branch;
+  if (key === "headRepository") return entry.head_repository;
+  if (key === "headRef") return entry.head_ref;
+  if (key === "dirty") return entry.dirty === undefined ? undefined : entry.dirty ? "dirty" : "clean";
+  if (key === "codePr") return entry.code_pr_number?.toString();
+  if (key === "memoryState") return entry.memory_commit_state;
+  if (key === "memoryPrId") return entry.memory_pr_id;
+  if (key === "commitRole") return entry.commit_role;
+  if (key === "promotion") return entry.promotion_id;
+  return undefined;
+}
+
+function provenanceFieldValues(
+  provenance: ManagedObjectProvenance | undefined,
+  key: string,
+): string[] {
+  return [...new Set(provenanceEntries(provenance)
+    .map((entry) => provenanceEntryValue(entry, key))
+    .filter((value): value is string => value !== undefined && value.length > 0))];
+}
+
+function provenanceDataAttributes(
+  provenance: ManagedObjectProvenance | undefined,
+  fallbackMemoryCommitId?: string | null,
+): string {
+  const fields = [
+    ["scope", "scope"],
+    ["author", "author"],
+    ["author-snapshot", "authorSnapshot"],
+    ["proposal-id", "proposalId"],
+    ["memory-commit-id", "memoryCommitId"],
+    ["agent", "agent"],
+    ["branch", "branch"],
+    ["head-repository", "headRepository"],
+    ["head-ref", "headRef"],
+    ["dirty", "dirty"],
+    ["code-pr", "codePr"],
+    ["memory-state", "memoryState"],
+    ["memory-pr-id", "memoryPrId"],
+    ["commit-role", "commitRole"],
+    ["promotion", "promotion"],
+  ] as const;
+  return fields
+    .map(([attribute, key]) => {
+      const values = provenanceFieldValues(provenance, key);
+      if (key === "memoryCommitId" && values.length === 0 && fallbackMemoryCommitId) {
+        values.push(fallbackMemoryCommitId);
+      }
+      return ` data-${attribute}="${escapeHtml(values.join(","))}"`;
+    })
+    .join("");
+}
+
+function provenanceBadgeValues(entry: ProvenanceEntry, origin: boolean): string[] {
+  const currentLogin = entry.author_github_login;
+  const historicalLogin = entry.author_github_login_snapshot;
+  const prefix = origin ? "origin " : "";
+  return [
+    entry.scope_kind === undefined ? undefined : `${prefix}${entry.scope_kind}`,
+    currentLogin === undefined ? undefined : `${prefix}@${currentLogin}`,
+    historicalLogin === undefined || historicalLogin === currentLogin
+      ? undefined
+      : `${prefix}formerly @${historicalLogin}`,
+    entry.proposal_id === undefined ? undefined : `${prefix}proposal ${entry.proposal_id}`,
+    entry.memory_commit_id === undefined ? undefined : `${prefix}commit ${entry.memory_commit_id}`,
+    ...(entry.session_refs ?? []).map((session) => `${prefix}session ${session.id}`),
+    entry.agent_platform === undefined ? undefined : `${prefix}agent ${entry.agent_platform}`,
+    entry.git_head === undefined ? undefined : `${prefix}git ${entry.git_head}`,
+    entry.head_repository === undefined ? undefined : `${prefix}head repository ${entry.head_repository}`,
+    entry.head_ref === undefined ? undefined : `${prefix}head ref ${entry.head_ref}`,
+    entry.branch === undefined ? undefined : `${prefix}branch ${entry.branch}`,
+    entry.dirty === undefined ? undefined : `${prefix}${entry.dirty ? "dirty" : "clean"}`,
+    entry.code_pr_number === undefined ? undefined : `${prefix}code PR #${entry.code_pr_number}`,
+    entry.commit_role === undefined ? undefined : `${prefix}${entry.commit_role}`,
+    entry.memory_commit_state === undefined ? undefined : `${prefix}${entry.memory_commit_state}`,
+    entry.memory_pr_id === undefined ? undefined : `${prefix}Memory PR ${entry.memory_pr_id}`,
+    entry.promotion_id === undefined ? undefined : `${prefix}promotion ${entry.promotion_id}`,
+    entry.quarantine_reason === undefined ? undefined : `${prefix}quarantine: ${entry.quarantine_reason}`,
+  ].filter((value): value is string => value !== undefined);
+}
+
+function renderProvenanceBadges(provenance: ManagedObjectProvenance | undefined): string {
+  if (provenance === undefined) return "";
+  const values = [
+    ...provenanceBadgeValues(provenance, false),
+    ...(provenance.origins ?? []).flatMap((origin) => provenanceBadgeValues(origin, true)),
+  ];
+  return `<div class="provenance-badges">${values
+    .map((value) => `<span class="provenance-badge">${escapeHtml(value)}</span>`)
+    .join("")}</div>`;
+}
+
+function renderProvenanceFilters(prefix: "components" | "flows" | "claims"): string {
+  return `<div class="provenance-filters" aria-label="${prefix} provenance filters">${PROVENANCE_FILTERS
+    .map((filter) =>
+      `<label>${filter.label}<select id="${prefix}-filter-${filter.slug}" class="provenance-filter"><option value="">${filter.all}</option></select></label>`
+    )
+    .join("")}</div>`;
+}
+
 function renderClaimRow(claim: GraphViewClaimRow): string {
   const badge = `<span class="kind-badge" style="background:${kindColor(claim.kind)}">${escapeHtml(claim.kind)}</span>`;
   const provenance = claim.provenance;
-  const currentLogin = provenance?.author_github_login;
-  const historicalLogin = provenance?.author_github_login_snapshot;
-  const provenanceBadges = provenance === undefined
-    ? ""
-    : `<div class="provenance-badges">${[
-        provenance.scope_kind,
-        currentLogin === undefined ? undefined : `@${currentLogin}`,
-        historicalLogin === undefined || historicalLogin === currentLogin ? undefined : `formerly @${historicalLogin}`,
-        provenance.proposal_id === undefined ? undefined : `proposal ${provenance.proposal_id}`,
-        provenance.memory_commit_id === undefined ? undefined : `commit ${provenance.memory_commit_id}`,
-        ...(provenance.session_refs ?? []).map((session) => `session ${session.id}`),
-        provenance.agent_platform === undefined ? undefined : `agent ${provenance.agent_platform}`,
-        provenance.git_head === undefined ? undefined : `git ${provenance.git_head}`,
-        provenance.branch === undefined ? undefined : `branch ${provenance.branch}`,
-        provenance.code_pr_number === undefined ? undefined : `code PR #${provenance.code_pr_number}`,
-        provenance.commit_role,
-        provenance.memory_commit_state,
-        provenance.memory_pr_id === undefined ? undefined : `Memory PR ${provenance.memory_pr_id}`,
-        provenance.promotion_id === undefined ? undefined : `promotion ${provenance.promotion_id}`,
-        provenance.quarantine_reason === undefined ? undefined : `quarantine: ${provenance.quarantine_reason}`,
-      ].filter((value): value is string => value !== undefined)
-        .map((value) => `<span class="provenance-badge">${escapeHtml(value)}</span>`)
-        .join("")}</div>`;
+  const provenanceBadges = renderProvenanceBadges(provenance);
   const version = provenance === undefined
     ? ""
     : ` <span class="claim-version">version <code>${escapeHtml(provenance.version_id)}</code></span>`;
-  return `          <tr data-id="${escapeHtml(claim.id)}" data-version-id="${escapeHtml(provenance?.version_id ?? "")}" data-scope="${escapeHtml(provenance?.scope_kind ?? "")}" data-author="${escapeHtml(currentLogin ?? historicalLogin ?? "")}" data-author-snapshot="${escapeHtml(historicalLogin ?? "")}" data-proposal-id="${escapeHtml(provenance?.proposal_id ?? "")}" data-agent="${escapeHtml(provenance?.agent_platform ?? "")}" data-branch="${escapeHtml(provenance?.branch ?? "")}" data-code-pr="${escapeHtml(provenance?.code_pr_number?.toString() ?? "")}" data-promotion="${escapeHtml(provenance?.promotion_id ?? "")}" data-memory-state="${escapeHtml(provenance?.memory_commit_state ?? "")}" data-commit-role="${escapeHtml(provenance?.commit_role ?? "")}" data-memory-pr-id="${escapeHtml(provenance?.memory_pr_id ?? "")}" data-kind="${escapeHtml(claim.kind)}" data-source="${escapeHtml(claim.source)}" data-freshness="${escapeHtml(claim.freshness)}" data-memory-commit-id="${escapeHtml(provenance?.memory_commit_id ?? claim.memoryCommitId ?? "")}"><td class="claim-text">${escapeHtml(claim.text)}<div class="claim-id"><code>${escapeHtml(claim.id)}</code>${version}</div>${provenanceBadges}</td><td class="session">${escapeHtml(claim.session)}</td><td class="kind-cell">${badge}</td><td class="created">${escapeHtml(formatDateTime(claim.createdAt))}</td></tr>`;
+  return `          <tr data-id="${escapeHtml(claim.id)}" data-version-id="${escapeHtml(provenance?.version_id ?? "")}"${provenanceDataAttributes(provenance, claim.memoryCommitId)} data-kind="${escapeHtml(claim.kind)}" data-source="${escapeHtml(claim.source)}" data-freshness="${escapeHtml(claim.freshness)}"><td class="claim-text">${escapeHtml(claim.text)}<div class="claim-id"><code>${escapeHtml(claim.id)}</code>${version}</div>${provenanceBadges}</td><td class="session">${escapeHtml(claim.session)}</td><td class="kind-cell">${badge}</td><td class="created">${escapeHtml(formatDateTime(claim.createdAt))}</td></tr>`;
 }
 
 function renderHtml(data: GraphViewData, title: string): string {
@@ -441,7 +557,7 @@ function renderHtml(data: GraphViewData, title: string): string {
         component.claimCount > 0
           ? `<a class="component-claims-link" href="#claims?component=${encodeURIComponent(component.id)}">${component.claimCount}</a>`
           : `${component.claimCount}`;
-      return `          <tr data-id="${escapeHtml(component.id)}"><td>${escapeHtml(component.folder)}</td><td class="component-description">${escapeHtml(component.name)}</td><td class="anchors">${anchors}</td><td class="count">${component.flowCount}</td><td class="count">${claimsCell}</td><td class="count">${component.subcomponentCount}</td></tr>`;
+      return `          <tr data-id="${escapeHtml(component.id)}" data-version-id="${escapeHtml(component.provenance?.version_id ?? "")}"${provenanceDataAttributes(component.provenance)}><td>${escapeHtml(component.folder)}</td><td class="component-description">${escapeHtml(component.name)}${renderProvenanceBadges(component.provenance)}</td><td class="anchors">${anchors}</td><td class="count">${component.flowCount}</td><td class="count">${claimsCell}</td><td class="count">${component.subcomponentCount}</td></tr>`;
     })
     .join("\n");
 
@@ -455,7 +571,7 @@ function renderHtml(data: GraphViewData, title: string): string {
         flow.claimCount > 0
           ? `<a class="flow-claims-link" href="#claims?flow=${encodeURIComponent(flow.id)}">${flow.claimCount}</a>`
           : `${flow.claimCount}`;
-      return `          <tr data-id="${escapeHtml(flow.id)}"><td>${escapeHtml(flow.folder)}</td><td class="flow-description">${escapeHtml(flow.name)}</td><td class="anchors">${touchedComponents}</td><td class="count">${claimsCell}</td></tr>`;
+      return `          <tr data-id="${escapeHtml(flow.id)}" data-version-id="${escapeHtml(flow.provenance?.version_id ?? "")}"${provenanceDataAttributes(flow.provenance)}><td>${escapeHtml(flow.folder)}</td><td class="flow-description">${escapeHtml(flow.name)}${renderProvenanceBadges(flow.provenance)}</td><td class="anchors">${touchedComponents}</td><td class="count">${claimsCell}</td></tr>`;
     })
     .join("\n");
 
@@ -897,6 +1013,7 @@ function renderHtml(data: GraphViewData, title: string): string {
       <section id="view-components" class="view" data-view="components">
         <h2>Components</h2>
         <p class="meta">${data.components.length} top-level components · click to see claims</p>
+        ${renderProvenanceFilters("components")}
         <table>
           <thead>
             <tr><th>Name</th><th>Description</th><th>Code Anchors</th><th class="count">Flows</th><th class="count">Claims</th><th class="count">Subcomponents</th></tr>
@@ -909,6 +1026,7 @@ ${componentRows}
       <section id="view-flows" class="view" data-view="flows">
         <h2>Flows</h2>
         <p class="meta">${data.flows.length} top-level flows · click to see claims</p>
+        ${renderProvenanceFilters("flows")}
         <table class="flows-table">
           <thead>
             <tr><th>Name</th><th>Description</th><th>Touched Components</th><th class="count">Claims</th></tr>
@@ -922,20 +1040,7 @@ ${flowRows}
         <h2>Claims</h2>
         <div class="claims-search-wrap">
           <input type="search" id="claims-search" class="claims-search" placeholder="Search by keyword" autocomplete="off" spellcheck="false">
-          <div class="provenance-filters" aria-label="Provenance filters">
-            <label>Scope<select id="claims-filter-scope" class="provenance-filter"><option value="">All scopes</option></select></label>
-            <label>Author<select id="claims-filter-author" class="provenance-filter"><option value="">All authors</option></select></label>
-            <label>Historical author<select id="claims-filter-author-snapshot" class="provenance-filter"><option value="">All historical authors</option></select></label>
-            <label>Proposal<select id="claims-filter-proposal" class="provenance-filter"><option value="">All proposals</option></select></label>
-            <label>Memory commit<select id="claims-filter-memory-commit" class="provenance-filter"><option value="">All commits</option></select></label>
-            <label>Agent<select id="claims-filter-agent" class="provenance-filter"><option value="">All agents</option></select></label>
-            <label>Branch<select id="claims-filter-branch" class="provenance-filter"><option value="">All branches</option></select></label>
-            <label>Code PR<select id="claims-filter-code-pr" class="provenance-filter"><option value="">All code PRs</option></select></label>
-            <label>Memory state<select id="claims-filter-memory-state" class="provenance-filter"><option value="">All states</option></select></label>
-            <label>Memory PR<select id="claims-filter-memory-pr" class="provenance-filter"><option value="">All Memory PRs</option></select></label>
-            <label>Commit role<select id="claims-filter-commit-role" class="provenance-filter"><option value="">All roles</option></select></label>
-            <label>Promotion<select id="claims-filter-promotion" class="provenance-filter"><option value="">All promotions</option></select></label>
-          </div>
+          ${renderProvenanceFilters("claims")}
         </div>
         <p class="meta claims-meta" id="claims-meta">${escapeHtml(defaultClaimsMeta)}</p>
         <table class="claims-table" id="claims-table">
@@ -994,22 +1099,20 @@ ${timelineEvents}
     const links = document.querySelectorAll("nav a[data-view]");
     const views = document.querySelectorAll(".view[data-view]");
     const claimRows = document.querySelectorAll("#claims-table tbody tr[data-id]");
+    const componentRows = document.querySelectorAll("#view-components tbody tr[data-id]");
+    const flowRows = document.querySelectorAll("#view-flows tbody tr[data-id]");
     const claimsMeta = document.getElementById("claims-meta");
     const claimsSearchInput = document.getElementById("claims-search");
-    const provenanceFilterSelects = {
-      scope: document.getElementById("claims-filter-scope"),
-      author: document.getElementById("claims-filter-author"),
-      authorSnapshot: document.getElementById("claims-filter-author-snapshot"),
-      proposalId: document.getElementById("claims-filter-proposal"),
-      memoryCommitId: document.getElementById("claims-filter-memory-commit"),
-      agent: document.getElementById("claims-filter-agent"),
-      branch: document.getElementById("claims-filter-branch"),
-      codePr: document.getElementById("claims-filter-code-pr"),
-      memoryState: document.getElementById("claims-filter-memory-state"),
-      memoryPrId: document.getElementById("claims-filter-memory-pr"),
-      commitRole: document.getElementById("claims-filter-commit-role"),
-      promotion: document.getElementById("claims-filter-promotion"),
-    };
+    const provenanceFilterDefinitions = ${JSON.stringify(PROVENANCE_FILTERS)};
+    function provenanceFilterMap(prefix) {
+      return Object.fromEntries(provenanceFilterDefinitions.map((filter) => [
+        filter.key,
+        document.getElementById(prefix + "-filter-" + filter.slug),
+      ]));
+    }
+    const provenanceFilterSelects = provenanceFilterMap("claims");
+    const componentProvenanceFilterSelects = provenanceFilterMap("components");
+    const flowProvenanceFilterSelects = provenanceFilterMap("flows");
     const defaultClaimsMeta = ${JSON.stringify(defaultClaimsMeta)};
 
     const CLAIM_KIND_ORDER = ${JSON.stringify(CLAIM_KIND_ORDER)};
@@ -1020,6 +1123,7 @@ ${timelineEvents}
     const allClaims = graphData.claims.concat(graphData.supersededClaims);
     const claimVersionKey = (claim) => (claim.provenance && claim.provenance.version_id) || claim.id;
     const rowVersionKey = (row) => row.dataset.versionId || row.dataset.id || "";
+    const claimByVersion = new Map(allClaims.map((claim) => [claimVersionKey(claim), claim]));
     const claimTextByVersion = new Map(allClaims.map((claim) => [claimVersionKey(claim), claim.text]));
     const componentIdsByClaimVersion = new Map(
       graphData.claims.map((claim) => [claimVersionKey(claim), claim.componentIds || []])
@@ -1032,33 +1136,50 @@ ${timelineEvents}
 
     let activeFilter = null;
 
-    function provenanceValue(claim, key) {
-      const provenance = claim.provenance || {};
-      if (key === "scope") return provenance.scope_kind || "";
-      if (key === "author") return provenance.author_github_login || provenance.author_github_login_snapshot || "";
-      if (key === "authorSnapshot") return provenance.author_github_login_snapshot || "";
-      if (key === "proposalId") return provenance.proposal_id || "";
-      if (key === "memoryCommitId") return provenance.memory_commit_id || claim.memoryCommitId || "";
-      if (key === "agent") return provenance.agent_platform || "";
-      if (key === "branch") return provenance.branch || "";
-      if (key === "codePr") return provenance.code_pr_number ? String(provenance.code_pr_number) : "";
-      if (key === "memoryState") return provenance.memory_commit_state || "";
-      if (key === "memoryPrId") return provenance.memory_pr_id || "";
-      if (key === "commitRole") return provenance.commit_role || "";
-      if (key === "promotion") return provenance.promotion_id || "";
+    function provenanceEntryValue(entry, key) {
+      if (key === "scope") return entry.scope_kind || "";
+      if (key === "author") return entry.author_github_login || entry.author_github_login_snapshot || "";
+      if (key === "authorSnapshot") return entry.author_github_login_snapshot || "";
+      if (key === "proposalId") return entry.proposal_id || "";
+      if (key === "memoryCommitId") return entry.memory_commit_id || "";
+      if (key === "agent") return entry.agent_platform || "";
+      if (key === "branch") return entry.branch || "";
+      if (key === "headRepository") return entry.head_repository || "";
+      if (key === "headRef") return entry.head_ref || "";
+      if (key === "dirty") return entry.dirty === undefined ? "" : entry.dirty ? "dirty" : "clean";
+      if (key === "codePr") return entry.code_pr_number ? String(entry.code_pr_number) : "";
+      if (key === "memoryState") return entry.memory_commit_state || "";
+      if (key === "memoryPrId") return entry.memory_pr_id || "";
+      if (key === "commitRole") return entry.commit_role || "";
+      if (key === "promotion") return entry.promotion_id || "";
       return "";
     }
 
-    for (const [key, select] of Object.entries(provenanceFilterSelects)) {
-      if (!select) continue;
-      const values = [...new Set(allClaims.map((claim) => provenanceValue(claim, key)).filter(Boolean))].sort();
-      for (const value of values) {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = value;
-        select.appendChild(option);
+    function provenanceValues(object, key) {
+      const provenance = object.provenance;
+      const entries = provenance ? [provenance, ...(provenance.origins || [])] : [];
+      const values = entries.map((entry) => provenanceEntryValue(entry, key)).filter(Boolean);
+      if (key === "memoryCommitId" && values.length === 0 && object.memoryCommitId) {
+        values.push(object.memoryCommitId);
+      }
+      return [...new Set(values)];
+    }
+
+    function populateProvenanceFilters(objects, selects) {
+      for (const [key, select] of Object.entries(selects)) {
+        if (!select) continue;
+        const values = [...new Set(objects.flatMap((object) => provenanceValues(object, key)))].sort();
+        for (const value of values) {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = value;
+          select.appendChild(option);
+        }
       }
     }
+    populateProvenanceFilters(allClaims, provenanceFilterSelects);
+    populateProvenanceFilters(graphData.components, componentProvenanceFilterSelects);
+    populateProvenanceFilters(graphData.flows, flowProvenanceFilterSelects);
 
     function escapeHtmlClient(value) {
       return String(value)
@@ -1302,7 +1423,10 @@ ${timelineEvents}
       if (freshness !== "active") return false;
       if (filter.type === "kind") return row.dataset.kind === filter.value;
       if (filter.type === "source") return row.dataset.source === filter.value;
-      if (filter.type === "commit") return row.dataset.memoryCommitId === filter.value;
+      if (filter.type === "commit") {
+        const claim = claimByVersion.get(rowVersionKey(row));
+        return claim ? provenanceValues(claim, "memoryCommitId").includes(filter.value) : false;
+      }
       if (filter.type === "component") {
         return (componentIdsByClaimVersion.get(rowVersionKey(row)) || []).includes(filter.value);
       }
@@ -1313,14 +1437,27 @@ ${timelineEvents}
     }
 
     function rowMatchesProvenanceFilters(row) {
+      const claim = claimByVersion.get(rowVersionKey(row));
+      if (!claim) return false;
       return Object.entries(provenanceFilterSelects).every(([key, select]) => {
         if (!select || !select.value) return true;
-        return (row.dataset[key] || "") === select.value;
+        return provenanceValues(claim, key).includes(select.value);
       });
     }
 
     function hasProvenanceFilter() {
       return Object.values(provenanceFilterSelects).some((select) => select && select.value);
+    }
+
+    function applyObjectProvenanceFilters(rows, objects, selects) {
+      const byId = new Map(objects.map((object) => [object.id, object]));
+      for (const row of rows) {
+        const object = byId.get(row.dataset.id || "");
+        const visible = object && Object.entries(selects).every(([key, select]) =>
+          !select || !select.value || provenanceValues(object, key).includes(select.value)
+        );
+        row.classList.toggle("claim-row-hidden", !visible);
+      }
     }
 
     function applyClaims() {
@@ -1411,6 +1548,18 @@ ${timelineEvents}
     for (const select of Object.values(provenanceFilterSelects)) {
       if (select) select.addEventListener("change", applyClaims);
     }
+    for (const select of Object.values(componentProvenanceFilterSelects)) {
+      if (select) select.addEventListener("change", () =>
+        applyObjectProvenanceFilters(componentRows, graphData.components, componentProvenanceFilterSelects)
+      );
+    }
+    for (const select of Object.values(flowProvenanceFilterSelects)) {
+      if (select) select.addEventListener("change", () =>
+        applyObjectProvenanceFilters(flowRows, graphData.flows, flowProvenanceFilterSelects)
+      );
+    }
+    applyObjectProvenanceFilters(componentRows, graphData.components, componentProvenanceFilterSelects);
+    applyObjectProvenanceFilters(flowRows, graphData.flows, flowProvenanceFilterSelects);
 
     const overviewNavLink = document.querySelector('nav a[data-view="claims-overview"]');
     if (overviewNavLink) {

@@ -2,7 +2,7 @@ import type {
   GraphContextResult,
   RankedGraphContextResult,
 } from "./types.js";
-import type { ManagedObjectProvenance } from "../../managed/protocol.js";
+import type { ManagedObjectOrigin, ManagedObjectProvenance } from "../../managed/protocol.js";
 
 export function renderGraphContextMarkdown(result: GraphContextResult): string {
   const rankedComponents = result.ranked_results.filter((item) => item.type === "component");
@@ -75,6 +75,14 @@ function renderRankedClaims(
 function provenanceLabel(object: object): string {
   const provenance = (object as { provenance?: ManagedObjectProvenance }).provenance;
   if (provenance === undefined) return "";
+  const origins = (provenance.origins ?? [])
+    .map((origin) => `[${provenanceValues(origin).join("; ")}]`)
+    .join(" ");
+  return ` Provenance: ${provenanceValues(provenance).join("; ")}.` +
+    (origins.length === 0 ? "" : ` Origins: ${origins}.`);
+}
+
+function provenanceValues(provenance: ManagedObjectProvenance | ManagedObjectOrigin): string[] {
   const currentLogin = provenance.author_github_login;
   const historicalLogin = provenance.author_github_login_snapshot;
   const values = [
@@ -88,6 +96,9 @@ function provenanceLabel(object: object): string {
     provenance.agent_platform === undefined ? undefined : `agent ${provenance.agent_platform}`,
     provenance.branch === undefined ? undefined : `branch ${provenance.branch}`,
     provenance.git_head === undefined ? undefined : `git ${provenance.git_head}`,
+    provenance.head_repository === undefined ? undefined : `head repository ${provenance.head_repository}`,
+    provenance.head_ref === undefined ? undefined : `head ref ${provenance.head_ref}`,
+    provenance.dirty === undefined ? undefined : provenance.dirty ? "dirty working tree" : "clean working tree",
     provenance.code_pr_number === undefined ? undefined : `code PR #${provenance.code_pr_number}`,
     provenance.memory_pr_id === undefined ? undefined : `Memory PR ${provenance.memory_pr_id}`,
     provenance.commit_role,
@@ -95,7 +106,7 @@ function provenanceLabel(object: object): string {
     provenance.promotion_id === undefined ? undefined : `promotion ${provenance.promotion_id}`,
     provenance.quarantine_reason === undefined ? undefined : `quarantine ${provenance.quarantine_reason}`,
   ].filter((value): value is string => value !== undefined);
-  return ` Provenance: ${values.join("; ")}.`;
+  return values;
 }
 
 function anchorLabel(anchor: Extract<RankedGraphContextResult, { type: "claim" }>["code_anchors"][number]): string {
