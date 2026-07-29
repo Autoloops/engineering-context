@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   type CommandResult,
@@ -236,7 +236,9 @@ async function prepareTargetRepo(context: Context): Promise<void> {
   const response = await fetch(`https://codeload.github.com/${context.config.repo.full_name}/tar.gz/${context.config.repo.base_commit}`);
   if (!response.ok) throw new Error(`Failed to download base archive: ${response.status} ${response.statusText}`);
   writeFileSync(archivePath, Buffer.from(await response.arrayBuffer()));
-  const extract = run(["tar", "-xzf", archivePath, "-C", extractDir], context.repoRoot, process.env);
+  // Run tar from the run directory with relative paths: GNU tar interprets
+  // absolute Windows paths ("C:\...") as remote host specs and fails.
+  const extract = run(["tar", "-xzf", relative(context.runDir, archivePath), "-C", relative(context.runDir, extractDir)], context.runDir, process.env);
   if (extract.exit_code !== 0) throw new Error(`Failed to extract base archive: ${extract.stderr ?? extract.stdout ?? ""}`);
   const roots = readdirSync(extractDir, { withFileTypes: true }).filter((entry) => entry.isDirectory());
   if (roots.length !== 1) throw new Error(`Expected one archive root in ${extractDir}, found ${roots.length}`);
