@@ -194,3 +194,78 @@ for (const { name, proposal } of malformedCompactRelationshipCases) {
 }
 
 console.log("check-proposal-validate: ok");
+
+// Security regression: code_anchors[].file must reject ".." path-traversal
+// segments, not just absolute paths. The validator's own error message says
+// "must be repo-relative" -- it must actually enforce that, since the
+// downstream code-anchor resolver's isRepoRelative() guard should not be the
+// only thing standing between a proposal and an out-of-repo file read.
+const traversalCases = [
+  "../../../../etc/passwd",
+  "../secrets.env",
+  "components/../../../../etc/passwd",
+  "..\\..\\..\\Windows\\System32\\config\\SAM",
+  "\\Windows\\System32\\config\\SAM",
+  "\\\\server\\share\\secret.txt",
+  "\\\\?\\C:\\Windows\\System32\\config\\SAM",
+];
+
+for (const file of traversalCases) {
+  const traversalProposal = {
+    title: "t",
+    creates: {
+      components: [{ id: "component.a", name: "A" }],
+      claims: [
+        {
+          id: "claim.a",
+          kind: "fact",
+          text: "x",
+          truth: "unknown",
+          intent: "intended",
+          about: ["component.a"],
+          code_anchors: [{ file }],
+        },
+      ],
+    },
+  };
+
+  let normalizedTraversal;
+  assert.doesNotThrow(() => {
+    normalizedTraversal = normalizeProposal(traversalProposal);
+  }, `normalizeProposal must not throw for traversal case: ${file}`);
+
+  const traversalResult = validateProposal(normalizedTraversal);
+  assert.equal(traversalResult.valid, false, `expected invalid (path traversal) for code_anchors[].file = ${file}`);
+  assert.ok(
+    traversalResult.errors.some((error) => error.includes("repo-relative")),
+    `expected a repo-relative error for code_anchors[].file = ${file}, got: ${JSON.stringify(traversalResult.errors)}`,
+  );
+}
+
+// A genuinely repo-relative path (including one that legitimately contains ".."
+// as a substring, not a path segment) must still be accepted.
+const validAnchorProposal = {
+  title: "t",
+  creates: {
+    components: [{ id: "component.a", name: "A" }],
+    claims: [
+      {
+        id: "claim.a",
+        kind: "fact",
+        text: "x",
+        truth: "unknown",
+        intent: "intended",
+        about: ["component.a"],
+        code_anchors: [{ file: "apps/cli/main.ts" }, { file: "libs/foo..bar/index.ts" }],
+      },
+    ],
+  },
+};
+const normalizedValidAnchor = normalizeProposal(validAnchorProposal);
+const validAnchorResult = validateProposal(normalizedValidAnchor);
+assert.ok(
+  !validAnchorResult.errors.some((error) => error.includes("repo-relative")),
+  `expected no repo-relative error for legitimate paths, got: ${JSON.stringify(validAnchorResult.errors)}`,
+);
+
+console.log("check-proposal-validate: path-traversal regression ok");

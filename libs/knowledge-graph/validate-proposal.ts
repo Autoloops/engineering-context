@@ -214,7 +214,13 @@ function validateClaimCodeAnchors(claim: Record<string, unknown>, errors: string
 }
 
 function isAbsoluteOrLineAnchor(file: string): boolean {
-  return file.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(file) || /:\d+(:\d+)?$/.test(file);
+  if (/^[\\/]/.test(file) || /^[a-zA-Z]:[\\/]/.test(file) || /:\d+(:\d+)?$/.test(file)) return true;
+  // Reject any ".." path segment (checked on both separators, since the string
+  // itself isn't resolved on this OS yet) so a proposal can't escape the repo
+  // root via e.g. "../../../../etc/passwd" -- this validator's error message
+  // promises "repo-relative", so it must actually enforce that, not rely on
+  // the downstream code-anchor resolver's isRepoRelative() guard as the only line of defense.
+  return file.split(/[\\/]/).some((segment) => segment === "..");
 }
 
 function validateSubjectBase(
