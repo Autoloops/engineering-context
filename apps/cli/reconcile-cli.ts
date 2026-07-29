@@ -44,6 +44,11 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
     audited_claim_versions: number;
     memory_commit_ids: string[];
   }> = [];
+  const skipped: Array<{
+    memory_pr_id: string;
+    reason: "git_head_not_ancestor";
+    memory_commit_ids: string[];
+  }> = [];
   const excludedMemoryPrIds: string[] = [];
   while (true) {
     const candidate = await reconciliationCandidate(
@@ -63,6 +68,16 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
       git_head: commit.git_head,
       is_ancestor: isAncestor(repoRoot, commit.git_head, mergeSha),
     }));
+    const nonAncestors = ancestry.filter((entry) => !entry.is_ancestor);
+    if (nonAncestors.length > 0) {
+      skipped.push({
+        memory_pr_id: candidate.memory_pr_id,
+        reason: "git_head_not_ancestor",
+        memory_commit_ids: nonAncestors.map((entry) => entry.memory_commit_id),
+      });
+      excludedMemoryPrIds.push(candidate.memory_pr_id);
+      continue;
+    }
     const auditClaims = candidate.claim_versions.map(({ version_id, claim }) => ({ ...claim, id: version_id }));
     const result = await auditClaimCodeAnchors(repoRoot, auditClaims);
     const fingerprints: Record<string, Record<string, string>> = {};
@@ -105,7 +120,9 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
     accepted: reconciliations.every(({ response }) => response.accepted),
     merge_sha: mergeSha,
     reconciliation_count: reconciliations.length,
+    skipped_count: skipped.length,
     reconciliations,
+    skipped,
   }, null, 2));
 }
 
