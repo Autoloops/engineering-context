@@ -33,6 +33,8 @@ const wasmByExtension = new Map<string, string>([
   [".cc", "tree-sitter-cpp.wasm"],
   [".cxx", "tree-sitter-cpp.wasm"],
   [".hpp", "tree-sitter-cpp.wasm"],
+  [".hh", "tree-sitter-cpp.wasm"],
+  [".hxx", "tree-sitter-cpp.wasm"],
   [".cs", "tree-sitter-c_sharp.wasm"],
   [".php", "tree-sitter-php.wasm"],
   [".rb", "tree-sitter-ruby.wasm"],
@@ -47,6 +49,13 @@ const wasmByExtension = new Map<string, string>([
   [".sh", "tree-sitter-bash.wasm"],
   [".bash", "tree-sitter-bash.wasm"],
   [".json", "tree-sitter-json.wasm"],
+  [".toml", "tree-sitter-toml.wasm"],
+  [".css", "tree-sitter-css.wasm"],
+  [".html", "tree-sitter-html.wasm"],
+  [".ex", "tree-sitter-elixir.wasm"],
+  [".exs", "tree-sitter-elixir.wasm"],
+  [".sol", "tree-sitter-solidity.wasm"],
+  [".zig", "tree-sitter-zig.wasm"],
 ]);
 
 const cFamilyExtensions = new Set([

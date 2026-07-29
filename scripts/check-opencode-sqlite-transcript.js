@@ -162,6 +162,9 @@ process.stdout.write('{"type":"done"}\\n');
   });
   runOrThrow([process.execPath, cli, "hook", "ingest", "--platform", "opencode"], workspace, hookInput);
   assert.equal(existsSync(runnerMarker), false, "disabled automatic updates should not spawn a worker");
+  const graphDb = new Database(join(greplicaHome, "graph.db"));
+  graphDb.prepare("UPDATE repos SET auto_memory_updates = 1").run();
+  graphDb.close();
   runOrThrow([process.execPath, cli, "hook", "worker"], workspace);
 
   const args = JSON.parse(readFileSync(runnerMarker, "utf8"));

@@ -45,7 +45,7 @@ Use **partial rewalk** when there is no changed-file list or the graph looks sta
 - re-inspect only the highest-value modules and their immediate neighbors
 - avoid creating a second full copy of the whole repo memory
 
-Use **full deep bootstrap** only when the user explicitly asks for a fresh first layer or the existing graph is unusable. That is handled by `greplica-deep-bootstrap`, not this skill.
+Use **full deep bootstrap** only when the user explicitly asks for a fresh first layer or the existing graph is unusable. That is handled by `greplica-deep-bootstrap`, not this prompt.
 
 ## Workflow
 
@@ -97,7 +97,7 @@ Write one proposal per changed module group or cross-cutting flow. Apply each pr
 
 Use existing component and flow IDs when they still represent the same concept. Create new IDs only for genuinely new concepts. When a previous claim is now too broad, incomplete, or stale, create a new claim with `supersedes[]` pointing to the old claim.
 
-Do not copy or recreate the parent graph. The proposal files from this skill should be small deltas that can be applied to the seeded parent graph. The harness may later materialize the current task by copying the parent runtime database and applying this task's proposal manifest.
+Do not copy or recreate the parent graph. The proposal files from this prompt should be small deltas that can be applied to the seeded parent graph. The harness may later materialize the current task by copying the parent runtime database and applying this task's proposal manifest.
 
 Use this proposal shape:
 
@@ -149,13 +149,13 @@ Allowed intent values: `intended`, `accidental`, `unknown`.
 Allowed source kinds: `session`.
 New `code_verified` claims require `code_anchors` with repo-relative `file` and optional `symbol`.
 
-For this skill, code inspection should normally produce source-free `code_verified` claims with `code_anchors`. Do not create session sources for source-code inspection.
+For this prompt, code inspection should normally produce source-free `code_verified` claims with `code_anchors`. Do not create session sources for source-code inspection.
 
 For claim `code_anchors`:
 
 - Prefer one stable symbol per code-verified claim.
 - Use two anchors for real cross-boundary behavior.
-- Three anchors is the hard maximum and should be rare.
+- The hard maximum is three anchors, and it should be rare.
 - A claim with four or more `code_anchors` is invalid; split it into narrower claims.
 - File-only anchors are acceptable for docs, config, schemas without symbols, generated artifacts, and tiny whole-file units.
 - Avoid file-only anchors for normal source files.
@@ -191,9 +191,9 @@ When an output directory is available, write a small JSON or Markdown report wit
 
 ## Handoff To GitHub Packet Ingestion
 
-After this skill finishes, the graph should be ready for noisy historical packet ingestion. The packet workflow should then add only source-verified issue/PR context visible before the cutoff and should attach it to the refreshed code components/flows.
+After this prompt finishes, the graph should be ready for noisy historical packet ingestion. The packet workflow should then add only source-verified issue/PR context visible before the cutoff and should attach it to the refreshed code components/flows.
 
-Do not run packet ingestion from this skill unless the user explicitly asks for the separate ingestion step.
+Do not run packet ingestion from this prompt unless the user explicitly asks for the separate ingestion step.
 
 ## Quality Bar
 

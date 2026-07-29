@@ -63,6 +63,7 @@ function runCodexProcess(
     child.stdin!.once("error", () => {});
     child.stdin!.end(input.prompt);
     child.once("close", (exitCode, signal) => {
+      if (spawnError !== undefined) return;
       resolve({ exitCode, signal });
     });
   });
