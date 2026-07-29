@@ -643,7 +643,6 @@ export const ReconciliationAttestationSchema = Type.Object({
   ref: Type.Optional(Type.String()),
   run_id: Type.Optional(Type.String()),
   run_attempt: Type.Optional(Type.String()),
-  workflow_ref: Type.Optional(Type.String()),
 });
 
 export const ReconciliationAttestationResultSchema = Type.Object({
@@ -741,7 +740,13 @@ export const routeSchemas = {
   memoryPrRetry: route(Type.Object({}), MemoryPrSchema),
   memoryStatus: route(Type.Object({}), MemoryStatusSchema),
   reconciliationCandidate: route(
-    Type.Object({ merge_sha: Type.String({ minLength: 7 }) }),
+    Type.Object({
+      merge_sha: Type.String({ minLength: 7 }),
+      exclude_memory_pr: Type.Optional(Type.Union([
+        Type.String({ minLength: 1 }),
+        Type.Array(Type.String({ minLength: 1 })),
+      ])),
+    }),
     ReconciliationCandidateSchema,
   ),
   reconciliationAttest: route(ReconciliationAttestationSchema, ReconciliationAttestationResultSchema),

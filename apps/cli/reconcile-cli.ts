@@ -29,10 +29,107 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
     authorization: `Bearer ${oidcToken}`,
     accept: "application/json",
   };
-  const candidate = await jsonRequest<ManagedReconciliationCandidate>(
-    `${apiUrl}/v1/repos/${encodeURIComponent(managedRepoId)}/memory/reconcile/candidate?merge_sha=${encodeURIComponent(mergeSha)}`,
-    { method: "GET", headers },
-  );
+  const repairProposalPath = optionalOption(args, "--repair-proposal");
+  const repairProposalValue = repairProposalPath === undefined
+    ? undefined
+    : JSON.parse(readFileSync(resolve(repairProposalPath), "utf8")) as unknown;
+  if (repairProposalValue !== undefined && !isRecord(repairProposalValue)) {
+    throw new Error("--repair-proposal must contain a JSON object.");
+  }
+  const repairProposal = repairProposalValue;
+
+  const reconciliations: Array<{
+    response: ManagedReconciliationAttestationResult;
+    memory_pr_id: string;
+    audited_claim_versions: number;
+    memory_commit_ids: string[];
+  }> = [];
+  const excludedMemoryPrIds: string[] = [];
+  while (true) {
+    const candidate = await reconciliationCandidate(
+      apiUrl,
+      managedRepoId,
+      mergeSha,
+      excludedMemoryPrIds,
+      headers,
+    );
+    if (candidate === undefined) break;
+    if (excludedMemoryPrIds.includes(candidate.memory_pr_id)) {
+      throw new Error(`Managed reconciliation returned duplicate Memory PR ${candidate.memory_pr_id}.`);
+    }
+    verifyCandidate(candidate, mergeSha);
+    const ancestry = candidate.commits.map((commit) => ({
+      memory_commit_id: commit.memory_commit_id,
+      git_head: commit.git_head,
+      is_ancestor: isAncestor(repoRoot, commit.git_head, mergeSha),
+    }));
+    const auditClaims = candidate.claim_versions.map(({ version_id, claim }) => ({ ...claim, id: version_id }));
+    const result = await auditClaimCodeAnchors(repoRoot, auditClaims);
+    const fingerprints: Record<string, Record<string, string>> = {};
+    for (const claim of auditClaims) {
+      if (claim.code_anchors === undefined || claim.code_anchors.length === 0) continue;
+      const values = await fingerprintClaimAnchors(repoRoot, claim.code_anchors);
+      if (Object.keys(values).length > 0) fingerprints[claim.id] = values;
+    }
+    const attestation: ManagedReconciliationAttestation = {
+      managed_repo_id: managedRepoId,
+      repository,
+      merge_sha: mergeSha,
+      memory_pr_id: candidate.memory_pr_id,
+      memory_commit_ids: candidate.memory_commit_ids,
+      ancestry,
+      audit_key: "version_id",
+      anchor_audit: { result, fingerprints },
+      ...(repairProposal === undefined ? {} : { repair_proposal: repairProposal }),
+      ref: process.env.GITHUB_REF,
+      run_id: process.env.GITHUB_RUN_ID,
+      run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+    };
+    const response = await jsonRequest<ManagedReconciliationAttestationResult>(
+      `${apiUrl}/v1/repos/${encodeURIComponent(managedRepoId)}/memory/reconcile/attest`,
+      {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json" },
+        body: JSON.stringify(attestation),
+      },
+    );
+    reconciliations.push({
+      response,
+      memory_pr_id: response.memory_pr_id ?? candidate.memory_pr_id,
+      audited_claim_versions: candidate.claim_versions.length,
+      memory_commit_ids: candidate.memory_commit_ids,
+    });
+    excludedMemoryPrIds.push(candidate.memory_pr_id);
+  }
+  console.log(JSON.stringify({
+    accepted: reconciliations.every(({ response }) => response.accepted),
+    merge_sha: mergeSha,
+    reconciliation_count: reconciliations.length,
+    reconciliations,
+  }, null, 2));
+}
+
+async function reconciliationCandidate(
+  apiUrl: string,
+  managedRepoId: string,
+  mergeSha: string,
+  excludedMemoryPrIds: string[],
+  headers: Record<string, string>,
+): Promise<ManagedReconciliationCandidate | undefined> {
+  const query = new URLSearchParams({ merge_sha: mergeSha });
+  for (const memoryPrId of excludedMemoryPrIds) query.append("exclude_memory_pr", memoryPrId);
+  try {
+    return await jsonRequest<ManagedReconciliationCandidate>(
+      `${apiUrl}/v1/repos/${encodeURIComponent(managedRepoId)}/memory/reconcile/candidate?${query.toString()}`,
+      { method: "GET", headers },
+    );
+  } catch (error) {
+    if (error instanceof ManagedReconciliationHttpError && error.status === 404) return undefined;
+    throw error;
+  }
+}
+
+function verifyCandidate(candidate: ManagedReconciliationCandidate, mergeSha: string): void {
   if (candidate.merge_sha !== mergeSha) {
     throw new Error(`Managed reconciliation candidate is bound to ${candidate.merge_sha}, not ${mergeSha}.`);
   }
@@ -42,58 +139,6 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
   if (JSON.stringify(candidateIds) !== JSON.stringify(commitIds)) {
     throw new Error("Managed reconciliation candidate commit metadata does not match its selected commit IDs.");
   }
-  const ancestry = candidate.commits.map((commit) => ({
-    memory_commit_id: commit.memory_commit_id,
-    git_head: commit.git_head,
-    is_ancestor: isAncestor(repoRoot, commit.git_head, mergeSha),
-  }));
-
-  const auditClaims = candidate.claim_versions.map(({ version_id, claim }) => ({ ...claim, id: version_id }));
-  const result = await auditClaimCodeAnchors(repoRoot, auditClaims);
-  const fingerprints: Record<string, Record<string, string>> = {};
-  for (const claim of auditClaims) {
-    if (claim.code_anchors === undefined || claim.code_anchors.length === 0) continue;
-    const values = await fingerprintClaimAnchors(repoRoot, claim.code_anchors);
-    if (Object.keys(values).length > 0) fingerprints[claim.id] = values;
-  }
-  const repairProposalPath = optionalOption(args, "--repair-proposal");
-  const repairProposalValue = repairProposalPath === undefined
-    ? undefined
-    : JSON.parse(readFileSync(resolve(repairProposalPath), "utf8")) as unknown;
-  if (repairProposalValue !== undefined && !isRecord(repairProposalValue)) {
-    throw new Error("--repair-proposal must contain a JSON object.");
-  }
-  const repairProposal = repairProposalValue;
-  const attestation: ManagedReconciliationAttestation = {
-    managed_repo_id: managedRepoId,
-    repository,
-    merge_sha: mergeSha,
-    memory_pr_id: candidate.memory_pr_id,
-    memory_commit_ids: candidate.memory_commit_ids,
-    ancestry,
-    audit_key: "version_id",
-    anchor_audit: { result, fingerprints },
-    ...(repairProposal === undefined ? {} : { repair_proposal: repairProposal }),
-    ref: process.env.GITHUB_REF,
-    run_id: process.env.GITHUB_RUN_ID,
-    run_attempt: process.env.GITHUB_RUN_ATTEMPT,
-    workflow_ref: process.env.GITHUB_WORKFLOW_REF,
-  };
-  const response = await jsonRequest<ManagedReconciliationAttestationResult>(
-    `${apiUrl}/v1/repos/${encodeURIComponent(managedRepoId)}/memory/reconcile/attest`,
-    {
-      method: "POST",
-      headers: { ...headers, "content-type": "application/json" },
-      body: JSON.stringify(attestation),
-    },
-  );
-  console.log(JSON.stringify({
-    ...response,
-    memory_pr_id: response.memory_pr_id ?? candidate.memory_pr_id,
-    merge_sha: mergeSha,
-    audited_claim_versions: candidate.claim_versions.length,
-    memory_commit_ids: candidate.memory_commit_ids,
-  }, null, 2));
 }
 
 function isAncestor(repoRoot: string, gitHead: string, mergeSha: string): boolean {
@@ -114,7 +159,7 @@ function assertExactCheckout(repoRoot: string, mergeSha: string): void {
   }).trim();
   const head = git(["rev-parse", "HEAD"]);
   if (head !== mergeSha) throw new Error(`Checked-out HEAD ${head} does not equal requested merge SHA ${mergeSha}.`);
-  const status = git(["status", "--porcelain", "--untracked-files=no"]);
+  const status = git(["status", "--porcelain", "--untracked-files=all"]);
   if (status.length > 0) throw new Error("Reconciliation requires a clean exact-SHA checkout.");
 }
 
@@ -151,9 +196,16 @@ async function jsonRequest<T>(url: string, init: RequestInit): Promise<T> {
     const message = isRecord(payload) && typeof payload.message === "string"
       ? payload.message
       : `Managed Greplica reconciliation failed (${response.status}).`;
-    throw new Error(message);
+    throw new ManagedReconciliationHttpError(response.status, message);
   }
   return payload as T;
+}
+
+class ManagedReconciliationHttpError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+    this.name = "ManagedReconciliationHttpError";
+  }
 }
 
 function requiredOption(args: string[], name: string): string {

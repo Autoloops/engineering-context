@@ -233,6 +233,7 @@ assert.match(html, /id="claims-filter-memory-pr"/);
 assert.match(html, /id="claims-filter-commit-role"/);
 
 let attestation;
+let candidateCalls = 0;
 const server = createServer(async (incoming, response) => {
   const url = new URL(incoming.url, "http://127.0.0.1");
   const chunks = [];
@@ -250,7 +251,13 @@ const server = createServer(async (incoming, response) => {
   }
   assert.equal(incoming.headers.authorization, "Bearer github-oidc-token");
   if (url.pathname.endsWith("/memory/reconcile/candidate")) {
+    candidateCalls += 1;
     assert.equal(url.searchParams.get("merge_sha"), mergeSha);
+    if (url.searchParams.has("exclude_memory_pr")) {
+      assert.deepEqual(url.searchParams.getAll("exclude_memory_pr"), ["memory-pr-1"]);
+      send(404, { message: "No Memory PR is ready for this merged checkout." });
+      return;
+    }
     send(200, {
       memory_pr_id: "memory-pr-1",
       merge_sha: mergeSha,
@@ -303,6 +310,8 @@ try {
     GITHUB_RUN_ID: "123",
   });
   assert.match(result.stdout, /"accepted": true/);
+  assert.match(result.stdout, /"reconciliation_count": 1/);
+  assert.equal(candidateCalls, 2);
   assert.equal(attestation.audit_key, "version_id");
   assert.deepEqual(attestation.memory_commit_ids, ["commit-1"]);
   assert.deepEqual(attestation.ancestry, [{ memory_commit_id: "commit-1", git_head: mergeSha, is_ancestor: true }]);
