@@ -214,12 +214,12 @@ export class ManagedGraphMemoryClient implements GraphMemoryProvider {
 
   private requestView(view: ManagedGraphView | undefined): ManagedGraphView | undefined {
     if (view?.working_users === undefined || view.working_users.length === 0) return view;
-    const login = this.credentials?.user.githubLogin;
     return {
       ...view,
-      working_users: uniqueGithubLogins(
-        login === undefined ? view.working_users : [login, ...view.working_users],
-      ),
+      // The managed server always composes the authenticated user's working
+      // scope when one exists. Send only explicit additional contributors so
+      // readers without a personal scope can still inspect someone else's.
+      working_users: uniqueGithubLogins(view.working_users),
     };
   }
 

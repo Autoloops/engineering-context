@@ -462,10 +462,10 @@ try {
   assert.match(selectedContext.stdout, /"query": "authentication"/);
   assert.deepEqual(graphContextBodies.at(-1).view, {
     base: "main",
-    working_users: ["contributor-1", "alice", "bob"],
+    working_users: ["alice", "bob"],
     memory_pr_id: "memory-pr-selector",
     include_quarantined: true,
-  }, "context selectors must deduplicate users and preserve every explicit overlay");
+  }, "a reader without personal working sends only deduplicated explicit contributor overlays");
 
   await run(process.execPath, [
     cliPath,
@@ -484,7 +484,7 @@ try {
     "--no-open",
   ], managedRepo, env);
   const selectedViewUrl = new URL(graphViewUrls.at(-1), "http://127.0.0.1");
-  assert.deepEqual(selectedViewUrl.searchParams.getAll("working_user"), ["contributor-1", "alice", "bob"]);
+  assert.deepEqual(selectedViewUrl.searchParams.getAll("working_user"), ["alice", "bob"]);
   assert.equal(selectedViewUrl.searchParams.get("memory_pr_id"), "memory-pr-selector");
   assert.equal(selectedViewUrl.searchParams.get("include_quarantined"), "true");
   assert.equal(selectedViewUrl.searchParams.get("base"), "main");

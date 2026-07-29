@@ -341,7 +341,8 @@ assert.equal(request.searchParams.get("main_only"), "true");
 assert.match(calls.at(-1).headers.get("x-greplica-capabilities"), /graph-selectors-v1/);
 assert.equal(calls.at(-1).headers.get("x-greplica-client-version"), "0.2.1");
 const contextResult = await client.contextGraph("auth", { base: "main", working_users: ["alice", "alice"] });
-assert.deepEqual(calls.at(-1).body.view.working_users, ["me", "alice"]);
+assert.deepEqual(calls.at(-1).body.view.working_users, ["alice"],
+  "the server adds the authenticated user's working scope; the client sends only explicit overlays");
 assert.equal(contextResult.ranked_results[0].code_anchors[0].status, "resolved");
 assert.equal(contextResult.ranked_results[1].code_anchors[0].status, "missing_symbol");
 const contextMarkdown = renderGraphContextMarkdown(contextResult);
