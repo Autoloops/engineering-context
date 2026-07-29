@@ -120,7 +120,7 @@ export async function installGreplica(options: InstallOptions): Promise<InstallR
   if (options.autoMemoryUpdates && !supportsAutoMemoryUpdates && platformInstall.hooks !== undefined) {
     notes.push(`${platformDisplayName(platform)} automatic memory updates are not supported yet; installed hooks still record session activity.`);
   }
-  if (options.mode === "managed" && options.managedRole !== "memory_admin" && options.autoMemoryUpdates) {
+  if (options.mode === "managed" && options.managedRole === "reader" && options.autoMemoryUpdates) {
     notes.push("Managed reader access records session guidance but does not schedule memory updates.");
   }
   if (options.mode === "local" && options.embedding === "local") {

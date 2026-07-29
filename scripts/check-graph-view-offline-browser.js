@@ -22,6 +22,9 @@ const root = new URL("..", import.meta.url);
 const { openDatabase } = await import(new URL("dist/libs/storage/sqlite/db.js", root));
 const { SqliteRepository } = await import(new URL("dist/libs/storage/sqlite/repository.js", root));
 const { KnowledgeGraphService } = await import(new URL("dist/libs/knowledge-graph/service.js", root));
+const { buildGraphViewHtmlFromData } = await import(
+  new URL("dist/libs/knowledge-graph/graph-view/build-graph-view.js", root)
+);
 
 function findBrowserBinary() {
   const candidates = [
@@ -130,6 +133,112 @@ try {
   assert.equal(result.chartDefined, true, "window.Chart must be defined after loading the page with no network access");
   assert.equal(result.dataLabelsDefined, true, "window.ChartDataLabels must be defined after loading the page with no network access");
   assert.equal(result.chartInstanceCount, 3, "expected all 3 overview pie charts (type/source/freshness) to have rendered");
+
+  const provenance = {
+    version_id: "canonical-version",
+    scope_kind: "main",
+    author_github_login: "alice",
+    memory_commit_id: "alice-commit",
+    origins: [{
+      version_id: "bob-source-version",
+      scope_kind: "working",
+      author_github_login: "bob",
+      memory_commit_id: "bob-commit",
+    }],
+  };
+  const provenanceHtml = buildGraphViewHtmlFromData({
+    generatedAt: new Date().toISOString(),
+    counts: { components: 1, flows: 1, claims: 1, superseded: 0 },
+    components: [{
+      id: "component.provenance",
+      name: "Provenance Component",
+      folder: "provenance",
+      anchors: [],
+      flowCount: 1,
+      claimCount: 1,
+      subcomponentCount: 0,
+      provenance,
+    }],
+    flows: [{
+      id: "flow.provenance",
+      name: "Provenance Flow",
+      folder: "provenance",
+      touchedComponentFolders: ["provenance"],
+      claimCount: 1,
+      provenance,
+    }],
+    claims: [{
+      id: "claim.provenance",
+      text: "Provenance claim",
+      kind: "fact",
+      session: "",
+      source: "code",
+      freshness: "active",
+      componentIds: ["component.provenance"],
+      flowIds: ["flow.provenance"],
+      createdAt: new Date().toISOString(),
+      memoryCommitId: "alice-commit",
+      provenance,
+    }],
+    supersededClaims: [],
+    claimsTimeline: {
+      summary: { total: 1, sessionPct: 0, codePct: 100 },
+      events: [],
+    },
+  });
+  const provenanceHarness = `
+  <script>
+    (function () {
+      function values(id) {
+        return Array.from(document.getElementById(id).options).map(function (option) { return option.value; });
+      }
+      var claimFilter = document.getElementById("claims-filter-author");
+      claimFilter.value = "bob";
+      claimFilter.dispatchEvent(new Event("change"));
+      var componentFilter = document.getElementById("components-filter-author");
+      componentFilter.value = "bob";
+      componentFilter.dispatchEvent(new Event("change"));
+      var flowFilter = document.getElementById("flows-filter-author");
+      flowFilter.value = "bob";
+      flowFilter.dispatchEvent(new Event("change"));
+      var result = {
+        claimAuthors: values("claims-filter-author"),
+        componentAuthors: values("components-filter-author"),
+        flowAuthors: values("flows-filter-author"),
+        claimVisible: !document.querySelector("#claims-table tbody tr").classList.contains("claim-row-hidden"),
+        componentVisible: !document.querySelector("#view-components tbody tr").classList.contains("claim-row-hidden"),
+        flowVisible: !document.querySelector("#view-flows tbody tr").classList.contains("claim-row-hidden"),
+      };
+      var marker = document.createElement("div");
+      marker.id = "provenance-browser-test-result";
+      marker.setAttribute("data-result", JSON.stringify(result));
+      document.body.appendChild(marker);
+    })();
+  </script>`;
+  const provenancePath = join(tmp, "provenance.html");
+  writeFileSync(provenancePath, provenanceHtml.replace("</body>", `${provenanceHarness}\n</body>`));
+  const provenanceDom = execFileSync(
+    browser,
+    [
+      "--headless=new",
+      "--disable-gpu",
+      "--no-sandbox",
+      "--host-resolver-rules=MAP * 0.0.0.0",
+      "--virtual-time-budget=4000",
+      "--dump-dom",
+      `file://${provenancePath}#claims`,
+    ],
+    { encoding: "utf8", timeout: 30_000, stdio: ["ignore", "pipe", "ignore"] },
+  );
+  const provenanceMatch = provenanceDom.match(/id="provenance-browser-test-result" data-result="([^"]+)"/);
+  assert.ok(provenanceMatch, "expected the provenance browser harness marker");
+  const provenanceResult = JSON.parse(provenanceMatch[1].replace(/&quot;/g, '"'));
+  assert.deepEqual(provenanceResult.claimAuthors, ["", "alice", "bob"]);
+  assert.deepEqual(provenanceResult.componentAuthors, ["", "alice", "bob"]);
+  assert.deepEqual(provenanceResult.flowAuthors, ["", "alice", "bob"]);
+  assert.equal(provenanceResult.claimVisible, true, "claims must filter by a coalesced origin author");
+  assert.equal(provenanceResult.componentVisible, true, "components must filter by a coalesced origin author");
+  assert.equal(provenanceResult.flowVisible, true, "flows must filter by a coalesced origin author");
 } finally {
   db.close();
 }
