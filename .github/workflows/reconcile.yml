@@ -32,7 +32,7 @@ jobs:
       # Keep this immutable. The managed service separately allowlists this
       # reusable workflow's signed job_workflow_sha.
       - name: Reconcile Memory PRs
-        uses: Autoloops/greplica@fb14d063e9394e8b25ab2cf7c00398cbe6d25be9
+        uses: Autoloops/greplica@e9d22a982f499159efc0a321fee21e858151efb4
         with:
           managed-repo: ${{ inputs.managed-repo }}
           merge-sha: ${{ inputs.merge-sha }}
