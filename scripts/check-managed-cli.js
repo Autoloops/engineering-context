@@ -30,6 +30,41 @@ let deviceStarts = 0;
 let requestCount = 0;
 let importedSnapshot;
 let memoryPrContextBody;
+const graphReadUrls = [];
+const graphViewUrls = [];
+const graphContextBodies = [];
+const proposalRecord = {
+  id: "proposal-renamed-author",
+  memory_commit: {
+    id: "memory-commit-renamed-author",
+    proposal_id: "proposal-renamed-author",
+    scope_id: "working-user-1",
+    scope_name: "working/contributor-1",
+    state: "active",
+    author: {
+      id: "10000000-0000-4000-8000-000000000000",
+      github_user_id: "1",
+      github_login: "contributor-current",
+      created_at: now,
+    },
+    author_github_login_snapshot: "contributor-old",
+    session_refs: [{
+      id: "codex-session:proposal-1",
+      agent_platform: "codex",
+    }],
+    agent_platform: "codex",
+    git: {
+      git_head: "b".repeat(40),
+      head_repository: "example/project",
+      head_ref: "feature/memory",
+      branch: "feature/memory",
+      dirty: false,
+    },
+    created_at: now,
+  },
+  proposal: { title: "Rename-safe provenance" },
+  created_at: now,
+};
 
 const server = createServer(async (request, response) => {
   requestCount += 1;
@@ -128,15 +163,21 @@ const server = createServer(async (request, response) => {
     });
     return;
   }
-  if (request.method === "GET" && request.url === `/v1/repos/${managedRepoId}/graph`) {
+  if (
+    request.method === "GET" &&
+    new URL(request.url, "http://127.0.0.1").pathname === `/v1/repos/${managedRepoId}/graph`
+  ) {
+    graphReadUrls.push(request.url);
     send(200, { components: [], flows: [], claims: [], sources: [], edges: [] }, {
       "x-greplica-repo-role": managedRepository.effective_role,
       "x-greplica-access-status": "active",
+      "x-greplica-capabilities": "personal-working-v1,graph-selectors-v1,memory-pr-v1",
     });
     return;
   }
   if (request.method === "POST" && request.url === `/v1/repos/${managedRepoId}/graph/context`) {
     memoryPrContextBody = body;
+    graphContextBodies.push(body);
     send(200, {
       query: body.query,
       search_config_version: "test",
@@ -147,6 +188,16 @@ const server = createServer(async (request, response) => {
       ranked_results: [],
       sources: [],
     }, { "x-greplica-capabilities": "personal-working-v1,graph-selectors-v1,memory-pr-v1" });
+    return;
+  }
+  if (
+    request.method === "GET" &&
+    new URL(request.url, "http://127.0.0.1").pathname === `/v1/repos/${managedRepoId}/graph/view-data`
+  ) {
+    graphViewUrls.push(request.url);
+    send(200, {}, {
+      "x-greplica-capabilities": "personal-working-v1,graph-selectors-v1,memory-pr-v1",
+    });
     return;
   }
   if (request.method === "GET" && request.url === `/v1/repos/${managedRepoId}/memory/status`) {
@@ -170,27 +221,14 @@ const server = createServer(async (request, response) => {
     return;
   }
   if (request.method === "GET" && request.url === `/v1/repos/${managedRepoId}/proposals`) {
-    send(200, [{
-      id: "proposal-renamed-author",
-      memory_commit: {
-        id: "memory-commit-renamed-author",
-        proposal_id: "proposal-renamed-author",
-        scope_id: "working-user-1",
-        scope_name: "working/contributor-1",
-        state: "active",
-        author: {
-          id: "10000000-0000-4000-8000-000000000000",
-          github_user_id: "1",
-          github_login: "contributor-current",
-          created_at: now,
-        },
-        author_github_login_snapshot: "contributor-old",
-        session_refs: [],
-        created_at: now,
-      },
-      proposal: { title: "Rename-safe provenance" },
-      created_at: now,
-    }]);
+    send(200, [proposalRecord]);
+    return;
+  }
+  if (
+    request.method === "GET" &&
+    request.url === `/v1/repos/${managedRepoId}/proposals/proposal-renamed-author`
+  ) {
+    send(200, proposalRecord);
     return;
   }
   if (request.method === "GET" && request.url === `/v1/repos/${managedRepoId}/memory-prs`) {
@@ -391,6 +429,121 @@ try {
   );
   assert.match(proposalList.stdout, /contributor-current \(formerly contributor-old\)/,
     "proposal summaries must preserve both current and historical GitHub logins");
+  assert.match(proposalList.stdout, /head:b{40}/,
+    "human proposal list output must expose the immutable Git head");
+  assert.match(proposalList.stdout, /agent:codex/,
+    "human proposal list output must expose the creating agent platform");
+  const proposalShow = await run(
+    process.execPath,
+    [cliPath, "proposal", "show", "proposal-renamed-author"],
+    managedRepo,
+    env,
+  );
+  assert.match(proposalShow.stdout, /head:b{40}/,
+    "human proposal show output must expose the immutable Git head");
+  assert.match(proposalShow.stdout, /agent:codex/,
+    "human proposal show output must expose the creating agent platform");
+
+  const selectedContext = await run(process.execPath, [
+    cliPath,
+    "graph",
+    "context",
+    "authentication",
+    "--with-working",
+    "alice",
+    "--with-working=bob",
+    "--with-working",
+    "ALICE",
+    "--memory-pr",
+    "memory-pr-selector",
+    "--include-quarantined",
+    "--json",
+  ], managedRepo, env);
+  assert.match(selectedContext.stdout, /"query": "authentication"/);
+  assert.deepEqual(graphContextBodies.at(-1).view, {
+    base: "main",
+    working_users: ["contributor-1", "alice", "bob"],
+    memory_pr_id: "memory-pr-selector",
+    include_quarantined: true,
+  }, "context selectors must deduplicate users and preserve every explicit overlay");
+
+  await run(process.execPath, [
+    cliPath,
+    "graph",
+    "view",
+    "--with-working",
+    "alice",
+    "--with-working=alice",
+    "--with-working",
+    "bob",
+    "--with-working",
+    "ALICE",
+    "--memory-pr=memory-pr-selector",
+    "--include-quarantined",
+    "--json",
+    "--no-open",
+  ], managedRepo, env);
+  const selectedViewUrl = new URL(graphViewUrls.at(-1), "http://127.0.0.1");
+  assert.deepEqual(selectedViewUrl.searchParams.getAll("working_user"), ["contributor-1", "alice", "bob"]);
+  assert.equal(selectedViewUrl.searchParams.get("memory_pr_id"), "memory-pr-selector");
+  assert.equal(selectedViewUrl.searchParams.get("include_quarantined"), "true");
+  assert.equal(selectedViewUrl.searchParams.get("base"), "main");
+
+  await run(process.execPath, [
+    cliPath, "graph", "context", "canonical only", "--main-only", "--json",
+  ], managedRepo, env);
+  assert.deepEqual(graphContextBodies.at(-1).view, {
+    base: "main",
+    working_users: [],
+  });
+  await run(process.execPath, [
+    cliPath,
+    "graph",
+    "context",
+    "canonical quarantine",
+    "--main-only",
+    "--include-quarantined",
+    "--json",
+  ], managedRepo, env);
+  assert.deepEqual(graphContextBodies.at(-1).view, {
+    base: "main",
+    working_users: [],
+    include_quarantined: true,
+  }, "main-only must suppress personal working without suppressing an explicit quarantine overlay");
+  await run(process.execPath, [
+    cliPath,
+    "graph",
+    "view",
+    "--main-only",
+    "--memory-pr",
+    "memory-pr-selector",
+    "--json",
+    "--no-open",
+  ], managedRepo, env);
+  const mainOnlyViewUrl = new URL(graphViewUrls.at(-1), "http://127.0.0.1");
+  assert.equal(mainOnlyViewUrl.searchParams.get("main_only"), "true");
+  assert.equal(mainOnlyViewUrl.searchParams.get("memory_pr_id"), "memory-pr-selector");
+  assert.deepEqual(mainOnlyViewUrl.searchParams.getAll("working_user"), []);
+  await run(process.execPath, [
+    cliPath, "graph", "read", "--main-only", "--json",
+  ], managedRepo, env);
+  const mainOnlyReadUrl = new URL(graphReadUrls.at(-1), "http://127.0.0.1");
+  assert.equal(mainOnlyReadUrl.searchParams.get("main_only"), "true");
+
+  const requestsBeforeInvalidSelectors = requestCount;
+  for (const incompatibleArgs of [
+    [cliPath, "graph", "context", "query", "--main-only", "--with-working", "alice"],
+    [cliPath, "graph", "view", "--memory-pr", "one", "--memory-pr=two", "--json"],
+  ]) {
+    const incompatible = await runFailure(process.execPath, incompatibleArgs, managedRepo, env);
+    assert.match(
+      incompatible.stderr,
+      /--main-only cannot be combined|Specify --memory-pr only once/,
+      "incompatible graph selectors must fail before a managed request",
+    );
+  }
+  assert.equal(requestCount, requestsBeforeInvalidSelectors,
+    "invalid selector combinations must be rejected before network access");
   const directDefaultMemoryPr = await run(
     process.execPath,
     [cliPath, "memory", "pr", "list"],

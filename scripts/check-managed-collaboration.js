@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -23,6 +24,9 @@ const { renderGraphContextMarkdown } = await import(
 );
 const { fingerprintClaimAnchors } = await import(
   "../dist/libs/knowledge-graph/code-anchors/fingerprint.js"
+);
+const { reconciliationCodeEvidenceHash } = await import(
+  "../dist/libs/knowledge-graph/code-anchors/evidence.js"
 );
 const { migrate } = await import("../dist/libs/storage/sqlite/migrate.js");
 
@@ -629,6 +633,7 @@ const server = createServer(async (incoming, response) => {
   }
   assert.equal(incoming.headers.authorization, "Bearer github-oidc-token");
   assert.match(incoming.headers["x-greplica-capabilities"], /oidc-reconciliation-v1/);
+  assert.match(incoming.headers["x-greplica-capabilities"], /reconciliation-code-evidence-v1/);
   assert.equal(incoming.headers["x-greplica-client-version"], "0.2.1");
   if (url.pathname.endsWith("/memory/reconcile/candidate")) {
     candidateCalls += 1;
@@ -736,6 +741,7 @@ const server = createServer(async (incoming, response) => {
       memory_pr_id: "memory-pr-1",
       merge_sha: mergeSha,
       code_merge_sha: codeMergeSha,
+      code_evidence_required: true,
       memory_commit_ids: ["commit-1", "commit-dependency-1"],
       commits: [{
         memory_commit_id: "commit-1",
@@ -772,7 +778,7 @@ const server = createServer(async (incoming, response) => {
         component: {
           id: "component.logical",
           name: "Version-keyed component audit",
-          code_anchor: "example.ts",
+          code_anchor: "example.ts, example.ts",
         },
       }, {
         version_id: "version-component-missing",
@@ -840,6 +846,7 @@ try {
   assert.match(result.stdout, /"accepted": true/);
   assert.match(result.stdout, /"reconciliation_count": 2/);
   assert.match(result.stdout, /"audited_component_versions": 2/);
+  assert.match(result.stdout, /"code_evidence_entries": 3/);
   assert.match(result.stdout, /"skipped_count": 2/);
   assert.match(result.stdout, /"reason": "git_head_not_in_pr_delta"/);
   assert.equal(candidateCalls, 5);
@@ -890,6 +897,41 @@ try {
   ), "missing component anchors must fail under immutable component version IDs");
   assert.deepEqual(attestations[0].anchor_audit.fingerprints["version-component-missing"], {});
   assert.equal(attestations[0].repository, "example/project");
+  assert.equal(attestations[0].code_evidence.managed_repo_id, installation.managedRepoId);
+  assert.equal(attestations[0].code_evidence.repository, "example/project");
+  assert.equal(attestations[0].code_evidence.attested_git_sha, mergeSha);
+  assert.equal(attestations[0].code_evidence.entries.length, 3,
+    "duplicate component anchors must not inflate the repair evidence packet");
+  const {
+    evidence_sha256: submittedEvidenceHash,
+    ...submittedEvidencePayload
+  } = attestations[0].code_evidence;
+  assert.equal(
+    submittedEvidenceHash,
+    reconciliationCodeEvidenceHash(submittedEvidencePayload),
+    "the Action must hash the deterministic packet bound to the exact checkout",
+  );
+  const exactClaimEvidence = attestations[0].code_evidence.entries.find((entry) =>
+    entry.version_id === "version-1"
+  );
+  assert.equal(exactClaimEvidence.status, "resolved");
+  assert.match(exactClaimEvidence.snippet, /return 2/);
+  assert.doesNotMatch(exactClaimEvidence.snippet, /return 1/);
+  assert.equal(
+    exactClaimEvidence.snippet_sha256,
+    createHash("sha256").update(exactClaimEvidence.snippet, "utf8").digest("hex"),
+  );
+  const exactComponentEvidence = attestations[0].code_evidence.entries.filter((entry) =>
+    entry.version_id === "version-component-1"
+  );
+  assert.equal(exactComponentEvidence.length, 1);
+  assert.equal(exactComponentEvidence[0].status, "file_only");
+  assert.match(exactComponentEvidence[0].snippet, /return 2/);
+  const missingComponentEvidence = attestations[0].code_evidence.entries.find((entry) =>
+    entry.version_id === "version-component-missing"
+  );
+  assert.equal(missingComponentEvidence.status, "missing_file");
+  assert.equal(Object.hasOwn(missingComponentEvidence, "snippet"), false);
   assert.deepEqual(attestations[1].ancestry, [{
     memory_commit_id: "commit-2",
     git_head: baseSha,
@@ -900,6 +942,8 @@ try {
     "legacy candidates without code-merge proof must remain compatible");
   assert.equal(Object.hasOwn(attestations[1], "code_merge_is_ancestor"), false,
     "legacy attestations must not send unsupported proof fields");
+  assert.equal(Object.hasOwn(attestations[1], "code_evidence"), false,
+    "legacy candidates must retain their exact attestation shape");
   assert.equal(
     exec("git", ["-C", repoRoot, "rev-parse", "FETCH_HEAD"]).trim(),
     featureSha,

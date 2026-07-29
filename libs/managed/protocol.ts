@@ -6,6 +6,7 @@ export const managedClientCapabilities = [
   "graph-selectors-v1",
   "memory-pr-v1",
   "oidc-reconciliation-v1",
+  "reconciliation-code-evidence-v1",
 ] as const;
 export type ManagedClientCapability = (typeof managedClientCapabilities)[number];
 export const managedClientVersionHeader = "x-greplica-client-version";
@@ -356,6 +357,58 @@ export const ProposalAnchorAuditSchema = Type.Object({
   fingerprints: Type.Record(Type.String(), Type.Record(Type.String(), Type.String())),
 });
 
+export const ReconciliationCodeEvidenceAnchorSchema = Type.Object({
+  file: Type.String({ minLength: 1, maxLength: 512 }),
+  symbol: Type.Optional(Type.String({ minLength: 1, maxLength: 512 })),
+});
+
+export const ReconciliationCodeEvidenceEntrySchema = Type.Object({
+  version_id: Type.String({ minLength: 1, maxLength: 512 }),
+  object_type: Type.Union([Type.Literal("claim"), Type.Literal("component")]),
+  anchor: ReconciliationCodeEvidenceAnchorSchema,
+  status: Type.Union([
+    Type.Literal("resolved"),
+    Type.Literal("file_only"),
+    Type.Literal("missing_file"),
+    Type.Literal("missing_symbol"),
+    Type.Literal("ambiguous_symbol"),
+    Type.Literal("unsupported_language"),
+    Type.Literal("omitted"),
+  ]),
+  normalized_path: Type.String({ minLength: 1, maxLength: 512 }),
+  anchor_start_line: Type.Optional(Type.Integer({ minimum: 1 })),
+  anchor_end_line: Type.Optional(Type.Integer({ minimum: 1 })),
+  snippet_start_line: Type.Optional(Type.Integer({ minimum: 1 })),
+  snippet_end_line: Type.Optional(Type.Integer({ minimum: 1 })),
+  snippet: Type.Optional(Type.String({ maxLength: 4096 })),
+  snippet_sha256: Type.Optional(Type.String({ pattern: "^[0-9a-f]{64}$" })),
+  anchor_fingerprint: Type.Optional(Type.String({ pattern: "^[0-9a-f]{16}$" })),
+  truncated: Type.Optional(Type.Boolean()),
+  omission_reason: Type.Optional(Type.Union([
+    Type.Literal("missing_file"),
+    Type.Literal("no_resolved_span"),
+    Type.Literal("sensitive_path"),
+    Type.Literal("binary"),
+    Type.Literal("file_too_large"),
+    Type.Literal("unreadable"),
+    Type.Literal("total_budget"),
+    Type.Literal("submodule"),
+    Type.Literal("sensitive_content"),
+    Type.Literal("not_in_attested_tree"),
+    Type.Literal("symlink"),
+    Type.Literal("not_regular_blob"),
+  ])),
+});
+
+export const ReconciliationCodeEvidenceSchema = Type.Object({
+  managed_repo_id: Type.String({ format: "uuid" }),
+  repository: Type.String({ minLength: 3, maxLength: 255 }),
+  attested_git_sha: Type.String({ pattern: "^[0-9a-fA-F]{40}$" }),
+  truncated: Type.Boolean(),
+  entries: Type.Array(ReconciliationCodeEvidenceEntrySchema, { maxItems: 128 }),
+  evidence_sha256: Type.String({ pattern: "^[0-9a-f]{64}$" }),
+});
+
 export const ProposalReviewSchema = Type.Object({
   valid: Type.Boolean(),
   errors: Type.Array(Type.String()),
@@ -680,6 +733,7 @@ export const ReconciliationCandidateSchema = Type.Object({
   memory_pr_id: Type.String(),
   merge_sha: Type.String({ minLength: 7 }),
   code_merge_sha: Type.Optional(Type.String({ pattern: "^[0-9a-fA-F]{40}$" })),
+  code_evidence_required: Type.Optional(Type.Literal(true)),
   memory_commit_ids: Type.Array(Type.String(), { minItems: 1, uniqueItems: true }),
   commits: Type.Array(Type.Object({
     memory_commit_id: Type.String(),
@@ -724,6 +778,7 @@ export const ReconciliationAttestationSchema = Type.Object({
   merge_sha: Type.String({ minLength: 7 }),
   code_merge_sha: Type.Optional(Type.String({ pattern: "^[0-9a-fA-F]{40}$" })),
   code_merge_is_ancestor: Type.Optional(Type.Boolean()),
+  code_evidence: Type.Optional(ReconciliationCodeEvidenceSchema),
   memory_pr_id: Type.String(),
   memory_commit_ids: Type.Array(Type.String(), { minItems: 1, uniqueItems: true }),
   ancestry: Type.Array(ReconciliationProofSchema, { minItems: 1 }),
@@ -897,6 +952,8 @@ export type ManagedProposal = Static<typeof ProposalRecordSchema>;
 export type ManagedMemoryPr = Static<typeof MemoryPrSchema>;
 export type ManagedMemoryStatus = Static<typeof MemoryStatusSchema>;
 export type ManagedPromotionCleanup = Static<typeof PromotionCleanupSchema>;
+export type ManagedReconciliationCodeEvidenceEntry = Static<typeof ReconciliationCodeEvidenceEntrySchema>;
+export type ManagedReconciliationCodeEvidence = Static<typeof ReconciliationCodeEvidenceSchema>;
 export type ManagedReconciliationAttestation = Static<typeof ReconciliationAttestationSchema>;
 export type ManagedReconciliationCandidate = Static<typeof ReconciliationCandidateSchema>;
 export type ManagedReconciliationAttestationResult = Static<typeof ReconciliationAttestationResultSchema>;

@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { auditClaimCodeAnchors } from "../../libs/knowledge-graph/code-anchors/audit.js";
+import { buildReconciliationCodeEvidence } from "../../libs/knowledge-graph/code-anchors/evidence.js";
 import { fingerprintClaimAnchors } from "../../libs/knowledge-graph/code-anchors/fingerprint.js";
 import { ensureGreplicaConfig, managedApiUrl } from "../../libs/config/greplica-config.js";
 import type {
@@ -43,6 +44,7 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
     memory_pr_id: string;
     audited_claim_versions: number;
     audited_component_versions: number;
+    code_evidence_entries?: number;
     memory_commit_ids: string[];
   }> = [];
   const skipped: Array<{
@@ -232,6 +234,29 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
     for (const component of componentAuditClaims) {
       fingerprints[component.id] = await fingerprintClaimAnchors(repoRoot, component.code_anchors);
     }
+    const codeEvidence = candidate.code_evidence_required === true
+      ? await buildReconciliationCodeEvidence(repoRoot, {
+        managedRepoId,
+        repository,
+        attestedGitSha: mergeSha,
+        anchors: [
+          ...candidate.claim_versions.flatMap(({ version_id, claim }) =>
+            (claim.code_anchors ?? []).map((anchor) => ({
+              versionId: version_id,
+              objectType: "claim" as const,
+              anchor,
+            }))
+          ),
+          ...(candidate.component_versions ?? []).flatMap(({ version_id, component }) =>
+            componentCodeAnchors(component.code_anchor).map((anchor) => ({
+              versionId: version_id,
+              objectType: "component" as const,
+              anchor,
+            }))
+          ),
+        ],
+      })
+      : undefined;
     const observedDefaultHeadSha = assertCurrentRemoteDefaultHead(
       repoRoot,
       mergeSha,
@@ -248,6 +273,7 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
       ancestry,
       audit_key: "version_id",
       anchor_audit: { result, fingerprints },
+      code_evidence: codeEvidence,
       observed_default_head_sha: observedDefaultHeadSha,
       ref: process.env.GITHUB_REF,
       run_id: process.env.GITHUB_RUN_ID,
@@ -266,6 +292,7 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
       memory_pr_id: response.memory_pr_id ?? candidate.memory_pr_id,
       audited_claim_versions: candidate.claim_versions.length,
       audited_component_versions: candidate.component_versions?.length ?? 0,
+      ...(codeEvidence === undefined ? {} : { code_evidence_entries: codeEvidence.entries.length }),
       memory_commit_ids: candidate.memory_commit_ids,
     });
     excludedMemoryPrIds.push(candidate.memory_pr_id);
@@ -309,6 +336,9 @@ function verifyCandidate(candidate: ManagedReconciliationCandidate, mergeSha: st
   if (candidate.memory_commit_ids.length === 0) throw new Error("Managed reconciliation candidate has no memory commits.");
   if (candidate.code_merge_sha !== undefined && !/^[0-9a-f]{40}$/i.test(candidate.code_merge_sha)) {
     throw new Error("Managed reconciliation candidate has an invalid code merge SHA.");
+  }
+  if (candidate.code_evidence_required !== undefined && candidate.code_evidence_required !== true) {
+    throw new Error("Managed reconciliation candidate has an invalid code evidence requirement.");
   }
   const candidateIds = [...candidate.memory_commit_ids].sort();
   const commitIds = candidate.commits.map((commit) => commit.memory_commit_id).sort();

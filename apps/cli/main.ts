@@ -1349,10 +1349,10 @@ function parseGraphSelectionArgs(args: string[], passthroughFlags: ReadonlySet<s
     remaining.push(arg);
   }
 
-  if (mainOnly && (workingUsers.length > 0 || memoryPrId !== undefined || includeQuarantined)) {
-    throw new Error("--main-only cannot be combined with working, Memory PR, or quarantine overlays.");
+  if (mainOnly && workingUsers.length > 0) {
+    throw new Error("--main-only cannot be combined with working overlays.");
   }
-  const uniqueWorkingUsers = [...new Set(workingUsers)];
+  const uniqueWorkingUsers = uniqueGithubLogins(workingUsers);
   const hasView = mainOnly || uniqueWorkingUsers.length > 0 || memoryPrId !== undefined || includeQuarantined;
   const view = hasView
     ? {
@@ -1364,6 +1364,16 @@ function parseGraphSelectionArgs(args: string[], passthroughFlags: ReadonlySet<s
       }
     : undefined;
   return { view, json, remaining };
+}
+
+function uniqueGithubLogins(logins: string[]): string[] {
+  const seen = new Set<string>();
+  return logins.filter((login) => {
+    const key = login.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function defaultGraphViewOutputPath(repoName: string): string {
@@ -1440,6 +1450,11 @@ function positionalWithJson(args: string[], command: CommandKey): { positional: 
 function printProposalSummary(proposal: ManagedProposal): void {
   const commit = proposal.memory_commit;
   const sessions = commit.session_refs.map((session) => session.id).join(",") || "-";
+  const agentPlatforms = [
+    commit.agent_platform,
+    ...commit.session_refs.map((session) => session.agent_platform),
+  ].filter((value): value is string => value !== undefined);
+  const agents = [...new Set(agentPlatforms)].join(",") || "-";
   const currentLogin = commit.author.github_login;
   const historicalLogin = commit.author_github_login_snapshot;
   const author = historicalLogin === undefined || historicalLogin === currentLogin
@@ -1450,6 +1465,8 @@ function printProposalSummary(proposal: ManagedProposal): void {
     commit.state,
     author,
     commit.git?.branch ?? "-",
+    `head:${commit.git?.git_head ?? "-"}`,
+    `agent:${agents}`,
     commit.code_pr?.number === undefined ? "-" : `#${commit.code_pr.number}`,
     commit.memory_pr_id ?? "-",
     sessions,

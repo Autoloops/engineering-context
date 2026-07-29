@@ -217,7 +217,9 @@ export class ManagedGraphMemoryClient implements GraphMemoryProvider {
     const login = this.credentials?.user.githubLogin;
     return {
       ...view,
-      working_users: [...new Set(login === undefined ? view.working_users : [login, ...view.working_users])],
+      working_users: uniqueGithubLogins(
+        login === undefined ? view.working_users : [login, ...view.working_users],
+      ),
     };
   }
 
@@ -396,15 +398,23 @@ function githubRepository(remoteUrl: string | undefined): string | undefined {
 function viewQuery(view: ManagedGraphView | undefined): string {
   if (view === undefined) return "";
   const query = new URLSearchParams({ base: view.base });
-  if (view.working_users?.length === 0 &&
-      view.memory_pr_id === undefined &&
-      view.include_quarantined !== true) {
+  if (view.working_users?.length === 0) {
     query.set("main_only", "true");
   }
   for (const user of view.working_users ?? []) query.append("working_user", user);
   if (view.memory_pr_id !== undefined) query.set("memory_pr_id", view.memory_pr_id);
   if (view.include_quarantined === true) query.set("include_quarantined", "true");
   return `?${query.toString()}`;
+}
+
+function uniqueGithubLogins(logins: string[]): string[] {
+  const seen = new Set<string>();
+  return logins.filter((login) => {
+    const key = login.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function responseCapabilities(response: Response): Set<string> {
