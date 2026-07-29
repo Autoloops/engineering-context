@@ -292,6 +292,11 @@ export class SqliteRepository implements GraphReadRepository {
       .all(repoId) as ClaimProvenanceRecord[];
   }
 
+  readEdges(repoId: string): Edge[] {
+    const rows = this.db.prepare("SELECT * FROM edges WHERE repo_id = ?").all(repoId) as EdgeRow[];
+    return deserializeEdges(rows);
+  }
+
   // Baseline anchor fingerprints stored when each claim was written, keyed by
   // claim id then by anchor key. Used by the anchor audit to detect drift.
   readClaimAnchorFingerprints(repoId: string, ids: string[]): Map<string, Record<string, string>> {
@@ -544,10 +549,7 @@ export class SqliteRepository implements GraphReadRepository {
     const rows = this.db
       .prepare(`SELECT * FROM edges WHERE repo_id = ? AND id IN (${placeholders(ids)})`)
       .all(repoId, ...ids) as EdgeRow[];
-    return rows.map(({ repo_id: _repoId, metadata, ...row }) => ({
-      ...row,
-      metadata: metadata === null ? undefined : (JSON.parse(metadata) as Record<string, unknown>),
-    }));
+    return deserializeEdges(rows);
   }
 
   private loadByIds<T>(repoId: string, table: string, ids: string[]): T[] {
@@ -569,6 +571,13 @@ function activeSubjectKeys(memberships: MembershipRow[], edges: Edge[]): Set<str
   }
 
   return active;
+}
+
+function deserializeEdges(rows: EdgeRow[]): Edge[] {
+  return rows.map(({ repo_id: _repoId, metadata, ...row }) => ({
+    ...row,
+    metadata: metadata === null ? undefined : (JSON.parse(metadata) as Record<string, unknown>),
+  }));
 }
 
 function selectIds(memberships: MembershipRow[], type: MembershipRow["subject_type"]): string[] {
