@@ -64,6 +64,44 @@ const compactEdge = {
 const compactResult = validateProposal(normalizeProposal(compactEdge));
 assert.equal(compactResult.valid, true, `compact edge must stay valid, got: ${JSON.stringify(compactResult.errors)}`);
 
+const selfSupersedes = normalizeProposal({
+  title: "Self supersedes",
+  creates: {
+    claims: [
+      {
+        id: "claim.self_supersedes",
+        kind: "fact",
+        text: "A claim cannot supersede itself.",
+        truth: "unknown",
+        intent: "unknown",
+        supersedes: "claim.self_supersedes",
+      },
+    ],
+  },
+});
+const selfSupersedesResult = validateProposal(selfSupersedes);
+assert.equal(selfSupersedesResult.valid, false, "self-superseding claims must be invalid");
+assert.ok(
+  selfSupersedesResult.errors.some((error) => error.includes("cannot supersede itself")),
+  `expected a self-supersedes error, got: ${JSON.stringify(selfSupersedesResult.errors)}`,
+);
+
+const containsCycle = normalizeProposal({
+  title: "Contains cycle",
+  creates: {
+    components: [
+      { id: "component.cycle_a", name: "Cycle A", contains: "component.cycle_b" },
+      { id: "component.cycle_b", name: "Cycle B", contains: "component.cycle_a" },
+    ],
+  },
+});
+const containsCycleResult = validateProposal(containsCycle);
+assert.equal(containsCycleResult.valid, false, "proposal-local contains cycles must be invalid");
+assert.ok(
+  containsCycleResult.errors.some((error) => error.includes("creates a contains cycle")),
+  `expected a contains-cycle error, got: ${JSON.stringify(containsCycleResult.errors)}`,
+);
+
 const tmp = mkdtempSync(join(tmpdir(), "greplica-proposal-validate-test-"));
 const db = openDatabase(join(tmp, "graph.db"));
 const repository = new SqliteRepository(db);
@@ -85,6 +123,11 @@ try {
     repo_name: "repo-c",
     default_branch: "main",
   };
+  const repoD = {
+    repo_root: join(tmp, "repo-d"),
+    repo_name: "repo-d",
+    default_branch: "main",
+  };
   const repoAProposal = {
     title: "Seed CLI component",
     creates: {
@@ -101,6 +144,7 @@ try {
   const initializedA = service.initRepo(repoA);
   const initializedB = service.initRepo(repoB);
   service.initRepo(repoC);
+  const initializedD = service.initRepo(repoD);
   const memoryCommit = repository.createMemoryCommit({
     scope_id: initializedA.working_scope_id,
     title: "Seed repo A",
@@ -146,6 +190,65 @@ try {
   assert.ok(
     repoBDuplicateResult.errors.includes("component:component.cli already exists."),
     `expected repo B duplicate error, got: ${JSON.stringify(repoBDuplicateResult.errors)}`,
+  );
+
+  const repoDSeed = normalizeProposal({
+    title: "Seed graph relationships",
+    creates: {
+      components: [
+        { id: "component.parent", name: "Parent" },
+        { id: "component.child", name: "Child" },
+      ],
+      claims: [
+        {
+          id: "claim.current",
+          kind: "fact",
+          text: "Current claim.",
+          truth: "unknown",
+          intent: "unknown",
+        },
+        {
+          id: "claim.previous",
+          kind: "fact",
+          text: "Previous claim.",
+          truth: "unknown",
+          intent: "unknown",
+        },
+      ],
+      edges: [
+        { kind: "contains", from: "component.parent", to: "component.child" },
+        { kind: "supersedes", from: "claim.current", to: "claim.previous" },
+      ],
+    },
+  });
+  const repoDCommit = repository.createMemoryCommit({
+    scope_id: initializedD.working_scope_id,
+    title: repoDSeed.title,
+  });
+  repository.createProposalRecords(initializedD.working_scope_id, repoDCommit.id, repoDSeed);
+
+  const storedContainsCycle = await service.validateProposal(repoD, {
+    title: "Reverse stored contains edge",
+    creates: {
+      edges: [{ kind: "contains", from: "component.child", to: "component.parent" }],
+    },
+  });
+  assert.equal(storedContainsCycle.valid, false, "proposals must not close a cycle against a stored contains edge");
+  assert.ok(
+    storedContainsCycle.errors.some((error) => error.includes("creates a contains cycle")),
+    `expected a stored contains-cycle error, got: ${JSON.stringify(storedContainsCycle.errors)}`,
+  );
+
+  const storedSupersedesCycle = await service.validateProposal(repoD, {
+    title: "Reverse stored supersedes edge",
+    creates: {
+      edges: [{ kind: "supersedes", from: "claim.previous", to: "claim.current" }],
+    },
+  });
+  assert.equal(storedSupersedesCycle.valid, false, "proposals must not close a cycle against a stored supersedes edge");
+  assert.ok(
+    storedSupersedesCycle.errors.some((error) => error.includes("creates a supersedes cycle")),
+    `expected a stored supersedes-cycle error, got: ${JSON.stringify(storedSupersedesCycle.errors)}`,
   );
 
   const repoAGraph = service.readGraph(repoA);
@@ -194,3 +297,78 @@ for (const { name, proposal } of malformedCompactRelationshipCases) {
 }
 
 console.log("check-proposal-validate: ok");
+
+// Security regression: code_anchors[].file must reject ".." path-traversal
+// segments, not just absolute paths. The validator's own error message says
+// "must be repo-relative" -- it must actually enforce that, since the
+// downstream code-anchor resolver's isRepoRelative() guard should not be the
+// only thing standing between a proposal and an out-of-repo file read.
+const traversalCases = [
+  "../../../../etc/passwd",
+  "../secrets.env",
+  "components/../../../../etc/passwd",
+  "..\\..\\..\\Windows\\System32\\config\\SAM",
+  "\\Windows\\System32\\config\\SAM",
+  "\\\\server\\share\\secret.txt",
+  "\\\\?\\C:\\Windows\\System32\\config\\SAM",
+];
+
+for (const file of traversalCases) {
+  const traversalProposal = {
+    title: "t",
+    creates: {
+      components: [{ id: "component.a", name: "A" }],
+      claims: [
+        {
+          id: "claim.a",
+          kind: "fact",
+          text: "x",
+          truth: "unknown",
+          intent: "intended",
+          about: ["component.a"],
+          code_anchors: [{ file }],
+        },
+      ],
+    },
+  };
+
+  let normalizedTraversal;
+  assert.doesNotThrow(() => {
+    normalizedTraversal = normalizeProposal(traversalProposal);
+  }, `normalizeProposal must not throw for traversal case: ${file}`);
+
+  const traversalResult = validateProposal(normalizedTraversal);
+  assert.equal(traversalResult.valid, false, `expected invalid (path traversal) for code_anchors[].file = ${file}`);
+  assert.ok(
+    traversalResult.errors.some((error) => error.includes("repo-relative")),
+    `expected a repo-relative error for code_anchors[].file = ${file}, got: ${JSON.stringify(traversalResult.errors)}`,
+  );
+}
+
+// A genuinely repo-relative path (including one that legitimately contains ".."
+// as a substring, not a path segment) must still be accepted.
+const validAnchorProposal = {
+  title: "t",
+  creates: {
+    components: [{ id: "component.a", name: "A" }],
+    claims: [
+      {
+        id: "claim.a",
+        kind: "fact",
+        text: "x",
+        truth: "unknown",
+        intent: "intended",
+        about: ["component.a"],
+        code_anchors: [{ file: "apps/cli/main.ts" }, { file: "libs/foo..bar/index.ts" }],
+      },
+    ],
+  },
+};
+const normalizedValidAnchor = normalizeProposal(validAnchorProposal);
+const validAnchorResult = validateProposal(normalizedValidAnchor);
+assert.ok(
+  !validAnchorResult.errors.some((error) => error.includes("repo-relative")),
+  `expected no repo-relative error for legitimate paths, got: ${JSON.stringify(validAnchorResult.errors)}`,
+);
+
+console.log("check-proposal-validate: path-traversal regression ok");

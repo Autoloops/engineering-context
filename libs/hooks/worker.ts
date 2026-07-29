@@ -3,9 +3,10 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ClaimedMemoryUpdateAttempt } from "./types.js";
-import { HookSessionStore } from "./session-state.js";
+import { LocalAgentRuntimeStore } from "./runtime-store.js";
 import { WorkerLease } from "../utils/worker-lease.js";
-import { ensureGreplicaConfig, type GreplicaConfig } from "../config/greplica-config.js";
+import { ensureGreplicaConfig } from "../config/greplica-config.js";
+import { canScheduleMemoryUpdates, type RepoInstallation } from "../install/repo-installation-store.js";
 import { platformInstaller } from "../install/platforms/index.js";
 import { openDatabase } from "../storage/sqlite/db.js";
 
@@ -28,8 +29,8 @@ export function startHookWorker(): void {
   }
 }
 
-export function shouldRunAutoMemoryUpdates(config: Pick<GreplicaConfig, "session">): boolean {
-  return config.session.autoMemoryUpdates;
+export function shouldRunAutoMemoryUpdates(installation: RepoInstallation): boolean {
+  return canScheduleMemoryUpdates(installation);
 }
 
 export async function runHookWorker(): Promise<void> {
@@ -47,9 +48,9 @@ export async function runHookWorker(): Promise<void> {
     heartbeat.unref();
 
     const config = ensureGreplicaConfig();
-    const sessionStore = new HookSessionStore(db, config.session);
+    const runtimeStore = new LocalAgentRuntimeStore(db, config.session);
     if (!lease.renew()) return;
-    const attempts = sessionStore.claimDueMemoryUpdateAttempts();
+    const attempts = runtimeStore.claimDueMemoryUpdateAttempts();
     for (const attempt of attempts) {
       if (!leaseValid || !lease.renew()) return;
       await maybeUpdateWorkingMemory(attempt);
