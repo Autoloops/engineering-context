@@ -114,7 +114,7 @@ jobs:
       merge-sha: ${{ github.sha }}
 ```
 
-The push trigger reconciles immediately after default-branch updates; the hourly schedule retries unmatched and stalled work without a human memory-admin step. The workflow checks out `merge-sha` with full history, installs an immutable Greplica Action revision, audits every eligible Memory PR and its version-keyed anchors (including code drift from stored baselines), and attests through GitHub OIDC. It does not use a repository or model secret. Managed Greplica must allowlist both signed reusable-workflow claims for the pinned revision:
+The push trigger reconciles immediately after default-branch updates; the hourly schedule retries unmatched and stalled work without a human memory-admin step. The workflow checks out `merge-sha` with full history, installs an immutable Greplica Action revision, proves that each code PR's recorded merge commit is contained in that exact checkout, audits every eligible Memory PR and its version-keyed anchors (including code drift from stored baselines), and attests through GitHub OIDC. It does not use a repository or model secret. Managed Greplica must allowlist both signed reusable-workflow claims for the pinned revision:
 
 - `job_workflow_ref=Autoloops/greplica/.github/workflows/reconcile.yml@<full-40-character-commit-sha>`
 - `job_workflow_sha=<the-same-full-40-character-commit-sha>`

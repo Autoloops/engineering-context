@@ -46,8 +46,10 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
   }> = [];
   const skipped: Array<{
     memory_pr_id: string;
-    reason: "git_head_not_ancestor" | "git_head_not_in_pr_delta";
+    reason: "code_merge_not_ancestor" | "git_head_not_ancestor" | "git_head_not_in_pr_delta";
     memory_commit_ids: string[];
+    code_merge_sha?: string;
+    code_merge_is_ancestor?: boolean;
     response: ManagedReconciliationRejectionResult;
   }> = [];
   const excludedMemoryPrIds: string[] = [];
@@ -71,6 +73,10 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
       throw new Error(`Managed reconciliation returned duplicate Memory PR ${candidate.memory_pr_id}.`);
     }
     verifyCandidate(candidate, mergeSha);
+    const codeMergeSha = candidate.code_merge_sha?.toLowerCase();
+    const codeMergeIsAncestor = codeMergeSha === undefined
+      ? undefined
+      : hasGitCommit(repoRoot, codeMergeSha) && isAncestor(repoRoot, codeMergeSha, mergeSha);
     const verifiedRanges = new Map<string, VerifiedPrRange>();
     const proofs = candidate.commits.map((commit) => {
       const proofMode = commit.proof_mode ?? "default_ancestry";
@@ -124,14 +130,22 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
       proof.ancestry.is_ancestor && !proof.isInPrDelta
     );
     const ancestry = proofs.map((proof) => proof.ancestry);
-    if (nonAncestors.length > 0 || outsidePrDelta.length > 0) {
+    if (codeMergeIsAncestor === false || nonAncestors.length > 0 || outsidePrDelta.length > 0) {
       const failures = nonAncestors.length > 0 ? nonAncestors : outsidePrDelta;
-      const reason = nonAncestors.length > 0 ? "git_head_not_ancestor" as const : "git_head_not_in_pr_delta" as const;
-      const rejectedMemoryCommitIds = failures.map((proof) => proof.ancestry.memory_commit_id);
+      const reason = codeMergeIsAncestor === false
+        ? "code_merge_not_ancestor" as const
+        : nonAncestors.length > 0
+          ? "git_head_not_ancestor" as const
+          : "git_head_not_in_pr_delta" as const;
+      const rejectedMemoryCommitIds = reason === "code_merge_not_ancestor"
+        ? []
+        : failures.map((proof) => proof.ancestry.memory_commit_id);
       const generationKey = JSON.stringify({
         memory_pr_id: candidate.memory_pr_id,
         memory_commit_ids: [...candidate.memory_commit_ids].sort(),
         rejected_memory_commit_ids: [...rejectedMemoryCommitIds].sort(),
+        code_merge_sha: codeMergeSha,
+        code_merge_is_ancestor: codeMergeIsAncestor,
         reason,
         ancestry,
       });
@@ -150,6 +164,8 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
         managed_repo_id: managedRepoId,
         repository,
         merge_sha: mergeSha,
+        code_merge_sha: codeMergeSha,
+        code_merge_is_ancestor: codeMergeIsAncestor,
         memory_pr_id: candidate.memory_pr_id,
         memory_commit_ids: candidate.memory_commit_ids,
         rejected_memory_commit_ids: rejectedMemoryCommitIds,
@@ -175,6 +191,8 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
         memory_pr_id: candidate.memory_pr_id,
         reason,
         memory_commit_ids: rejectedMemoryCommitIds,
+        code_merge_sha: codeMergeSha,
+        code_merge_is_ancestor: codeMergeIsAncestor,
         response,
       });
       continue;
@@ -206,6 +224,8 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
       managed_repo_id: managedRepoId,
       repository,
       merge_sha: mergeSha,
+      code_merge_sha: codeMergeSha,
+      code_merge_is_ancestor: codeMergeIsAncestor,
       memory_pr_id: candidate.memory_pr_id,
       memory_commit_ids: candidate.memory_commit_ids,
       ancestry,
@@ -269,6 +289,9 @@ function verifyCandidate(candidate: ManagedReconciliationCandidate, mergeSha: st
     throw new Error(`Managed reconciliation candidate is bound to ${candidate.merge_sha}, not ${mergeSha}.`);
   }
   if (candidate.memory_commit_ids.length === 0) throw new Error("Managed reconciliation candidate has no memory commits.");
+  if (candidate.code_merge_sha !== undefined && !/^[0-9a-f]{40}$/i.test(candidate.code_merge_sha)) {
+    throw new Error("Managed reconciliation candidate has an invalid code merge SHA.");
+  }
   const candidateIds = [...candidate.memory_commit_ids].sort();
   const commitIds = candidate.commits.map((commit) => commit.memory_commit_id).sort();
   if (JSON.stringify(candidateIds) !== JSON.stringify(commitIds)) {

@@ -67,8 +67,18 @@ exec("git", ["-C", repoRoot, "checkout", "--quiet", defaultBranch]);
 writeFileSync(join(repoRoot, "example.ts"), "export function example() { return 2; }\n");
 exec("git", ["-C", repoRoot, "add", "example.ts"]);
 exec("git", ["-C", repoRoot, "commit", "--quiet", "-m", "squash feature"]);
+const codeMergeSha = exec("git", ["-C", repoRoot, "rev-parse", "HEAD"]).trim();
+exec("git", ["-C", repoRoot, "commit", "--quiet", "--allow-empty", "-m", "default branch descendant"]);
 const mergeSha = exec("git", ["-C", repoRoot, "rev-parse", "HEAD"]).trim();
+assert.equal(gitIsAncestor(repoRoot, codeMergeSha, mergeSha), true,
+  "fixture must place the code PR merge before the exact default checkout");
 assert.equal(gitIsAncestor(repoRoot, featureSha, mergeSha), false, "fixture must model a squash/rebase merge");
+const unrelatedCodeMergeSha = exec(
+  "git",
+  ["-C", repoRoot, "commit-tree", `${featureSha}^{tree}`, "-p", featureSha, "-m", "force-pushed merge"],
+).trim();
+assert.equal(gitIsAncestor(repoRoot, unrelatedCodeMergeSha, mergeSha), false,
+  "fixture must include a code merge outside the exact default checkout");
 const originRoot = join(temporary, "origin.git");
 exec("git", ["init", "--quiet", "--bare", originRoot]);
 exec("git", ["-C", repoRoot, "remote", "add", "origin", originRoot]);
@@ -475,6 +485,9 @@ const rejections = [];
 const rejectedMemoryPrIds = new Set();
 let candidateCalls = 0;
 let forcePushMode = false;
+let codeMergeFailureMode = false;
+let codeMergeFailureSha = unrelatedCodeMergeSha;
+let codeMergeFailureMemoryPrId = "memory-pr-code-merge-away";
 const server = createServer(async (incoming, response) => {
   const url = new URL(incoming.url, "http://127.0.0.1");
   const chunks = [];
@@ -497,6 +510,27 @@ const server = createServer(async (incoming, response) => {
     candidateCalls += 1;
     assert.equal(url.searchParams.get("merge_sha"), mergeSha);
     const excluded = url.searchParams.getAll("exclude_memory_pr");
+    if (codeMergeFailureMode) {
+      assert.deepEqual(excluded, []);
+      if (rejectedMemoryPrIds.has(codeMergeFailureMemoryPrId)) {
+        send(404, { message: "No Memory PR is ready for this merged checkout." });
+        return;
+      }
+      send(200, {
+        memory_pr_id: codeMergeFailureMemoryPrId,
+        merge_sha: mergeSha,
+        code_merge_sha: codeMergeFailureSha,
+        memory_commit_ids: ["commit-code-merge-proof"],
+        commits: [{
+          memory_commit_id: "commit-code-merge-proof",
+          git_head: baseSha,
+          head_repository: "example/project",
+          proof_mode: "default_ancestry",
+        }],
+        claim_versions: [],
+      });
+      return;
+    }
     if (forcePushMode) {
       assert.deepEqual(excluded, []);
       if (rejectedMemoryPrIds.has("memory-pr-force-push")) {
@@ -577,6 +611,7 @@ const server = createServer(async (incoming, response) => {
     send(200, {
       memory_pr_id: "memory-pr-1",
       merge_sha: mergeSha,
+      code_merge_sha: codeMergeSha,
       memory_commit_ids: ["commit-1", "commit-dependency-1"],
       commits: [{
         memory_commit_id: "commit-1",
@@ -627,7 +662,9 @@ const server = createServer(async (incoming, response) => {
       accepted: true,
       memory_pr_id: body.memory_pr_id,
       removed_commit_ids: body.rejected_memory_commit_ids,
-      remaining_commit_ids: [],
+      remaining_commit_ids: body.reason === "code_merge_not_ancestor"
+        ? body.memory_commit_ids
+        : [],
     });
     return;
   }
@@ -690,6 +727,9 @@ try {
     is_ancestor: true,
   }]);
   assert.equal(attestations[0].observed_default_head_sha, mergeSha);
+  assert.equal(attestations[0].code_merge_sha, codeMergeSha);
+  assert.equal(attestations[0].code_merge_is_ancestor, true,
+    "the Action must attest that the code PR merge is an ancestor of the later exact checkout");
   assert.equal(attestations[0].anchor_audit.result.drifted[0].claim_id, "version-1");
   assert.notEqual(
     attestations[0].anchor_audit.fingerprints["version-1"]["example.ts#example"],
@@ -702,6 +742,10 @@ try {
     proof_mode: "default_ancestry",
     is_ancestor: true,
   }]);
+  assert.equal(Object.hasOwn(attestations[1], "code_merge_sha"), false,
+    "legacy candidates without code-merge proof must remain compatible");
+  assert.equal(Object.hasOwn(attestations[1], "code_merge_is_ancestor"), false,
+    "legacy attestations must not send unsupported proof fields");
   assert.equal(
     exec("git", ["-C", repoRoot, "rev-parse", "FETCH_HEAD"]).trim(),
     featureSha,
@@ -777,6 +821,72 @@ try {
   assert.equal(rejections.at(-1).ancestry[0].verified_base_sha, baseSha);
   assert.equal(rejections.at(-1).ancestry[0].is_ancestor, false);
 
+  forcePushMode = false;
+  codeMergeFailureMode = true;
+  const candidateCallsBeforeCodeMergeRejection = candidateCalls;
+  const rejectionsBeforeCodeMergeRejection = rejections.length;
+  const codeMergeResult = await run(process.execPath, [
+    cliPath,
+    "memory",
+    "reconcile",
+    "--managed-repo",
+    installation.managedRepoId,
+    "--merge-sha",
+    mergeSha,
+    "--api-url",
+    apiUrl,
+  ], repoRoot, {
+    ...process.env,
+    ACTIONS_ID_TOKEN_REQUEST_URL: `${apiUrl}/oidc?api-version=1`,
+    ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-request-token",
+    GITHUB_REPOSITORY: "example/project",
+    GITHUB_REF: `refs/heads/${defaultBranch}`,
+    GITHUB_RUN_ID: "126",
+  });
+  assert.match(codeMergeResult.stdout, /"reconciliation_count": 0/);
+  assert.match(codeMergeResult.stdout, /"skipped_count": 1/);
+  assert.match(codeMergeResult.stdout, /"reason": "code_merge_not_ancestor"/);
+  assert.match(codeMergeResult.stdout, /"memory_commit_ids": \[\]/);
+  assert.equal(candidateCalls, candidateCallsBeforeCodeMergeRejection + 2,
+    "a candidate-level code-merge rejection must be persisted before candidate refetch");
+  assert.equal(rejections.length, rejectionsBeforeCodeMergeRejection + 1);
+  const codeMergeRejection = rejections.at(-1);
+  assert.equal(codeMergeRejection.memory_pr_id, "memory-pr-code-merge-away");
+  assert.equal(codeMergeRejection.code_merge_sha, unrelatedCodeMergeSha);
+  assert.equal(codeMergeRejection.code_merge_is_ancestor, false);
+  assert.equal(codeMergeRejection.reason, "code_merge_not_ancestor");
+  assert.deepEqual(codeMergeRejection.rejected_memory_commit_ids, [],
+    "a code-merge failure must not be mislabeled as a per-memory-commit failure");
+  assert.deepEqual(codeMergeRejection.memory_commit_ids, ["commit-code-merge-proof"]);
+  assert.equal(codeMergeRejection.ancestry[0].is_ancestor, true,
+    "independent memory-commit ancestry may pass while the code merge proof fails");
+
+  codeMergeFailureSha = "f".repeat(40);
+  codeMergeFailureMemoryPrId = "memory-pr-code-merge-missing";
+  const missingCodeMergeResult = await run(process.execPath, [
+    cliPath,
+    "memory",
+    "reconcile",
+    "--managed-repo",
+    installation.managedRepoId,
+    "--merge-sha",
+    mergeSha,
+    "--api-url",
+    apiUrl,
+  ], repoRoot, {
+    ...process.env,
+    ACTIONS_ID_TOKEN_REQUEST_URL: `${apiUrl}/oidc?api-version=1`,
+    ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-request-token",
+    GITHUB_REPOSITORY: "example/project",
+    GITHUB_REF: `refs/heads/${defaultBranch}`,
+    GITHUB_RUN_ID: "127",
+  });
+  assert.match(missingCodeMergeResult.stdout, /"reason": "code_merge_not_ancestor"/);
+  assert.equal(rejections.at(-1).code_merge_sha, "f".repeat(40));
+  assert.equal(rejections.at(-1).code_merge_is_ancestor, false,
+    "an unavailable code merge object must never be accepted as trusted ancestry");
+
+  codeMergeFailureMode = false;
   const advancedDefaultSha = exec(
     "git",
     ["-C", repoRoot, "commit-tree", `${mergeSha}^{tree}`, "-p", mergeSha, "-m", "advance default"],
@@ -807,7 +917,7 @@ try {
       ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-request-token",
       GITHUB_REPOSITORY: "example/project",
       GITHUB_REF: `refs/heads/${defaultBranch}`,
-      GITHUB_RUN_ID: "126",
+      GITHUB_RUN_ID: "128",
     }),
     /historical workflow reruns cannot reconcile memory/,
   );

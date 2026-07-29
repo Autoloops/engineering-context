@@ -633,6 +633,7 @@ export const MemoryStatusSchema = Type.Object({
 export const ReconciliationCandidateSchema = Type.Object({
   memory_pr_id: Type.String(),
   merge_sha: Type.String({ minLength: 7 }),
+  code_merge_sha: Type.Optional(Type.String({ pattern: "^[0-9a-fA-F]{40}$" })),
   memory_commit_ids: Type.Array(Type.String(), { minItems: 1, uniqueItems: true }),
   commits: Type.Array(Type.Object({
     memory_commit_id: Type.String(),
@@ -670,6 +671,8 @@ export const ReconciliationAttestationSchema = Type.Object({
   managed_repo_id: Type.String({ format: "uuid" }),
   repository: Type.String({ minLength: 3 }),
   merge_sha: Type.String({ minLength: 7 }),
+  code_merge_sha: Type.Optional(Type.String({ pattern: "^[0-9a-fA-F]{40}$" })),
+  code_merge_is_ancestor: Type.Optional(Type.Boolean()),
   memory_pr_id: Type.String(),
   memory_commit_ids: Type.Array(Type.String(), { minItems: 1, uniqueItems: true }),
   ancestry: Type.Array(ReconciliationProofSchema, { minItems: 1 }),
@@ -692,11 +695,14 @@ export const ReconciliationRejectionSchema = Type.Object({
   managed_repo_id: Type.String({ format: "uuid" }),
   repository: Type.String({ minLength: 3 }),
   merge_sha: Type.String({ minLength: 7 }),
+  code_merge_sha: Type.Optional(Type.String({ pattern: "^[0-9a-fA-F]{40}$" })),
+  code_merge_is_ancestor: Type.Optional(Type.Boolean()),
   memory_pr_id: Type.String(),
   memory_commit_ids: Type.Array(Type.String(), { minItems: 1, uniqueItems: true }),
-  rejected_memory_commit_ids: Type.Array(Type.String(), { minItems: 1, uniqueItems: true }),
+  rejected_memory_commit_ids: Type.Array(Type.String(), { uniqueItems: true }),
   ancestry: Type.Array(ReconciliationProofSchema, { minItems: 1 }),
   reason: Type.Union([
+    Type.Literal("code_merge_not_ancestor"),
     Type.Literal("git_head_not_ancestor"),
     Type.Literal("git_head_not_in_pr_delta"),
   ]),
