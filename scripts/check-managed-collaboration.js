@@ -45,7 +45,7 @@ assert.match(reusableWorkflow, /oidc-audience: greplica-managed/);
 assert.doesNotMatch(reusableWorkflow, /\$\{\{ inputs\.(?:api-url|oidc-audience) \}\}/);
 assert.match(
   reusableWorkflow,
-  /uses: Autoloops\/greplica@b2f120919fc3b0d693b6fafaa76a39a195078a81/,
+  /uses: Autoloops\/greplica@fb14d063e9394e8b25ab2cf7c00398cbe6d25be9/,
 );
 assert.doesNotMatch(reusableWorkflow, /uses: Autoloops\/greplica@(main|refs\/heads\/|v\d)/);
 
