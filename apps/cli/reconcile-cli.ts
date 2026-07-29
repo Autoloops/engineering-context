@@ -44,11 +44,12 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
   }> = [];
   const skipped: Array<{
     memory_pr_id: string;
-    reason: "git_head_not_ancestor";
+    reason: "git_head_not_ancestor" | "git_head_not_in_pr_delta";
     memory_commit_ids: string[];
   }> = [];
   const excludedMemoryPrIds: string[] = [];
   while (true) {
+    assertCurrentRemoteDefaultHead(repoRoot, mergeSha, process.env.GITHUB_REF);
     const candidate = await reconciliationCandidate(
       apiUrl,
       managedRepoId,
@@ -61,29 +62,69 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
       throw new Error(`Managed reconciliation returned duplicate Memory PR ${candidate.memory_pr_id}.`);
     }
     verifyCandidate(candidate, mergeSha);
-    const ancestry = candidate.commits.map((commit) => {
+    const verifiedRanges = new Map<string, VerifiedPrRange>();
+    const proofs = candidate.commits.map((commit) => {
       const proofMode = commit.proof_mode ?? "default_ancestry";
-      const targetSha = proofMode === "pr_head"
-        ? verifiedPrHead(repoRoot, commit.code_pr_number, commit.verified_head_sha)
-        : mergeSha;
+      let targetSha = mergeSha;
+      let verifiedBaseSha: string | undefined;
+      let mergeBaseSha: string | undefined;
+      if (proofMode === "pr_head") {
+        const key = [
+          commit.code_pr_number,
+          commit.verified_head_sha,
+          commit.verified_base_sha ?? "",
+        ].join(":");
+        let range = verifiedRanges.get(key);
+        if (range === undefined) {
+          range = verifiedPrRange(
+            repoRoot,
+            commit.code_pr_number,
+            commit.verified_head_sha,
+            commit.verified_base_sha,
+          );
+          verifiedRanges.set(key, range);
+        }
+        targetSha = range.headSha;
+        verifiedBaseSha = range.baseSha;
+        mergeBaseSha = range.mergeBaseSha;
+      }
+      const isAncestorOfTarget = isAncestor(repoRoot, commit.git_head, targetSha);
+      const isInPrDelta = proofMode !== "pr_head" ||
+        mergeBaseSha === undefined ||
+        (
+          isAncestorOfTarget &&
+          commit.git_head.toLowerCase() !== mergeBaseSha &&
+          isAncestor(repoRoot, mergeBaseSha, commit.git_head)
+        );
       return {
-        memory_commit_id: commit.memory_commit_id,
-        git_head: commit.git_head,
-        proof_mode: proofMode,
-        ...(proofMode === "pr_head" ? { verified_head_sha: targetSha } : {}),
-        is_ancestor: isAncestor(repoRoot, commit.git_head, targetSha),
+        ancestry: {
+          memory_commit_id: commit.memory_commit_id,
+          git_head: commit.git_head,
+          proof_mode: proofMode,
+          ...(proofMode === "pr_head" ? {
+            verified_head_sha: targetSha,
+            ...(verifiedBaseSha === undefined ? {} : { verified_base_sha: verifiedBaseSha }),
+          } : {}),
+          is_ancestor: isAncestorOfTarget,
+        },
+        isInPrDelta,
       };
     });
-    const nonAncestors = ancestry.filter((entry) => !entry.is_ancestor);
-    if (nonAncestors.length > 0) {
+    const nonAncestors = proofs.filter((proof) => !proof.ancestry.is_ancestor);
+    const outsidePrDelta = proofs.filter((proof) =>
+      proof.ancestry.is_ancestor && !proof.isInPrDelta
+    );
+    if (nonAncestors.length > 0 || outsidePrDelta.length > 0) {
+      const failures = nonAncestors.length > 0 ? nonAncestors : outsidePrDelta;
       skipped.push({
         memory_pr_id: candidate.memory_pr_id,
-        reason: "git_head_not_ancestor",
-        memory_commit_ids: nonAncestors.map((entry) => entry.memory_commit_id),
+        reason: nonAncestors.length > 0 ? "git_head_not_ancestor" : "git_head_not_in_pr_delta",
+        memory_commit_ids: failures.map((proof) => proof.ancestry.memory_commit_id),
       });
       excludedMemoryPrIds.push(candidate.memory_pr_id);
       continue;
     }
+    const ancestry = proofs.map((proof) => proof.ancestry);
     const auditClaims = candidate.claim_versions.map(({ version_id, claim }) => ({ ...claim, id: version_id }));
     const baselineFingerprints = new Map(
       candidate.claim_versions
@@ -102,6 +143,11 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
       const values = await fingerprintClaimAnchors(repoRoot, claim.code_anchors);
       if (Object.keys(values).length > 0) fingerprints[claim.id] = values;
     }
+    const observedDefaultHeadSha = assertCurrentRemoteDefaultHead(
+      repoRoot,
+      mergeSha,
+      process.env.GITHUB_REF,
+    );
     const attestation: ManagedReconciliationAttestation = {
       managed_repo_id: managedRepoId,
       repository,
@@ -111,6 +157,7 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
       ancestry,
       audit_key: "version_id",
       anchor_audit: { result, fingerprints },
+      observed_default_head_sha: observedDefaultHeadSha,
       ref: process.env.GITHUB_REF,
       run_id: process.env.GITHUB_RUN_ID,
       run_attempt: process.env.GITHUB_RUN_ATTEMPT,
@@ -181,6 +228,9 @@ function verifyCandidate(candidate: ManagedReconciliationCandidate, mergeSha: st
         (commit.code_pr_number === undefined || commit.verified_head_sha === undefined)) {
       throw new Error(`Memory commit ${commit.memory_commit_id} is missing its verified PR-head proof.`);
     }
+    if (commit.verified_base_sha !== undefined && !/^[0-9a-f]{40}$/i.test(commit.verified_base_sha)) {
+      throw new Error(`Memory commit ${commit.memory_commit_id} has an invalid verified PR base SHA.`);
+    }
   }
 }
 
@@ -195,11 +245,18 @@ function isAncestor(repoRoot: string, gitHead: string, mergeSha: string): boolea
   }
 }
 
-function verifiedPrHead(
+interface VerifiedPrRange {
+  headSha: string;
+  baseSha?: string;
+  mergeBaseSha?: string;
+}
+
+function verifiedPrRange(
   repoRoot: string,
   pullRequestNumber: number | undefined,
   verifiedHeadSha: string | undefined,
-): string {
+  verifiedBaseSha: string | undefined,
+): VerifiedPrRange {
   if (pullRequestNumber === undefined || !Number.isSafeInteger(pullRequestNumber) || pullRequestNumber < 1) {
     throw new Error("PR-head proof is missing a valid code PR number.");
   }
@@ -227,7 +284,28 @@ function verifiedPrHead(
   if (!hasGitCommit(repoRoot, verifiedHeadSha)) {
     throw new Error(`Verified head ${verifiedHeadSha} for PR #${pullRequestNumber} is unavailable.`);
   }
-  return verifiedHeadSha.toLowerCase();
+  const headSha = verifiedHeadSha.toLowerCase();
+  if (verifiedBaseSha === undefined) return { headSha };
+  if (!/^[0-9a-f]{40}$/i.test(verifiedBaseSha)) {
+    throw new Error(`PR #${pullRequestNumber} proof is missing a full verified base SHA.`);
+  }
+  const baseSha = verifiedBaseSha.toLowerCase();
+  if (!hasGitCommit(repoRoot, baseSha)) {
+    throw new Error(`Verified base ${verifiedBaseSha} for PR #${pullRequestNumber} is unavailable.`);
+  }
+  let mergeBaseSha: string;
+  try {
+    mergeBaseSha = execFileSync("git", ["-C", repoRoot, "merge-base", baseSha, headSha], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim().toLowerCase();
+  } catch {
+    throw new Error(`Could not establish the verified commit range for PR #${pullRequestNumber}.`);
+  }
+  if (!/^[0-9a-f]{40}$/.test(mergeBaseSha)) {
+    throw new Error(`PR #${pullRequestNumber} has an invalid verified merge base.`);
+  }
+  return { headSha, baseSha, mergeBaseSha };
 }
 
 function hasGitCommit(repoRoot: string, sha: string): boolean {
@@ -237,6 +315,51 @@ function hasGitCommit(repoRoot: string, sha: string): boolean {
   } catch {
     return false;
   }
+}
+
+function assertCurrentRemoteDefaultHead(
+  repoRoot: string,
+  mergeSha: string,
+  githubRef: string | undefined,
+): string {
+  if (githubRef === undefined || !githubRef.startsWith("refs/heads/")) {
+    throw new Error("Reconciliation requires GITHUB_REF to identify the default branch.");
+  }
+  try {
+    execFileSync("git", ["-C", repoRoot, "check-ref-format", githubRef], { stdio: "ignore" });
+  } catch {
+    throw new Error(`Reconciliation default ref ${githubRef} is invalid.`);
+  }
+  const observedRef = "refs/greplica/reconciliation-default-head";
+  try {
+    execFileSync(
+      "git",
+      [
+        "-C",
+        repoRoot,
+        "fetch",
+        "--force",
+        "--no-tags",
+        "--no-write-fetch-head",
+        "origin",
+        `+${githubRef}:${observedRef}`,
+      ],
+      { stdio: "ignore" },
+    );
+  } catch {
+    throw new Error(`Could not fetch current default ref ${githubRef} from the caller repository.`);
+  }
+  const observed = execFileSync("git", ["-C", repoRoot, "rev-parse", observedRef], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim().toLowerCase();
+  if (observed !== mergeSha.toLowerCase()) {
+    throw new Error(
+      `Current remote default head ${observed} does not equal requested merge SHA ${mergeSha}; ` +
+      "historical workflow reruns cannot reconcile memory.",
+    );
+  }
+  return observed;
 }
 
 function assertExactCheckout(repoRoot: string, mergeSha: string): void {

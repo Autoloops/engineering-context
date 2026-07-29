@@ -494,9 +494,28 @@ const server = createServer(async (incoming, response) => {
     candidateCalls += 1;
     assert.equal(url.searchParams.get("merge_sha"), mergeSha);
     const excluded = url.searchParams.getAll("exclude_memory_pr");
+    if (excluded.length === 4) {
+      assert.deepEqual(excluded, ["memory-pr-1", "memory-pr-2", "memory-pr-3", "memory-pr-4"]);
+      send(404, { message: "No Memory PR is ready for this merged checkout." });
+      return;
+    }
     if (excluded.length === 3) {
       assert.deepEqual(excluded, ["memory-pr-1", "memory-pr-2", "memory-pr-3"]);
-      send(404, { message: "No Memory PR is ready for this merged checkout." });
+      send(200, {
+        memory_pr_id: "memory-pr-4",
+        merge_sha: mergeSha,
+        memory_commit_ids: ["commit-common-base"],
+        commits: [{
+          memory_commit_id: "commit-common-base",
+          git_head: baseSha,
+          head_repository: "example/project",
+          proof_mode: "pr_head",
+          code_pr_number: 7,
+          verified_head_sha: featureSha,
+          verified_base_sha: baseSha,
+        }],
+        claim_versions: [],
+      });
       return;
     }
     if (excluded.length === 2) {
@@ -534,7 +553,7 @@ const server = createServer(async (incoming, response) => {
     send(200, {
       memory_pr_id: "memory-pr-1",
       merge_sha: mergeSha,
-      memory_commit_ids: ["commit-1"],
+      memory_commit_ids: ["commit-1", "commit-dependency-1"],
       commits: [{
         memory_commit_id: "commit-1",
         git_head: featureSha,
@@ -542,6 +561,15 @@ const server = createServer(async (incoming, response) => {
         proof_mode: "pr_head",
         code_pr_number: 7,
         verified_head_sha: featureSha,
+        verified_base_sha: baseSha,
+      }, {
+        memory_commit_id: "commit-dependency-1",
+        git_head: featureSha,
+        head_repository: "example/project",
+        proof_mode: "pr_head",
+        code_pr_number: 7,
+        verified_head_sha: featureSha,
+        verified_base_sha: baseSha,
       }],
       claim_versions: [{
         version_id: "version-1",
@@ -598,17 +626,27 @@ try {
   });
   assert.match(result.stdout, /"accepted": true/);
   assert.match(result.stdout, /"reconciliation_count": 2/);
-  assert.match(result.stdout, /"skipped_count": 1/);
-  assert.equal(candidateCalls, 4);
+  assert.match(result.stdout, /"skipped_count": 2/);
+  assert.match(result.stdout, /"reason": "git_head_not_in_pr_delta"/);
+  assert.equal(candidateCalls, 5);
   assert.equal(attestations[0].audit_key, "version_id");
-  assert.deepEqual(attestations[0].memory_commit_ids, ["commit-1"]);
+  assert.deepEqual(attestations[0].memory_commit_ids, ["commit-1", "commit-dependency-1"]);
   assert.deepEqual(attestations[0].ancestry, [{
     memory_commit_id: "commit-1",
     git_head: featureSha,
     proof_mode: "pr_head",
     verified_head_sha: featureSha,
+    verified_base_sha: baseSha,
+    is_ancestor: true,
+  }, {
+    memory_commit_id: "commit-dependency-1",
+    git_head: featureSha,
+    proof_mode: "pr_head",
+    verified_head_sha: featureSha,
+    verified_base_sha: baseSha,
     is_ancestor: true,
   }]);
+  assert.equal(attestations[0].observed_default_head_sha, mergeSha);
   assert.equal(attestations[0].anchor_audit.result.drifted[0].claim_id, "version-1");
   assert.notEqual(
     attestations[0].anchor_audit.fingerprints["version-1"]["example.ts#example"],
@@ -663,6 +701,43 @@ try {
     attestationsBeforeMismatch,
     "a mismatched base-repository PR ref must never be attested",
   );
+
+  const advancedDefaultSha = exec(
+    "git",
+    ["-C", repoRoot, "commit-tree", `${mergeSha}^{tree}`, "-p", mergeSha, "-m", "advance default"],
+  ).trim();
+  exec("git", [
+    "-C",
+    repoRoot,
+    "push",
+    "--quiet",
+    "origin",
+    `${advancedDefaultSha}:refs/heads/${defaultBranch}`,
+  ]);
+  const candidateCallsBeforeReplay = candidateCalls;
+  await assert.rejects(
+    run(process.execPath, [
+      cliPath,
+      "memory",
+      "reconcile",
+      "--managed-repo",
+      installation.managedRepoId,
+      "--merge-sha",
+      mergeSha,
+      "--api-url",
+      apiUrl,
+    ], repoRoot, {
+      ...process.env,
+      ACTIONS_ID_TOKEN_REQUEST_URL: `${apiUrl}/oidc?api-version=1`,
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-request-token",
+      GITHUB_REPOSITORY: "example/project",
+      GITHUB_REF: "refs/heads/main",
+      GITHUB_RUN_ID: "125",
+    }),
+    /historical workflow reruns cannot reconcile memory/,
+  );
+  assert.equal(candidateCalls, candidateCallsBeforeReplay,
+    "a historical workflow rerun must fail before requesting a reconciliation candidate");
 } finally {
   await new Promise((resolve) => server.close(resolve));
 }

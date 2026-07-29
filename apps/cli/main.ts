@@ -629,7 +629,11 @@ async function runMemoryPrContextCommand(args: string[], getContext: CommandCont
   const memoryPrId = positional.shift();
   const query = positional.join(" ").trim();
   if (memoryPrId === undefined || query.length === 0) throw new Error(usage("memoryPrContext"));
-  const result = await getContext().service.contextGraph(query, { base: "main", memory_pr_id: memoryPrId });
+  const result = await getContext().service.contextGraph(query, {
+    base: "main",
+    working_users: [],
+    memory_pr_id: memoryPrId,
+  });
   console.log(json ? JSON.stringify(result, null, 2) : renderGraphContextMarkdown(result));
 }
 
@@ -1443,7 +1447,7 @@ function printMemoryPrSummary(memoryPr: ManagedMemoryPr): void {
   console.log([
     memoryPr.id,
     memoryPr.state,
-    `code-pr:#${memoryPr.code_pr.number}`,
+    memoryPr.code_pr === undefined ? "direct-default" : `code-pr:#${memoryPr.code_pr.number}`,
     memoryPr.contributor_logins.join(",") || "-",
     `${memoryPr.direct_commit_ids.length} direct`,
     `${memoryPr.dependency_commit_ids.length} dependencies`,
@@ -1467,6 +1471,16 @@ function printPromotionCleanup(memoryPr: ManagedMemoryPr): void {
 
 function printMemoryStatus(status: ManagedMemoryStatus): void {
   console.log(`Reconciliation jobs: ${status.queued} queued, ${status.running} running, ${status.failed} failed`);
+  if (status.action_verified !== undefined) console.log(`Action ready: ${status.action_verified ? "yes" : "no"}`);
+  if (status.action_verified_at !== undefined) console.log(`Action verified: ${status.action_verified_at}`);
+  if (status.action_workflow_ref !== undefined) console.log(`Action workflow ref: ${status.action_workflow_ref}`);
+  if (status.action_workflow_sha !== undefined) console.log(`Action workflow SHA: ${status.action_workflow_sha}`);
+  if (status.repair_service !== undefined) {
+    console.log(
+      `Repair service: ${status.repair_service}` +
+      (status.repair_service_detail === undefined ? "" : ` (${status.repair_service_detail})`),
+    );
+  }
   console.log(`Last sweep: ${status.last_sweep_at ?? "never"}`);
   console.log(`Last promotion: ${status.last_promotion_at ?? "never"}`);
   console.log(`Repair attempts: ${status.repair_attempts}`);

@@ -29,6 +29,7 @@ const managedRepository = {
 let deviceStarts = 0;
 let requestCount = 0;
 let importedSnapshot;
+let memoryPrContextBody;
 
 const server = createServer(async (request, response) => {
   requestCount += 1;
@@ -132,6 +133,53 @@ const server = createServer(async (request, response) => {
       "x-greplica-repo-role": managedRepository.effective_role,
       "x-greplica-access-status": "active",
     });
+    return;
+  }
+  if (request.method === "POST" && request.url === `/v1/repos/${managedRepoId}/graph/context`) {
+    memoryPrContextBody = body;
+    send(200, {
+      query: body.query,
+      search_config_version: "test",
+      embedding_status: { checked_objects: 0, created: 0, reused: 0 },
+      claims: [],
+      components: [],
+      flows: [],
+      ranked_results: [],
+      sources: [],
+    }, { "x-greplica-capabilities": "personal-working-v1,graph-selectors-v1,memory-pr-v1" });
+    return;
+  }
+  if (request.method === "GET" && request.url === `/v1/repos/${managedRepoId}/memory/status`) {
+    send(200, {
+      queued: 0,
+      running: 0,
+      failed: 0,
+      action_verified: true,
+      action_verified_at: now,
+      action_workflow_ref: `Autoloops/greplica/.github/workflows/reconcile.yml@${"a".repeat(40)}`,
+      action_workflow_sha: "a".repeat(40),
+      repair_service: "degraded",
+      repair_service_detail: "repair proxy is not configured",
+      repair_attempts: 0,
+      repaired_commits: 0,
+      promoted_commits: 0,
+      quarantined_commits: 0,
+      cleared_working_commits: 0,
+      remaining_active_working_commits: 0,
+    });
+    return;
+  }
+  if (request.method === "GET" && request.url === `/v1/repos/${managedRepoId}/memory-prs`) {
+    send(200, [{
+      id: "direct-default-memory-pr",
+      state: "reconciling",
+      direct_commit_ids: ["direct-default-commit"],
+      dependency_commit_ids: [],
+      repair_commit_ids: [],
+      contributor_logins: ["contributor-1"],
+      created_at: now,
+      updated_at: now,
+    }]);
     return;
   }
   if (request.method === "POST" && request.url === `/v1/repos/${managedRepoId}/import`) {
@@ -243,6 +291,28 @@ try {
   db.close();
   const managedGraph = await run(process.execPath, [cliPath, "graph", "read"], managedRepo, env);
   assert.match(managedGraph.stdout, /Current graph view: main \+ working/);
+  const memoryPrContext = await run(process.execPath, [
+    cliPath, "memory", "pr", "context", "memory-pr-1", "authentication", "--json",
+  ], managedRepo, env);
+  assert.match(memoryPrContext.stdout, /"query": "authentication"/);
+  assert.deepEqual(memoryPrContextBody.view, {
+    base: "main",
+    working_users: [],
+    memory_pr_id: "memory-pr-1",
+  }, "Memory PR context must not include the caller's unrelated personal working scope");
+  const memoryStatus = await run(process.execPath, [cliPath, "memory", "status"], managedRepo, env);
+  assert.match(memoryStatus.stdout, /Action ready: yes/);
+  assert.match(memoryStatus.stdout, new RegExp(`Action verified: ${now}`));
+  assert.match(memoryStatus.stdout, /Action workflow ref: Autoloops\/greplica\/\.github\/workflows\/reconcile\.yml@/);
+  assert.match(memoryStatus.stdout, new RegExp(`Action workflow SHA: ${"a".repeat(40)}`));
+  assert.match(memoryStatus.stdout, /Repair service: degraded \(repair proxy is not configured\)/);
+  const directDefaultMemoryPr = await run(
+    process.execPath,
+    [cliPath, "memory", "pr", "list"],
+    managedRepo,
+    env,
+  );
+  assert.match(directDefaultMemoryPr.stdout, /direct-default-memory-pr\s+reconciling\s+direct-default/);
 
   const requestsBeforeHook = requestCount;
   const hook = await run(process.execPath, [cliPath, "hook", "ingest", "--platform", "codex"], managedRepo, env, JSON.stringify({
