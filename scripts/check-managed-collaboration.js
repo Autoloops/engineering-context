@@ -656,7 +656,7 @@ try {
     ACTIONS_ID_TOKEN_REQUEST_URL: `${apiUrl}/oidc?api-version=1`,
     ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-request-token",
     GITHUB_REPOSITORY: "example/project",
-    GITHUB_REF: "refs/heads/main",
+    GITHUB_REF: `refs/heads/${defaultBranch}`,
     GITHUB_RUN_ID: "123",
   });
   assert.match(result.stdout, /"accepted": true/);
@@ -734,7 +734,7 @@ try {
       ACTIONS_ID_TOKEN_REQUEST_URL: `${apiUrl}/oidc?api-version=1`,
       ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-request-token",
       GITHUB_REPOSITORY: "example/project",
-      GITHUB_REF: "refs/heads/main",
+      GITHUB_REF: `refs/heads/${defaultBranch}`,
       GITHUB_RUN_ID: "124",
     }),
     /does not match verified head/,
@@ -763,7 +763,7 @@ try {
     ACTIONS_ID_TOKEN_REQUEST_URL: `${apiUrl}/oidc?api-version=1`,
     ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-request-token",
     GITHUB_REPOSITORY: "example/project",
-    GITHUB_REF: "refs/heads/main",
+    GITHUB_REF: `refs/heads/${defaultBranch}`,
     GITHUB_RUN_ID: "125",
   });
   assert.match(forcePushResult.stdout, /"reconciliation_count": 0/);
@@ -806,7 +806,7 @@ try {
       ACTIONS_ID_TOKEN_REQUEST_URL: `${apiUrl}/oidc?api-version=1`,
       ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-request-token",
       GITHUB_REPOSITORY: "example/project",
-      GITHUB_REF: "refs/heads/main",
+      GITHUB_REF: `refs/heads/${defaultBranch}`,
       GITHUB_RUN_ID: "126",
     }),
     /historical workflow reruns cannot reconcile memory/,
