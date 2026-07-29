@@ -471,7 +471,10 @@ const builtViewData = buildGraphViewData({
 assert.equal(builtViewData.claims[0].provenance.version_id, "version-built");
 
 const attestations = [];
+const rejections = [];
+const rejectedMemoryPrIds = new Set();
 let candidateCalls = 0;
+let forcePushMode = false;
 const server = createServer(async (incoming, response) => {
   const url = new URL(incoming.url, "http://127.0.0.1");
   const chunks = [];
@@ -494,24 +497,23 @@ const server = createServer(async (incoming, response) => {
     candidateCalls += 1;
     assert.equal(url.searchParams.get("merge_sha"), mergeSha);
     const excluded = url.searchParams.getAll("exclude_memory_pr");
-    if (excluded.length === 4) {
-      assert.deepEqual(excluded, ["memory-pr-1", "memory-pr-2", "memory-pr-3", "memory-pr-4"]);
-      send(404, { message: "No Memory PR is ready for this merged checkout." });
-      return;
-    }
-    if (excluded.length === 3) {
-      assert.deepEqual(excluded, ["memory-pr-1", "memory-pr-2", "memory-pr-3"]);
+    if (forcePushMode) {
+      assert.deepEqual(excluded, []);
+      if (rejectedMemoryPrIds.has("memory-pr-force-push")) {
+        send(404, { message: "No Memory PR is ready for this merged checkout." });
+        return;
+      }
       send(200, {
-        memory_pr_id: "memory-pr-4",
+        memory_pr_id: "memory-pr-force-push",
         merge_sha: mergeSha,
-        memory_commit_ids: ["commit-common-base"],
+        memory_commit_ids: ["commit-force-pushed-away"],
         commits: [{
-          memory_commit_id: "commit-common-base",
-          git_head: baseSha,
+          memory_commit_id: "commit-force-pushed-away",
+          git_head: featureSha,
           head_repository: "example/project",
           proof_mode: "pr_head",
           code_pr_number: 7,
-          verified_head_sha: featureSha,
+          verified_head_sha: mergeSha,
           verified_base_sha: baseSha,
         }],
         claim_versions: [],
@@ -520,18 +522,40 @@ const server = createServer(async (incoming, response) => {
     }
     if (excluded.length === 2) {
       assert.deepEqual(excluded, ["memory-pr-1", "memory-pr-2"]);
-      send(200, {
-        memory_pr_id: "memory-pr-3",
-        merge_sha: mergeSha,
-        memory_commit_ids: ["commit-3"],
-        commits: [{
-          memory_commit_id: "commit-3",
-          git_head: featureSha,
-          head_repository: "example/project",
-          proof_mode: "default_ancestry",
-        }],
-        claim_versions: [],
-      });
+      if (!rejectedMemoryPrIds.has("memory-pr-3")) {
+        send(200, {
+          memory_pr_id: "memory-pr-3",
+          merge_sha: mergeSha,
+          memory_commit_ids: ["commit-3"],
+          commits: [{
+            memory_commit_id: "commit-3",
+            git_head: featureSha,
+            head_repository: "example/project",
+            proof_mode: "default_ancestry",
+          }],
+          claim_versions: [],
+        });
+        return;
+      }
+      if (!rejectedMemoryPrIds.has("memory-pr-4")) {
+        send(200, {
+          memory_pr_id: "memory-pr-4",
+          merge_sha: mergeSha,
+          memory_commit_ids: ["commit-common-base"],
+          commits: [{
+            memory_commit_id: "commit-common-base",
+            git_head: baseSha,
+            head_repository: "example/project",
+            proof_mode: "pr_head",
+            code_pr_number: 7,
+            verified_head_sha: featureSha,
+            verified_base_sha: baseSha,
+          }],
+          claim_versions: [],
+        });
+        return;
+      }
+      send(404, { message: "No Memory PR is ready for this merged checkout." });
       return;
     }
     if (excluded.length === 1) {
@@ -596,6 +620,17 @@ const server = createServer(async (incoming, response) => {
     });
     return;
   }
+  if (url.pathname.endsWith("/memory/reconcile/reject")) {
+    rejections.push(body);
+    rejectedMemoryPrIds.add(body.memory_pr_id);
+    send(200, {
+      accepted: true,
+      memory_pr_id: body.memory_pr_id,
+      removed_commit_ids: body.rejected_memory_commit_ids,
+      remaining_commit_ids: [],
+    });
+    return;
+  }
   send(404, { message: `Unexpected ${incoming.method} ${url.pathname}` });
 });
 await new Promise((resolve, reject) => {
@@ -629,6 +664,14 @@ try {
   assert.match(result.stdout, /"skipped_count": 2/);
   assert.match(result.stdout, /"reason": "git_head_not_in_pr_delta"/);
   assert.equal(candidateCalls, 5);
+  assert.equal(rejections.length, 2);
+  assert.equal(rejections[0].memory_pr_id, "memory-pr-3");
+  assert.equal(rejections[0].reason, "git_head_not_ancestor");
+  assert.deepEqual(rejections[0].rejected_memory_commit_ids, ["commit-3"]);
+  assert.equal(rejections[1].memory_pr_id, "memory-pr-4");
+  assert.equal(rejections[1].reason, "git_head_not_in_pr_delta");
+  assert.deepEqual(rejections[1].rejected_memory_commit_ids, ["commit-common-base"]);
+  assert.ok(rejections.every((rejection) => rejection.observed_default_head_sha === mergeSha));
   assert.equal(attestations[0].audit_key, "version_id");
   assert.deepEqual(attestations[0].memory_commit_ids, ["commit-1", "commit-dependency-1"]);
   assert.deepEqual(attestations[0].ancestry, [{
@@ -702,6 +745,38 @@ try {
     "a mismatched base-repository PR ref must never be attested",
   );
 
+  forcePushMode = true;
+  const candidateCallsBeforeDurableRejection = candidateCalls;
+  const rejectionsBeforeDurableRejection = rejections.length;
+  const forcePushResult = await run(process.execPath, [
+    cliPath,
+    "memory",
+    "reconcile",
+    "--managed-repo",
+    installation.managedRepoId,
+    "--merge-sha",
+    mergeSha,
+    "--api-url",
+    apiUrl,
+  ], repoRoot, {
+    ...process.env,
+    ACTIONS_ID_TOKEN_REQUEST_URL: `${apiUrl}/oidc?api-version=1`,
+    ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-request-token",
+    GITHUB_REPOSITORY: "example/project",
+    GITHUB_REF: "refs/heads/main",
+    GITHUB_RUN_ID: "125",
+  });
+  assert.match(forcePushResult.stdout, /"reconciliation_count": 0/);
+  assert.match(forcePushResult.stdout, /"skipped_count": 1/);
+  assert.match(forcePushResult.stdout, /"memory_pr_id": "memory-pr-force-push"/);
+  assert.equal(candidateCalls, candidateCallsBeforeDurableRejection + 2,
+    "the Action must refetch after the managed service removes a rejected selection");
+  assert.equal(rejections.length, rejectionsBeforeDurableRejection + 1);
+  assert.deepEqual(rejections.at(-1).rejected_memory_commit_ids, ["commit-force-pushed-away"]);
+  assert.equal(rejections.at(-1).ancestry[0].verified_head_sha, mergeSha);
+  assert.equal(rejections.at(-1).ancestry[0].verified_base_sha, baseSha);
+  assert.equal(rejections.at(-1).ancestry[0].is_ancestor, false);
+
   const advancedDefaultSha = exec(
     "git",
     ["-C", repoRoot, "commit-tree", `${mergeSha}^{tree}`, "-p", mergeSha, "-m", "advance default"],
@@ -732,7 +807,7 @@ try {
       ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-request-token",
       GITHUB_REPOSITORY: "example/project",
       GITHUB_REF: "refs/heads/main",
-      GITHUB_RUN_ID: "125",
+      GITHUB_RUN_ID: "126",
     }),
     /historical workflow reruns cannot reconcile memory/,
   );

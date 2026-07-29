@@ -654,23 +654,25 @@ export const ReconciliationCandidateSchema = Type.Object({
   })),
 });
 
+export const ReconciliationProofSchema = Type.Object({
+  memory_commit_id: Type.String(),
+  git_head: Type.String({ minLength: 7 }),
+  is_ancestor: Type.Boolean(),
+  proof_mode: Type.Optional(Type.Union([
+    Type.Literal("pr_head"),
+    Type.Literal("default_ancestry"),
+  ])),
+  verified_head_sha: Type.Optional(Type.String({ minLength: 7 })),
+  verified_base_sha: Type.Optional(Type.String({ minLength: 7 })),
+});
+
 export const ReconciliationAttestationSchema = Type.Object({
   managed_repo_id: Type.String({ format: "uuid" }),
   repository: Type.String({ minLength: 3 }),
   merge_sha: Type.String({ minLength: 7 }),
   memory_pr_id: Type.String(),
   memory_commit_ids: Type.Array(Type.String(), { minItems: 1, uniqueItems: true }),
-  ancestry: Type.Array(Type.Object({
-    memory_commit_id: Type.String(),
-    git_head: Type.String({ minLength: 7 }),
-    is_ancestor: Type.Boolean(),
-    proof_mode: Type.Optional(Type.Union([
-      Type.Literal("pr_head"),
-      Type.Literal("default_ancestry"),
-    ])),
-    verified_head_sha: Type.Optional(Type.String({ minLength: 7 })),
-    verified_base_sha: Type.Optional(Type.String({ minLength: 7 })),
-  }), { minItems: 1 }),
+  ancestry: Type.Array(ReconciliationProofSchema, { minItems: 1 }),
   audit_key: Type.Literal("version_id"),
   anchor_audit: ProposalAnchorAuditSchema,
   observed_default_head_sha: Type.Optional(Type.String({ minLength: 7 })),
@@ -684,6 +686,31 @@ export const ReconciliationAttestationResultSchema = Type.Object({
   memory_pr_id: Type.Optional(Type.String()),
   job_id: Type.Optional(Type.String()),
   state: Type.Optional(ReconciliationJobStateSchema),
+});
+
+export const ReconciliationRejectionSchema = Type.Object({
+  managed_repo_id: Type.String({ format: "uuid" }),
+  repository: Type.String({ minLength: 3 }),
+  merge_sha: Type.String({ minLength: 7 }),
+  memory_pr_id: Type.String(),
+  memory_commit_ids: Type.Array(Type.String(), { minItems: 1, uniqueItems: true }),
+  rejected_memory_commit_ids: Type.Array(Type.String(), { minItems: 1, uniqueItems: true }),
+  ancestry: Type.Array(ReconciliationProofSchema, { minItems: 1 }),
+  reason: Type.Union([
+    Type.Literal("git_head_not_ancestor"),
+    Type.Literal("git_head_not_in_pr_delta"),
+  ]),
+  observed_default_head_sha: Type.String({ minLength: 7 }),
+  ref: Type.Optional(Type.String()),
+  run_id: Type.Optional(Type.String()),
+  run_attempt: Type.Optional(Type.String()),
+});
+
+export const ReconciliationRejectionResultSchema = Type.Object({
+  accepted: Type.Boolean(),
+  memory_pr_id: Type.String(),
+  removed_commit_ids: Type.Optional(Type.Array(Type.String())),
+  remaining_commit_ids: Type.Optional(Type.Array(Type.String())),
 });
 
 export const routeSchemas = {
@@ -784,6 +811,7 @@ export const routeSchemas = {
     ReconciliationCandidateSchema,
   ),
   reconciliationAttest: route(ReconciliationAttestationSchema, ReconciliationAttestationResultSchema),
+  reconciliationReject: route(ReconciliationRejectionSchema, ReconciliationRejectionResultSchema),
   repoImport: route(Type.Object({
     graph: GraphReadSchema,
     anchor_audit: ProposalAnchorAuditSchema,
@@ -814,6 +842,8 @@ export type ManagedPromotionCleanup = Static<typeof PromotionCleanupSchema>;
 export type ManagedReconciliationAttestation = Static<typeof ReconciliationAttestationSchema>;
 export type ManagedReconciliationCandidate = Static<typeof ReconciliationCandidateSchema>;
 export type ManagedReconciliationAttestationResult = Static<typeof ReconciliationAttestationResultSchema>;
+export type ManagedReconciliationRejection = Static<typeof ReconciliationRejectionSchema>;
+export type ManagedReconciliationRejectionResult = Static<typeof ReconciliationRejectionResultSchema>;
 
 function route<TRequest extends TSchema, TResponse extends TSchema>(request: TRequest, response: TResponse) {
   return { request, response, error: ManagedErrorSchema } as const;

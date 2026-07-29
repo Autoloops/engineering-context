@@ -7,6 +7,8 @@ import type {
   ManagedReconciliationAttestation,
   ManagedReconciliationAttestationResult,
   ManagedReconciliationCandidate,
+  ManagedReconciliationRejection,
+  ManagedReconciliationRejectionResult,
 } from "../../libs/managed/protocol.js";
 import {
   managedCapabilitiesHeader,
@@ -46,9 +48,16 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
     memory_pr_id: string;
     reason: "git_head_not_ancestor" | "git_head_not_in_pr_delta";
     memory_commit_ids: string[];
+    response: ManagedReconciliationRejectionResult;
   }> = [];
   const excludedMemoryPrIds: string[] = [];
+  const rejectedGenerations = new Set<string>();
+  let candidateIterations = 0;
   while (true) {
+    candidateIterations += 1;
+    if (candidateIterations > 1_000) {
+      throw new Error("Managed reconciliation exceeded its bounded candidate iteration limit.");
+    }
     assertCurrentRemoteDefaultHead(repoRoot, mergeSha, process.env.GITHUB_REF);
     const candidate = await reconciliationCandidate(
       apiUrl,
@@ -114,17 +123,62 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
     const outsidePrDelta = proofs.filter((proof) =>
       proof.ancestry.is_ancestor && !proof.isInPrDelta
     );
+    const ancestry = proofs.map((proof) => proof.ancestry);
     if (nonAncestors.length > 0 || outsidePrDelta.length > 0) {
       const failures = nonAncestors.length > 0 ? nonAncestors : outsidePrDelta;
+      const reason = nonAncestors.length > 0 ? "git_head_not_ancestor" as const : "git_head_not_in_pr_delta" as const;
+      const rejectedMemoryCommitIds = failures.map((proof) => proof.ancestry.memory_commit_id);
+      const generationKey = JSON.stringify({
+        memory_pr_id: candidate.memory_pr_id,
+        memory_commit_ids: [...candidate.memory_commit_ids].sort(),
+        rejected_memory_commit_ids: [...rejectedMemoryCommitIds].sort(),
+        reason,
+        ancestry,
+      });
+      if (rejectedGenerations.has(generationKey)) {
+        throw new Error(
+          `Managed reconciliation returned rejected Memory PR generation ${candidate.memory_pr_id} again.`,
+        );
+      }
+      rejectedGenerations.add(generationKey);
+      const observedDefaultHeadSha = assertCurrentRemoteDefaultHead(
+        repoRoot,
+        mergeSha,
+        process.env.GITHUB_REF,
+      );
+      const rejection: ManagedReconciliationRejection = {
+        managed_repo_id: managedRepoId,
+        repository,
+        merge_sha: mergeSha,
+        memory_pr_id: candidate.memory_pr_id,
+        memory_commit_ids: candidate.memory_commit_ids,
+        rejected_memory_commit_ids: rejectedMemoryCommitIds,
+        ancestry,
+        reason,
+        observed_default_head_sha: observedDefaultHeadSha,
+        ref: process.env.GITHUB_REF,
+        run_id: process.env.GITHUB_RUN_ID,
+        run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+      };
+      const response = await jsonRequest<ManagedReconciliationRejectionResult>(
+        `${apiUrl}/v1/repos/${encodeURIComponent(managedRepoId)}/memory/reconcile/reject`,
+        {
+          method: "POST",
+          headers: { ...headers, "content-type": "application/json" },
+          body: JSON.stringify(rejection),
+        },
+      );
+      if (!response.accepted || response.memory_pr_id !== candidate.memory_pr_id) {
+        throw new Error(`Managed service did not persist rejected Memory PR ${candidate.memory_pr_id}.`);
+      }
       skipped.push({
         memory_pr_id: candidate.memory_pr_id,
-        reason: nonAncestors.length > 0 ? "git_head_not_ancestor" : "git_head_not_in_pr_delta",
-        memory_commit_ids: failures.map((proof) => proof.ancestry.memory_commit_id),
+        reason,
+        memory_commit_ids: rejectedMemoryCommitIds,
+        response,
       });
-      excludedMemoryPrIds.push(candidate.memory_pr_id);
       continue;
     }
-    const ancestry = proofs.map((proof) => proof.ancestry);
     const auditClaims = candidate.claim_versions.map(({ version_id, claim }) => ({ ...claim, id: version_id }));
     const baselineFingerprints = new Map(
       candidate.claim_versions
