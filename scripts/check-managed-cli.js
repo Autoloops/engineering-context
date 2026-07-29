@@ -782,7 +782,7 @@ function run(command, args, cwd, env = process.env, input = "") {
       if (code === 0) resolve({ stdout, stderr });
       else reject(new Error(`${command} ${args.join(" ")} failed (${code})\n${stderr}`));
     });
-    child.stdin.end(input);
+    endChildInput(child, input, reject);
   });
 }
 
@@ -800,6 +800,13 @@ function runFailure(command, args, cwd, env = process.env, input = "") {
       if (code !== 0) resolve({ stdout, stderr, code });
       else reject(new Error(`${command} ${args.join(" ")} unexpectedly succeeded`));
     });
-    child.stdin.end(input);
+    endChildInput(child, input, reject);
   });
+}
+
+function endChildInput(child, input, reject) {
+  child.stdin.on("error", (error) => {
+    if (error?.code !== "EPIPE") reject(error);
+  });
+  child.stdin.end(input);
 }
