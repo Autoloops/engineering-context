@@ -55,6 +55,16 @@ export interface GraphViewClaimRow {
   flowIds: string[];
   createdAt: string | null;
   memoryCommitId: string | null;
+  provenance?: {
+    version_id: string;
+    scope_kind: "main" | "working" | "memory_pr" | "quarantine";
+    scope_name?: string;
+    author_github_login?: string;
+    author_github_login_snapshot?: string;
+    memory_commit_state?: "active" | "promoted" | "quarantined";
+    memory_pr_id?: string;
+    commit_role?: "direct" | "dependency" | "repair";
+  };
 }
 
 export interface GraphViewTimelineEvent {
@@ -392,7 +402,22 @@ function kindColor(kind: string): string {
 
 function renderClaimRow(claim: GraphViewClaimRow): string {
   const badge = `<span class="kind-badge" style="background:${kindColor(claim.kind)}">${escapeHtml(claim.kind)}</span>`;
-  return `          <tr data-id="${escapeHtml(claim.id)}" data-kind="${escapeHtml(claim.kind)}" data-source="${escapeHtml(claim.source)}" data-freshness="${escapeHtml(claim.freshness)}" data-memory-commit-id="${escapeHtml(claim.memoryCommitId ?? "")}"><td class="claim-text">${escapeHtml(claim.text)}<div class="claim-id"><code>${escapeHtml(claim.id)}</code></div></td><td class="session">${escapeHtml(claim.session)}</td><td class="kind-cell">${badge}</td><td class="created">${escapeHtml(formatDateTime(claim.createdAt))}</td></tr>`;
+  const provenance = claim.provenance;
+  const provenanceBadges = provenance === undefined
+    ? ""
+    : `<div class="provenance-badges">${[
+        provenance.scope_kind,
+        provenance.author_github_login ?? provenance.author_github_login_snapshot,
+        provenance.commit_role,
+        provenance.memory_commit_state,
+        provenance.memory_pr_id === undefined ? undefined : `Memory PR ${provenance.memory_pr_id}`,
+      ].filter((value): value is string => value !== undefined)
+        .map((value) => `<span class="provenance-badge">${escapeHtml(value)}</span>`)
+        .join("")}</div>`;
+  const version = provenance === undefined
+    ? ""
+    : ` <span class="claim-version">version <code>${escapeHtml(provenance.version_id)}</code></span>`;
+  return `          <tr data-id="${escapeHtml(claim.id)}" data-version-id="${escapeHtml(provenance?.version_id ?? "")}" data-scope="${escapeHtml(provenance?.scope_kind ?? "")}" data-author="${escapeHtml(provenance?.author_github_login ?? provenance?.author_github_login_snapshot ?? "")}" data-memory-state="${escapeHtml(provenance?.memory_commit_state ?? "")}" data-commit-role="${escapeHtml(provenance?.commit_role ?? "")}" data-memory-pr-id="${escapeHtml(provenance?.memory_pr_id ?? "")}" data-kind="${escapeHtml(claim.kind)}" data-source="${escapeHtml(claim.source)}" data-freshness="${escapeHtml(claim.freshness)}" data-memory-commit-id="${escapeHtml(claim.memoryCommitId ?? "")}"><td class="claim-text">${escapeHtml(claim.text)}<div class="claim-id"><code>${escapeHtml(claim.id)}</code>${version}</div>${provenanceBadges}</td><td class="session">${escapeHtml(claim.session)}</td><td class="kind-cell">${badge}</td><td class="created">${escapeHtml(formatDateTime(claim.createdAt))}</td></tr>`;
 }
 
 function renderHtml(data: GraphViewData, title: string): string {
@@ -609,6 +634,22 @@ function renderHtml(data: GraphViewData, title: string): string {
     td.claim-text .claim-id code {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     }
+    .claim-version { margin-left: 0.45rem; }
+    .provenance-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      margin-top: 0.45rem;
+    }
+    .provenance-badge {
+      display: inline-block;
+      padding: 0.1rem 0.45rem;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
     td.session { min-width: 180px; font-size: 0.9rem; }
     td.kind-cell { white-space: nowrap; }
     .kind-badge {
@@ -642,6 +683,32 @@ function renderHtml(data: GraphViewData, title: string): string {
       border-radius: 8px;
       background: var(--panel);
       color: var(--text);
+    }
+    .provenance-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      margin-top: 0.75rem;
+    }
+    .provenance-filters label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .provenance-filter {
+      min-width: 130px;
+      padding: 0.4rem 0.55rem;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.82rem;
+      text-transform: none;
     }
     .claims-search:focus {
       outline: none;
@@ -845,6 +912,13 @@ ${flowRows}
         <h2>Claims</h2>
         <div class="claims-search-wrap">
           <input type="search" id="claims-search" class="claims-search" placeholder="Search by keyword" autocomplete="off" spellcheck="false">
+          <div class="provenance-filters" aria-label="Provenance filters">
+            <label>Scope<select id="claims-filter-scope" class="provenance-filter"><option value="">All scopes</option></select></label>
+            <label>Author<select id="claims-filter-author" class="provenance-filter"><option value="">All authors</option></select></label>
+            <label>Memory state<select id="claims-filter-memory-state" class="provenance-filter"><option value="">All states</option></select></label>
+            <label>Memory PR<select id="claims-filter-memory-pr" class="provenance-filter"><option value="">All Memory PRs</option></select></label>
+            <label>Commit role<select id="claims-filter-commit-role" class="provenance-filter"><option value="">All roles</option></select></label>
+          </div>
         </div>
         <p class="meta claims-meta" id="claims-meta">${escapeHtml(defaultClaimsMeta)}</p>
         <table class="claims-table" id="claims-table">
@@ -905,6 +979,13 @@ ${timelineEvents}
     const claimRows = document.querySelectorAll("#claims-table tbody tr[data-id]");
     const claimsMeta = document.getElementById("claims-meta");
     const claimsSearchInput = document.getElementById("claims-search");
+    const provenanceFilterSelects = {
+      scope: document.getElementById("claims-filter-scope"),
+      author: document.getElementById("claims-filter-author"),
+      memoryState: document.getElementById("claims-filter-memory-state"),
+      memoryPrId: document.getElementById("claims-filter-memory-pr"),
+      commitRole: document.getElementById("claims-filter-commit-role"),
+    };
     const defaultClaimsMeta = ${JSON.stringify(defaultClaimsMeta)};
 
     const CLAIM_KIND_ORDER = ${JSON.stringify(CLAIM_KIND_ORDER)};
@@ -920,6 +1001,27 @@ ${timelineEvents}
     const flowNameById = new Map(graphData.flows.map((flow) => [flow.id, flow.name]));
 
     let activeFilter = null;
+
+    function provenanceValue(claim, key) {
+      const provenance = claim.provenance || {};
+      if (key === "scope") return provenance.scope_kind || "";
+      if (key === "author") return provenance.author_github_login || provenance.author_github_login_snapshot || "";
+      if (key === "memoryState") return provenance.memory_commit_state || "";
+      if (key === "memoryPrId") return provenance.memory_pr_id || "";
+      if (key === "commitRole") return provenance.commit_role || "";
+      return "";
+    }
+
+    for (const [key, select] of Object.entries(provenanceFilterSelects)) {
+      if (!select) continue;
+      const values = [...new Set(allClaims.map((claim) => provenanceValue(claim, key)).filter(Boolean))].sort();
+      for (const value of values) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+      }
+    }
 
     function escapeHtmlClient(value) {
       return String(value)
@@ -1173,6 +1275,17 @@ ${timelineEvents}
       return true;
     }
 
+    function rowMatchesProvenanceFilters(row) {
+      return Object.entries(provenanceFilterSelects).every(([key, select]) => {
+        if (!select || !select.value) return true;
+        return (row.dataset[key] || "") === select.value;
+      });
+    }
+
+    function hasProvenanceFilter() {
+      return Object.values(provenanceFilterSelects).some((select) => select && select.value);
+    }
+
     function applyClaims() {
       const query = (claimsSearchInput && claimsSearchInput.value ? claimsSearchInput.value : "").trim().toLowerCase();
       const filter = activeFilter;
@@ -1182,13 +1295,13 @@ ${timelineEvents}
         const matchesFilter = rowMatchesFilter(row, filter);
         const text = (claimTextById.get(id) || "").toLowerCase();
         const matchesSearch = !query || id.toLowerCase().includes(query) || text.includes(query);
-        const vis = matchesFilter && matchesSearch;
+        const vis = matchesFilter && matchesSearch && rowMatchesProvenanceFilters(row);
         row.classList.toggle("claim-row-hidden", !vis);
         if (vis) visible += 1;
       }
       if (!claimsMeta) return;
 
-      if (!filter && !query) {
+      if (!filter && !query && !hasProvenanceFilter()) {
         claimsMeta.textContent = defaultClaimsMeta;
         return;
       }
@@ -1202,6 +1315,7 @@ ${timelineEvents}
       let meta = visible + " of " + base + " claims";
       if (filter) meta += " " + describeFilter(filter);
       if (query) meta += ' matching "' + escapeHtmlClient(query) + '"';
+      if (hasProvenanceFilter()) meta += " matching provenance filters";
       meta += ' · <a class="filter-clear" href="#claims">Clear filter</a>';
       claimsMeta.innerHTML = meta;
     }
@@ -1240,6 +1354,9 @@ ${timelineEvents}
       if (filterClear) {
         event.preventDefault();
         if (claimsSearchInput) claimsSearchInput.value = "";
+        for (const select of Object.values(provenanceFilterSelects)) {
+          if (select) select.value = "";
+        }
         history.replaceState(null, "", "#claims");
         viewFromHash();
         return;
@@ -1254,6 +1371,9 @@ ${timelineEvents}
     });
 
     if (claimsSearchInput) claimsSearchInput.addEventListener("input", applyClaims);
+    for (const select of Object.values(provenanceFilterSelects)) {
+      if (select) select.addEventListener("change", applyClaims);
+    }
 
     const overviewNavLink = document.querySelector('nav a[data-view="claims-overview"]');
     if (overviewNavLink) {

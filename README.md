@@ -77,7 +77,23 @@ The link works for multiple GitHub users until an admin revokes it. Greplica nev
 
 Replace `codex` with your agent platform. Login uses GitHub's browser device flow; do not share GitHub credentials or Greplica tokens. Interactive install can accept a matching invitation and automatically map a public fork to its upstream namespace. The GitHub App therefore does not need access to each contributor fork.
 
-Organization admins and members inherit read access to every organization repository. Guests can read only explicitly granted repositories. Repository writes always require an explicit `memory_admin` grant; ordinary contributors remain read-only. Managed graph data stays on the server, while local SQLite stores only the repository binding, role cache, hook policy, and runtime session metadata.
+Organization admins and members inherit read access to every organization repository. Guests can read only explicitly granted repositories. A `contributor` writes proposals to their own persistent personal working scope; `memory_admin` additionally manages repository memory access. Managed graph data stays on the server, while local SQLite stores only the repository binding, role cache, hook policy, and runtime session metadata.
+
+Managed GitHub repositories can reconcile Memory PRs against the exact merged code with the bundled Action:
+
+```yaml
+permissions:
+  contents: read
+  id-token: write
+
+steps:
+  - uses: Autoloops/greplica@<pinned-version>
+    with:
+      managed-repo: <managed-repository-uuid>
+      merge-sha: ${{ github.event.pull_request.merge_commit_sha }}
+```
+
+The Action checks out `merge-sha` with full history, installs the CLI from the same pinned Action source, verifies every candidate Git head is an ancestor, audits version-keyed anchors, and attests through GitHub OIDC. It does not use a repository or model secret.
 
 Local mode remains independent and does not require login or a server:
 

@@ -17,6 +17,12 @@ import { normalizeProposal } from "./proposal.js";
 import type { GraphMemoryProvider, ManagedProposalReviewResult } from "./provider.js";
 import type { ApplyProposalResult, GraphReadResult, RepoRef } from "./service.js";
 import type { GraphContextResult } from "./graph-context/types.js";
+import type {
+  ManagedGraphView,
+  ManagedMemoryPr,
+  ManagedMemoryStatus,
+  ManagedProposal,
+} from "../managed/protocol.js";
 
 export interface ManagedGraphClientOptions {
   apiUrl: string;
@@ -33,13 +39,26 @@ interface AnchorDataResponse {
 interface ApplyRequest {
   proposal: unknown;
   working_head: string;
+  working_revision?: number;
+  main_head?: string;
   anchor_audit: ProposalAnchorAudit;
-  commit?: { git_head?: string; branch?: string; dirty?: boolean };
+  commit?: ProposalCommitContext;
+  context?: ProposalCommitContext;
 }
 
 interface ProposalAnchorAudit {
   result: ClaimAnchorAuditResult;
   fingerprints: Record<string, Record<string, string>>;
+}
+
+interface ProposalCommitContext {
+  git_head?: string;
+  head_repository?: string;
+  head_ref?: string;
+  branch?: string;
+  dirty?: boolean;
+  session_refs?: Array<{ id: string; agent_platform?: string }>;
+  agent_platform?: string;
 }
 
 export class ManagedGraphMemoryClient implements GraphMemoryProvider {
@@ -64,12 +83,16 @@ export class ManagedGraphMemoryClient implements GraphMemoryProvider {
 
   private readonly credentials?: ManagedCredentials;
 
-  readGraph(): Promise<GraphReadResult> {
-    return this.request("/graph", { method: "GET" });
+  readGraph(view?: ManagedGraphView): Promise<GraphReadResult> {
+    return this.request(`/graph${viewQuery(this.requestView(view))}`, { method: "GET" });
   }
 
-  async contextGraph(query: string): Promise<GraphContextResult> {
-    const result = await this.request<GraphContextResult>("/graph/context", { method: "POST", body: { query } });
+  async contextGraph(query: string, view?: ManagedGraphView): Promise<GraphContextResult> {
+    const requestView = this.requestView(view);
+    const result = await this.request<GraphContextResult>("/graph/context", {
+      method: "POST",
+      body: { query, ...(requestView === undefined ? {} : { view: requestView }) },
+    });
     const resolver = new CodeAnchorResolver();
     const resolved = new Map<string, Awaited<ReturnType<CodeAnchorResolver["resolveMany"]>>>();
     for (const claim of result.claims) {
@@ -83,12 +106,12 @@ export class ManagedGraphMemoryClient implements GraphMemoryProvider {
     return result;
   }
 
-  viewData(): Promise<GraphViewData> {
-    return this.request("/graph/view-data", { method: "GET" });
+  viewData(view?: ManagedGraphView): Promise<GraphViewData> {
+    return this.request(`/graph/view-data${viewQuery(this.requestView(view))}`, { method: "GET" });
   }
 
-  async buildGraphView(): Promise<string> {
-    return buildGraphViewHtmlFromData(await this.viewData(), { repoName: this.repo.repo_name });
+  async buildGraphView(view?: ManagedGraphView): Promise<string> {
+    return buildGraphViewHtmlFromData(await this.viewData(view), { repoName: this.repo.repo_name });
   }
 
   async auditCodeAnchors(): Promise<ClaimAnchorAuditResult> {
@@ -103,6 +126,7 @@ export class ManagedGraphMemoryClient implements GraphMemoryProvider {
 
   async reviewProposal(proposal: unknown): Promise<ManagedProposalReviewResult> {
     const anchorAudit = await this.proposalAnchorAudit(proposal);
+    const context = localProposalContext(this.repo, proposal);
     if (anchorAudit.result.missing_anchors.length > 0 ||
         anchorAudit.result.missing_files.length > 0 ||
         anchorAudit.result.missing_symbols.length > 0 ||
@@ -114,14 +138,18 @@ export class ManagedGraphMemoryClient implements GraphMemoryProvider {
         duplicate_warnings: {},
       };
     }
-    return this.request("/proposals/review", { method: "POST", body: { proposal, anchor_audit: anchorAudit } });
+    return this.request("/proposals/review", {
+      method: "POST",
+      body: { proposal, anchor_audit: anchorAudit, ...(context === undefined ? {} : { context }) },
+    });
   }
 
   async applyProposal(proposal: unknown): Promise<ApplyProposalResult> {
     const anchorAudit = await this.proposalAnchorAudit(proposal);
+    const context = localProposalContext(this.repo, proposal);
     const review = await this.request<ManagedProposalReviewResult>("/proposals/review", {
       method: "POST",
-      body: { proposal, anchor_audit: anchorAudit },
+      body: { proposal, anchor_audit: anchorAudit, ...(context === undefined ? {} : { context }) },
     });
     if (!review.valid) {
       throw new Error(`Proposal is invalid:\n${review.errors.map((error) => `- ${error}`).join("\n")}`);
@@ -130,13 +158,49 @@ export class ManagedGraphMemoryClient implements GraphMemoryProvider {
     const body: ApplyRequest = {
       proposal,
       working_head: review.working_head,
+      working_revision: review.working_revision,
+      main_head: review.main_head,
       anchor_audit: anchorAudit,
-      commit: localGitState(this.repo.repo_root),
+      commit: legacyCommitContext(context),
+      context,
     };
     return this.request("/proposals/apply", { method: "POST", body });
   }
 
+  listProposals(): Promise<ManagedProposal[]> {
+    return this.request("/proposals", { method: "GET" });
+  }
+
+  showProposal(proposalId: string): Promise<ManagedProposal> {
+    return this.request(`/proposals/${encodeURIComponent(proposalId)}`, { method: "GET" });
+  }
+
+  listMemoryPrs(): Promise<ManagedMemoryPr[]> {
+    return this.request("/memory-prs", { method: "GET" });
+  }
+
+  showMemoryPr(memoryPrId: string): Promise<ManagedMemoryPr> {
+    return this.request(`/memory-prs/${encodeURIComponent(memoryPrId)}`, { method: "GET" });
+  }
+
+  retryMemoryPr(memoryPrId: string): Promise<ManagedMemoryPr> {
+    return this.request(`/memory-prs/${encodeURIComponent(memoryPrId)}/retry`, { method: "POST" });
+  }
+
+  memoryStatus(): Promise<ManagedMemoryStatus> {
+    return this.request("/memory/status", { method: "GET" });
+  }
+
   close(): void {}
+
+  private requestView(view: ManagedGraphView | undefined): ManagedGraphView | undefined {
+    if (view?.working_users === undefined || view.working_users.length === 0) return view;
+    const login = this.credentials?.user.githubLogin;
+    return {
+      ...view,
+      working_users: [...new Set(login === undefined ? view.working_users : [login, ...view.working_users])],
+    };
+  }
 
   private async proposalAnchorAudit(proposal: unknown): Promise<ProposalAnchorAudit> {
     const normalized = normalizeProposal(proposal);
@@ -190,7 +254,7 @@ export class ManagedGraphMemoryClient implements GraphMemoryProvider {
     }
     const role = response.headers.get("x-greplica-repo-role");
     const access = response.headers.get("x-greplica-access-status");
-    if ((role === "reader" || role === "memory_admin") &&
+    if ((role === "reader" || role === "contributor" || role === "memory_admin") &&
         (access === "active" || access === "pending" || access === "suspended" || access === "revoked")) {
       const db = openDatabase();
       try {
@@ -226,8 +290,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function localGitState(repoRoot: string | undefined): ApplyRequest["commit"] {
-  if (repoRoot === undefined) return undefined;
+function localProposalContext(repo: RepoRef, proposal: unknown): ProposalCommitContext | undefined {
+  const repoRoot = repo.repo_root;
+  const sessionRefIds = proposalSessionRefs(proposal);
+  const agentPlatform = proposalAgentPlatform(sessionRefIds);
+  const sessionRefs = sessionRefIds.map((id) => ({ id, agent_platform: platformForSessionRef(id) }));
+  const headRepository = githubRepository(repo.remote_url);
+  if (repoRoot === undefined) {
+    if (sessionRefs.length === 0 && agentPlatform === undefined && headRepository === undefined) return undefined;
+    return {
+      head_repository: headRepository,
+      session_refs: sessionRefs.length === 0 ? undefined : sessionRefs,
+      agent_platform: agentPlatform,
+    };
+  }
   const git = (args: string[]): string | undefined => {
     try {
       const value = execFileSync("git", ["-C", repoRoot, ...args], {
@@ -242,6 +318,63 @@ function localGitState(repoRoot: string | undefined): ApplyRequest["commit"] {
   const gitHead = git(["rev-parse", "HEAD"]);
   const branch = git(["branch", "--show-current"]);
   const dirtyOutput = git(["status", "--porcelain"]);
-  if (gitHead === undefined && branch === undefined && dirtyOutput === undefined) return undefined;
-  return { git_head: gitHead, branch, dirty: dirtyOutput !== undefined };
+  if (gitHead === undefined && branch === undefined && dirtyOutput === undefined &&
+      sessionRefs.length === 0 && agentPlatform === undefined && headRepository === undefined) return undefined;
+  return {
+    git_head: gitHead,
+    head_repository: headRepository,
+    head_ref: branch,
+    branch,
+    dirty: dirtyOutput === undefined ? undefined : dirtyOutput.length > 0,
+    session_refs: sessionRefs.length === 0 ? undefined : sessionRefs,
+    agent_platform: agentPlatform,
+  };
+}
+
+function legacyCommitContext(context: ProposalCommitContext | undefined): ProposalCommitContext | undefined {
+  if (context === undefined) return undefined;
+  const { git_head, branch, dirty } = context;
+  if (git_head === undefined && branch === undefined && dirty === undefined) return undefined;
+  return { git_head, branch, dirty };
+}
+
+function proposalSessionRefs(proposal: unknown): string[] {
+  if (!isRecord(proposal) || !isRecord(proposal.creates) || !Array.isArray(proposal.creates.sources)) return [];
+  const refs = proposal.creates.sources.flatMap((source) =>
+    isRecord(source) && source.kind === "session" && typeof source.ref === "string" ? [source.ref] : []);
+  return [...new Set(refs)];
+}
+
+function proposalAgentPlatform(sessionRefs: string[]): string | undefined {
+  const platforms = new Set(sessionRefs.map(platformForSessionRef).filter((value): value is string => value !== undefined));
+  return platforms.size === 1 ? [...platforms][0] : undefined;
+}
+
+function platformForSessionRef(ref: string): string | undefined {
+  const separator = ref.indexOf(":");
+  if (separator <= 0) return undefined;
+  const prefix = ref.slice(0, separator);
+  if (prefix === "claude-code-session") return "claude";
+  if (prefix === "factory-droid-session") return "factory-droid";
+  return prefix.endsWith("-session") ? prefix.slice(0, -"-session".length) : prefix;
+}
+
+function githubRepository(remoteUrl: string | undefined): string | undefined {
+  if (remoteUrl === undefined) return undefined;
+  const match = /github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?$/i.exec(remoteUrl);
+  return match === null ? undefined : `${match[1]}/${match[2]}`;
+}
+
+function viewQuery(view: ManagedGraphView | undefined): string {
+  if (view === undefined) return "";
+  const query = new URLSearchParams({ base: view.base });
+  if (view.working_users?.length === 0 &&
+      view.memory_pr_id === undefined &&
+      view.include_quarantined !== true) {
+    query.set("main_only", "true");
+  }
+  for (const user of view.working_users ?? []) query.append("working_user", user);
+  if (view.memory_pr_id !== undefined) query.set("memory_pr_id", view.memory_pr_id);
+  if (view.include_quarantined === true) query.set("include_quarantined", "true");
+  return `?${query.toString()}`;
 }

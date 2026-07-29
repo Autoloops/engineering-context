@@ -14,6 +14,12 @@ import {
 } from "../../libs/config/greplica-config.js";
 import { createGraphMemoryProvider } from "../../libs/knowledge-graph/provider-factory.js";
 import type { GraphMemoryProvider } from "../../libs/knowledge-graph/provider.js";
+import type {
+  ManagedGraphView,
+  ManagedMemoryPr,
+  ManagedMemoryStatus,
+  ManagedProposal,
+} from "../../libs/managed/protocol.js";
 import { createEmbedder } from "../../libs/knowledge-graph/graph-context/embedder.js";
 import { renderGraphContextMarkdown } from "../../libs/knowledge-graph/graph-context/render.js";
 import { buildGraphFolderExport } from "../../libs/knowledge-graph/folder-export.js";
@@ -54,6 +60,8 @@ import {
   runRepoEnrollGithub,
   runRepoGithubInstall,
   runRepoGrantMemoryAdmin,
+  runRepoGrantContributor,
+  runRepoInviteContributor,
   runRepoInviteReader,
   runRepoInviteLinkCreate,
   runRepoInviteLinkList,
@@ -63,8 +71,10 @@ import {
   runRepoPublish,
   runRepoRestore,
   runRepoRevokeMemoryAdmin,
+  runRepoRevokeContributor,
   runWhoami,
 } from "./managed-cli.js";
+import { runMemoryReconcile } from "./reconcile-cli.js";
 
 interface CommandContext {
   repo: RepoRef;
@@ -138,11 +148,14 @@ const cliCommands = [
   { key: "repoRestore", path: ["repo", "restore"], usage: "repo restore", handler: runRepoRestore, showInTopLevelHelp: true },
   { key: "repoDiscovery", path: ["repo", "discovery"], usage: "repo discovery --discovery listed|unlisted", handler: runRepoDiscovery, showInTopLevelHelp: true },
   { key: "repoInviteReader", path: ["repo", "invite-reader"], usage: "repo invite-reader --github-user <login>", handler: runRepoInviteReader, showInTopLevelHelp: true },
+  { key: "repoInviteContributor", path: ["repo", "invite-contributor"], usage: "repo invite-contributor --github-user <login>", handler: runRepoInviteContributor, showInTopLevelHelp: true },
   { key: "repoInviteLinkCreate", path: ["repo", "invite-link", "create"], usage: "repo invite-link create", handler: runRepoInviteLinkCreate, showInTopLevelHelp: true },
   { key: "repoInviteLinkList", path: ["repo", "invite-link", "list"], usage: "repo invite-link list", handler: runRepoInviteLinkList, showInTopLevelHelp: true },
   { key: "repoInviteLinkRevoke", path: ["repo", "invite-link", "revoke"], usage: "repo invite-link revoke --link <id>", handler: runRepoInviteLinkRevoke, showInTopLevelHelp: true },
   { key: "repoGrantMemoryAdmin", path: ["repo", "grant-memory-admin"], usage: "repo grant-memory-admin --user <id>", handler: runRepoGrantMemoryAdmin, showInTopLevelHelp: true },
+  { key: "repoGrantContributor", path: ["repo", "grant-contributor"], usage: "repo grant-contributor --user <id>", handler: runRepoGrantContributor, showInTopLevelHelp: true },
   { key: "repoRevokeMemoryAdmin", path: ["repo", "revoke-memory-admin"], usage: "repo revoke-memory-admin --user <id>", handler: runRepoRevokeMemoryAdmin, showInTopLevelHelp: true },
+  { key: "repoRevokeContributor", path: ["repo", "revoke-contributor"], usage: "repo revoke-contributor --user <id>", handler: runRepoRevokeContributor, showInTopLevelHelp: true },
   { key: "repoAccessRequest", path: ["repo", "request-access"], usage: "repo request-access --managed-repo <id>", handler: runRepoAccessRequest, showInTopLevelHelp: true },
   { key: "repoAccessList", path: ["repo", "access-requests"], usage: "repo access-requests", handler: runRepoAccessList, showInTopLevelHelp: true },
   { key: "repoAccessApprove", path: ["repo", "approve-access"], usage: "repo approve-access --request <id>", handler: (args) => runRepoAccessDecision(args, "approve"), showInTopLevelHelp: true },
@@ -172,14 +185,14 @@ const cliCommands = [
   {
     key: "graphRead",
     path: ["graph", "read"],
-    usage: "graph read",
+    usage: "graph read [--with-working <login>...] [--memory-pr <id>] [--main-only] [--include-quarantined] [--json]",
     handler: withCommandContext(runGraphReadCommand),
     showInTopLevelHelp: true,
   },
   {
     key: "graphContext",
     path: ["graph", "context"],
-    usage: "graph context <query> [--debug]",
+    usage: "graph context <query> [--with-working <login>...] [--memory-pr <id>] [--main-only] [--include-quarantined] [--json|--debug]",
     handler: withCommandContext(runGraphContextCommand),
     showInTopLevelHelp: true,
     helpMode: "query-aware",
@@ -201,7 +214,7 @@ const cliCommands = [
   {
     key: "graphView",
     path: ["graph", "view"],
-    usage: "graph view [--out <file>] [--no-open]",
+    usage: "graph view [--with-working <login>...] [--memory-pr <id>] [--main-only] [--include-quarantined] [--json] [--out <file>] [--no-open]",
     handler: withCommandContext(runGraphViewCommand),
     showInTopLevelHelp: true,
   },
@@ -217,6 +230,63 @@ const cliCommands = [
     path: ["proposal", "apply"],
     usage: "proposal apply <file>",
     handler: withCommandContext(runProposalApplyCommand),
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "proposalList",
+    path: ["proposal", "list"],
+    usage: "proposal list [--json]",
+    handler: withCommandContext(runProposalListCommand),
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "proposalShow",
+    path: ["proposal", "show"],
+    usage: "proposal show <id> [--json]",
+    handler: withCommandContext(runProposalShowCommand),
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "memoryPrList",
+    path: ["memory", "pr", "list"],
+    usage: "memory pr list [--json]",
+    handler: withCommandContext(runMemoryPrListCommand),
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "memoryPrShow",
+    path: ["memory", "pr", "show"],
+    usage: "memory pr show <id> [--json]",
+    handler: withCommandContext(runMemoryPrShowCommand),
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "memoryPrContext",
+    path: ["memory", "pr", "context"],
+    usage: "memory pr context <id> <query> [--json]",
+    handler: withCommandContext(runMemoryPrContextCommand),
+    showInTopLevelHelp: true,
+    helpMode: "query-aware",
+  },
+  {
+    key: "memoryPrRetry",
+    path: ["memory", "pr", "retry"],
+    usage: "memory pr retry <id> [--json]",
+    handler: withCommandContext(runMemoryPrRetryCommand),
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "memoryStatus",
+    path: ["memory", "status"],
+    usage: "memory status [--json]",
+    handler: withCommandContext(runMemoryStatusCommand),
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "memoryReconcile",
+    path: ["memory", "reconcile"],
+    usage: "memory reconcile --managed-repo <id> --merge-sha <sha> [--api-url <url>] [--oidc-audience <audience>] [--repair-proposal <file>]",
+    handler: runMemoryReconcile,
     showInTopLevelHelp: true,
   },
   {
@@ -385,10 +455,16 @@ function runRepoStatusCommand(args: string[]): void {
   }
 }
 
-async function runGraphReadCommand(_args: string[], getContext: CommandContextProvider): Promise<void> {
+async function runGraphReadCommand(args: string[], getContext: CommandContextProvider): Promise<void> {
+  const options = parseGraphSelectionArgs(args, new Set(["--json"]));
+  if (options.remaining.length > 0) throw new Error(usage("graphRead"));
   const { service } = getContext();
-  const graph = await service.readGraph();
-  console.log("Current graph view: main + working");
+  const graph = await service.readGraph(options.view);
+  if (options.json) {
+    console.log(JSON.stringify(graph, null, 2));
+    return;
+  }
+  console.log(`Current graph view: ${graphViewLabel(options.view)}`);
   printSection("Components", graph.components, (item) => `${named(item)} ${anchor(item)}`.trim());
   printSection("Flows", graph.flows, named);
   printSection("Claims", graph.claims, (item) => `${field(item, "kind")}: ${field(item, "text")}`);
@@ -397,12 +473,13 @@ async function runGraphReadCommand(_args: string[], getContext: CommandContextPr
 }
 
 async function runGraphContextCommand(args: string[], getContext: CommandContextProvider): Promise<void> {
-  const output = parseGraphContextOutput(args);
-  const query = args.filter((arg) => arg !== "--debug").join(" ").trim();
+  const options = parseGraphSelectionArgs(args, new Set(["--json", "--debug"]));
+  const output = options.json || args.includes("--debug") ? "json" : "markdown";
+  const query = options.remaining.filter((arg) => arg !== "--debug").join(" ").trim();
   if (query.length === 0) throw new Error(usage("graphContext"));
   const { service } = getContext();
-  const result = await service.contextGraph(query);
-  if (output === "debug") {
+  const result = await service.contextGraph(query, options.view);
+  if (output === "json") {
     console.log(JSON.stringify(result, null, 2));
   } else {
     console.log(renderGraphContextMarkdown(result));
@@ -428,7 +505,18 @@ async function runGraphExportCommand(args: string[], getContext: CommandContextP
 async function runGraphViewCommand(args: string[], getContext: CommandContextProvider): Promise<void> {
   const options = parseGraphViewArgs(args);
   const { repo, service } = getContext();
-  const graph = await service.readGraph();
+  if (options.json) {
+    const json = `${JSON.stringify(await service.viewData(options.view), null, 2)}\n`;
+    if (options.outputPath === undefined) {
+      console.log(json.trimEnd());
+    } else {
+      mkdirSync(dirname(options.outputPath), { recursive: true });
+      writeFileSync(options.outputPath, json, "utf8");
+      console.log(`Wrote graph view data to ${options.outputPath}`);
+    }
+    return;
+  }
+  const graph = await service.readGraph(options.view);
   if (graph.components.length === 0) {
     console.log("No components to visualize. Bootstrap memory first.");
     process.exitCode = 1;
@@ -437,7 +525,7 @@ async function runGraphViewCommand(args: string[], getContext: CommandContextPro
 
   const outputPath = options.outputPath ?? defaultGraphViewOutputPath(repo.repo_name);
   mkdirSync(dirname(outputPath), { recursive: true });
-  const html = await service.buildGraphView();
+  const html = await service.buildGraphView(options.view);
   writeFileSync(outputPath, html, "utf8");
   console.log(`Wrote graph view to ${outputPath}`);
 
@@ -484,6 +572,78 @@ async function runProposalApplyCommand(args: string[], getContext: CommandContex
   console.log(`Embeddings created: ${result.embedding_status.created}`);
   console.log(`Embeddings reused: ${result.embedding_status.reused}`);
   markProposalApplyMemoryUpdated(repo, proposal);
+}
+
+async function runProposalListCommand(args: string[], getContext: CommandContextProvider): Promise<void> {
+  const json = onlyJsonFlag(args, "proposalList");
+  const proposals = await getContext().service.listProposals();
+  if (json) {
+    console.log(JSON.stringify(proposals, null, 2));
+    return;
+  }
+  for (const proposal of proposals) printProposalSummary(proposal);
+}
+
+async function runProposalShowCommand(args: string[], getContext: CommandContextProvider): Promise<void> {
+  const { positional, json } = positionalWithJson(args, "proposalShow");
+  const proposal = await getContext().service.showProposal(positional);
+  if (json) {
+    console.log(JSON.stringify(proposal, null, 2));
+    return;
+  }
+  printProposalSummary(proposal);
+  console.log(JSON.stringify(proposal.proposal, null, 2));
+}
+
+async function runMemoryPrListCommand(args: string[], getContext: CommandContextProvider): Promise<void> {
+  const json = onlyJsonFlag(args, "memoryPrList");
+  const memoryPrs = await getContext().service.listMemoryPrs();
+  if (json) {
+    console.log(JSON.stringify(memoryPrs, null, 2));
+    return;
+  }
+  for (const memoryPr of memoryPrs) printMemoryPrSummary(memoryPr);
+}
+
+async function runMemoryPrShowCommand(args: string[], getContext: CommandContextProvider): Promise<void> {
+  const { positional, json } = positionalWithJson(args, "memoryPrShow");
+  const memoryPr = await getContext().service.showMemoryPr(positional);
+  if (json) {
+    console.log(JSON.stringify(memoryPr, null, 2));
+    return;
+  }
+  printMemoryPrSummary(memoryPr);
+  printPromotionCleanup(memoryPr);
+}
+
+async function runMemoryPrContextCommand(args: string[], getContext: CommandContextProvider): Promise<void> {
+  const json = args.includes("--json");
+  const positional = args.filter((arg) => arg !== "--json");
+  const memoryPrId = positional.shift();
+  const query = positional.join(" ").trim();
+  if (memoryPrId === undefined || query.length === 0) throw new Error(usage("memoryPrContext"));
+  const result = await getContext().service.contextGraph(query, { base: "main", memory_pr_id: memoryPrId });
+  console.log(json ? JSON.stringify(result, null, 2) : renderGraphContextMarkdown(result));
+}
+
+async function runMemoryPrRetryCommand(args: string[], getContext: CommandContextProvider): Promise<void> {
+  const { positional, json } = positionalWithJson(args, "memoryPrRetry");
+  const memoryPr = await getContext().service.retryMemoryPr(positional);
+  if (json) console.log(JSON.stringify(memoryPr, null, 2));
+  else {
+    console.log(`Queued Memory PR ${memoryPr.id} for reconciliation.`);
+    printMemoryPrSummary(memoryPr);
+  }
+}
+
+async function runMemoryStatusCommand(args: string[], getContext: CommandContextProvider): Promise<void> {
+  const json = onlyJsonFlag(args, "memoryStatus");
+  const status = await getContext().service.memoryStatus();
+  if (json) {
+    console.log(JSON.stringify(status, null, 2));
+    return;
+  }
+  printMemoryStatus(status);
 }
 
 function printAnchorAudit(result: ClaimAnchorAuditResult): void {
@@ -1005,8 +1165,8 @@ function printInstallResult(result: Awaited<ReturnType<typeof installGreplica>>)
     console.log(`Project rules: ${result.rules.configFiles.join(", ")}`);
     console.log("- note: reload your editor if the new project rule does not appear immediately.");
   }
-  if (result.mode === "managed" && result.autoMemoryUpdates && result.installation.managedRole !== "memory_admin") {
-    console.log("Automatic memory updates: enabled when memory_admin access is granted.");
+  if (result.mode === "managed" && result.autoMemoryUpdates && result.installation.managedRole === "reader") {
+    console.log("Automatic memory updates: enabled when contributor access is granted.");
   } else {
     console.log(`Automatic memory updates: ${result.autoMemoryUpdates ? "enabled" : "disabled"}.`);
   }
@@ -1080,21 +1240,17 @@ function parseRequiredOption(args: string[], name: string, usage: string): strin
   throw new Error(usage);
 }
 
-function parseGraphContextOutput(args: string[]): "markdown" | "debug" {
-  if (args.includes("--json")) throw new Error("greplica graph context --json was removed; use Markdown output or --debug.");
-  const debug = args.includes("--debug");
-  if (debug) return "debug";
-  return "markdown";
-}
-
 interface GraphViewOptions {
   outputPath?: string;
   noOpen: boolean;
+  json: boolean;
+  view?: ManagedGraphView;
 }
 
 function parseGraphViewArgs(args: string[]): GraphViewOptions {
   let outputPath: string | undefined;
   let noOpen = false;
+  const selectionArgs: string[] = [];
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -1111,10 +1267,84 @@ function parseGraphViewArgs(args: string[]): GraphViewOptions {
       outputPath = resolve(arg.slice("--out=".length));
       continue;
     }
-    throw new Error(usage("graphView"));
+    selectionArgs.push(arg);
   }
 
-  return { outputPath, noOpen };
+  const selection = parseGraphSelectionArgs(selectionArgs, new Set(["--json"]));
+  if (selection.remaining.length > 0) throw new Error(usage("graphView"));
+  return { outputPath, noOpen, json: selection.json, view: selection.view };
+}
+
+interface GraphSelectionArgs {
+  view?: ManagedGraphView;
+  json: boolean;
+  remaining: string[];
+}
+
+function parseGraphSelectionArgs(args: string[], passthroughFlags: ReadonlySet<string>): GraphSelectionArgs {
+  const workingUsers: string[] = [];
+  let memoryPrId: string | undefined;
+  let mainOnly = false;
+  let includeQuarantined = false;
+  let json = false;
+  const remaining: string[] = [];
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--json") {
+      json = true;
+      continue;
+    }
+    if (arg === "--main-only") {
+      mainOnly = true;
+      continue;
+    }
+    if (arg === "--include-quarantined") {
+      includeQuarantined = true;
+      continue;
+    }
+    if (arg === "--with-working") {
+      workingUsers.push(requireFlagValue(args, index, "--with-working"));
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--with-working=")) {
+      workingUsers.push(requireFile(arg.slice("--with-working=".length), "Missing value for --with-working."));
+      continue;
+    }
+    if (arg === "--memory-pr") {
+      if (memoryPrId !== undefined) throw new Error("Specify --memory-pr only once.");
+      memoryPrId = requireFlagValue(args, index, "--memory-pr");
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--memory-pr=")) {
+      if (memoryPrId !== undefined) throw new Error("Specify --memory-pr only once.");
+      memoryPrId = requireFile(arg.slice("--memory-pr=".length), "Missing value for --memory-pr.");
+      continue;
+    }
+    if (passthroughFlags.has(arg)) {
+      remaining.push(arg);
+      continue;
+    }
+    remaining.push(arg);
+  }
+
+  if (mainOnly && (workingUsers.length > 0 || memoryPrId !== undefined || includeQuarantined)) {
+    throw new Error("--main-only cannot be combined with working, Memory PR, or quarantine overlays.");
+  }
+  const uniqueWorkingUsers = [...new Set(workingUsers)];
+  const hasView = mainOnly || uniqueWorkingUsers.length > 0 || memoryPrId !== undefined || includeQuarantined;
+  const view = hasView
+    ? {
+        base: "main" as const,
+        ...(mainOnly ? { working_users: [] } : {}),
+        ...(uniqueWorkingUsers.length === 0 ? {} : { working_users: uniqueWorkingUsers }),
+        ...(memoryPrId === undefined ? {} : { memory_pr_id: memoryPrId }),
+        ...(includeQuarantined ? { include_quarantined: true } : {}),
+      }
+    : undefined;
+  return { view, json, remaining };
 }
 
 function defaultGraphViewOutputPath(repoName: string): string {
@@ -1159,6 +1389,85 @@ function printSection<T extends { id: string }>(title: string, items: T[], forma
   for (const item of items) {
     console.log(`- ${field(item, "id")} ${format(item)}`.trim());
   }
+}
+
+function graphViewLabel(view: ManagedGraphView | undefined): string {
+  if (view === undefined) return "main + working (mine)";
+  const layers = ["main"];
+  if (view.working_users !== undefined) {
+    if (view.working_users.length > 0) layers.push("working (mine)");
+    for (const user of view.working_users) layers.push(`working/${user}`);
+  } else {
+    layers.push("working (mine)");
+  }
+  if (view.memory_pr_id !== undefined) layers.push(`Memory PR ${view.memory_pr_id}`);
+  if (view.include_quarantined === true) layers.push("quarantine");
+  return layers.join(" + ");
+}
+
+function onlyJsonFlag(args: string[], command: CommandKey): boolean {
+  if (args.length === 0) return false;
+  if (args.length === 1 && args[0] === "--json") return true;
+  throw new Error(usage(command));
+}
+
+function positionalWithJson(args: string[], command: CommandKey): { positional: string; json: boolean } {
+  const json = args.includes("--json");
+  const positionals = args.filter((arg) => arg !== "--json");
+  if (positionals.length !== 1 || positionals[0].startsWith("--")) throw new Error(usage(command));
+  return { positional: positionals[0], json };
+}
+
+function printProposalSummary(proposal: ManagedProposal): void {
+  const commit = proposal.memory_commit;
+  const sessions = commit.session_refs.map((session) => session.id).join(",") || "-";
+  console.log([
+    proposal.id,
+    commit.state,
+    commit.author.github_login,
+    commit.git?.branch ?? "-",
+    commit.code_pr?.number === undefined ? "-" : `#${commit.code_pr.number}`,
+    commit.memory_pr_id ?? "-",
+    sessions,
+  ].join("\t"));
+}
+
+function printMemoryPrSummary(memoryPr: ManagedMemoryPr): void {
+  console.log([
+    memoryPr.id,
+    memoryPr.state,
+    `code-pr:#${memoryPr.code_pr.number}`,
+    memoryPr.contributor_logins.join(",") || "-",
+    `${memoryPr.direct_commit_ids.length} direct`,
+    `${memoryPr.dependency_commit_ids.length} dependencies`,
+    memoryPr.latest_job_state ?? "-",
+  ].join("\t"));
+}
+
+function printPromotionCleanup(memoryPr: ManagedMemoryPr): void {
+  const promotion = memoryPr.promotion;
+  if (promotion === undefined) return;
+  console.log(`Main head: ${promotion.new_main_head}`);
+  console.log(`Cleared commits: ${promotion.cleared_commit_ids.join(", ") || "none"}`);
+  console.log(`Already canonical: ${promotion.already_canonical_commit_ids.join(", ") || "none"}`);
+  console.log(`Quarantined: ${promotion.quarantined_commit_ids.join(", ") || "none"}`);
+  for (const [login, cleanup] of Object.entries(promotion.cleared_by_user)) {
+    console.log(
+      `${login}: cleared ${cleanup.cleared_objects} objects; ${cleanup.remaining_active_objects} active working objects remain`,
+    );
+  }
+}
+
+function printMemoryStatus(status: ManagedMemoryStatus): void {
+  console.log(`Reconciliation jobs: ${status.queued} queued, ${status.running} running, ${status.failed} failed`);
+  console.log(`Last sweep: ${status.last_sweep_at ?? "never"}`);
+  console.log(`Last promotion: ${status.last_promotion_at ?? "never"}`);
+  console.log(`Repair attempts: ${status.repair_attempts}`);
+  console.log(`Repaired commits: ${status.repaired_commits}`);
+  console.log(`Promoted commits: ${status.promoted_commits}`);
+  console.log(`Quarantined commits: ${status.quarantined_commits}`);
+  console.log(`Cleared working commits: ${status.cleared_working_commits}`);
+  console.log(`Active working commits: ${status.remaining_active_working_commits}`);
 }
 
 function named(item: { id: string; name?: string }): string {
