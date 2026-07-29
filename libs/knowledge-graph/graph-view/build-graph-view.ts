@@ -104,6 +104,7 @@ const PROVENANCE_FILTERS = [
   { key: "proposalId", slug: "proposal", label: "Proposal", all: "All proposals" },
   { key: "memoryCommitId", slug: "memory-commit", label: "Memory commit", all: "All commits" },
   { key: "agent", slug: "agent", label: "Agent", all: "All agents" },
+  { key: "automation", slug: "automation", label: "Automation", all: "All automation" },
   { key: "branch", slug: "branch", label: "Branch", all: "All branches" },
   { key: "headRepository", slug: "head-repository", label: "Head repository", all: "All head repositories" },
   { key: "headRef", slug: "head-ref", label: "Head ref", all: "All head refs" },
@@ -436,6 +437,7 @@ function provenanceEntryValue(entry: ProvenanceEntry, key: string): string | und
   if (key === "proposalId") return entry.proposal_id;
   if (key === "memoryCommitId") return entry.memory_commit_id;
   if (key === "agent") return entry.agent_platform;
+  if (key === "automation") return entry.automation_identity?.kind;
   if (key === "branch") return entry.branch;
   if (key === "headRepository") return entry.head_repository;
   if (key === "headRef") return entry.head_ref;
@@ -448,12 +450,32 @@ function provenanceEntryValue(entry: ProvenanceEntry, key: string): string | und
   return undefined;
 }
 
+function repairSourceValues(entry: ProvenanceEntry, key: string): string[] {
+  return (entry.repair_sources ?? []).flatMap((source) => {
+    if (key === "author") {
+      const value = source.contributor_github_login ?? source.contributor_github_login_snapshot;
+      return value === undefined ? [] : [value];
+    }
+    if (key === "authorSnapshot") {
+      return source.contributor_github_login_snapshot === undefined
+        ? []
+        : [source.contributor_github_login_snapshot];
+    }
+    if (key === "proposalId") return source.proposal_id === undefined ? [] : [source.proposal_id];
+    if (key === "memoryCommitId") return [source.memory_commit_id];
+    return [];
+  });
+}
+
 function provenanceFieldValues(
   provenance: ManagedObjectProvenance | undefined,
   key: string,
 ): string[] {
   return [...new Set(provenanceEntries(provenance)
-    .map((entry) => provenanceEntryValue(entry, key))
+    .flatMap((entry) => [
+      provenanceEntryValue(entry, key),
+      ...repairSourceValues(entry, key),
+    ])
     .filter((value): value is string => value !== undefined && value.length > 0))];
 }
 
@@ -468,6 +490,7 @@ function provenanceDataAttributes(
     ["proposal-id", "proposalId"],
     ["memory-commit-id", "memoryCommitId"],
     ["agent", "agent"],
+    ["automation", "automation"],
     ["branch", "branch"],
     ["head-repository", "headRepository"],
     ["head-ref", "headRef"],
@@ -503,6 +526,20 @@ function provenanceBadgeValues(entry: ProvenanceEntry, origin: boolean): string[
     entry.memory_commit_id === undefined ? undefined : `${prefix}commit ${entry.memory_commit_id}`,
     ...(entry.session_refs ?? []).map((session) => `${prefix}session ${session.id}`),
     entry.agent_platform === undefined ? undefined : `${prefix}agent ${entry.agent_platform}`,
+    entry.automation_identity === undefined
+      ? undefined
+      : `${prefix}automation ${entry.automation_identity.kind} job ${entry.automation_identity.reconciliation_job_id} attempt ${entry.automation_identity.repair_attempt}`,
+    ...(entry.repair_sources ?? []).map((source) => {
+      const current = source.contributor_github_login;
+      const snapshot = source.contributor_github_login_snapshot;
+      const contributor = current === undefined
+        ? snapshot === undefined ? "" : ` by @${snapshot}`
+        : snapshot === undefined || snapshot === current
+          ? ` by @${current}`
+          : ` by @${current} (formerly @${snapshot})`;
+      const proposal = source.proposal_id === undefined ? "" : ` proposal ${source.proposal_id}`;
+      return `${prefix}repair source commit ${source.memory_commit_id}${contributor}${proposal}`;
+    }),
     entry.git_head === undefined ? undefined : `${prefix}git ${entry.git_head}`,
     entry.head_repository === undefined ? undefined : `${prefix}head repository ${entry.head_repository}`,
     entry.head_ref === undefined ? undefined : `${prefix}head ref ${entry.head_ref}`,
@@ -1143,6 +1180,7 @@ ${timelineEvents}
       if (key === "proposalId") return entry.proposal_id || "";
       if (key === "memoryCommitId") return entry.memory_commit_id || "";
       if (key === "agent") return entry.agent_platform || "";
+      if (key === "automation") return (entry.automation_identity && entry.automation_identity.kind) || "";
       if (key === "branch") return entry.branch || "";
       if (key === "headRepository") return entry.head_repository || "";
       if (key === "headRef") return entry.head_ref || "";
@@ -1155,10 +1193,26 @@ ${timelineEvents}
       return "";
     }
 
+    function repairSourceValues(entry, key) {
+      return (entry.repair_sources || []).flatMap((source) => {
+        if (key === "author") {
+          const value = source.contributor_github_login || source.contributor_github_login_snapshot;
+          return value ? [value] : [];
+        }
+        if (key === "authorSnapshot") return source.contributor_github_login_snapshot ? [source.contributor_github_login_snapshot] : [];
+        if (key === "proposalId") return source.proposal_id ? [source.proposal_id] : [];
+        if (key === "memoryCommitId") return [source.memory_commit_id];
+        return [];
+      });
+    }
+
     function provenanceValues(object, key) {
       const provenance = object.provenance;
       const entries = provenance ? [provenance, ...(provenance.origins || [])] : [];
-      const values = entries.map((entry) => provenanceEntryValue(entry, key)).filter(Boolean);
+      const values = entries.flatMap((entry) => [
+        provenanceEntryValue(entry, key),
+        ...repairSourceValues(entry, key),
+      ]).filter(Boolean);
       if (key === "memoryCommitId" && values.length === 0 && object.memoryCommitId) {
         values.push(object.memoryCommitId);
       }

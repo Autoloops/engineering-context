@@ -187,6 +187,20 @@ export const ReconciliationJobStateSchema = Type.Union([
   Type.Literal("failed"),
 ]);
 
+export const ManagedAutomationIdentitySchema = Type.Object({
+  kind: Type.Literal("managed_repair_agent"),
+  reconciliation_job_id: Type.String({ minLength: 1 }),
+  repair_attempt: Type.Integer({ minimum: 1 }),
+});
+
+export const ManagedRepairSourceSchema = Type.Object({
+  memory_commit_id: Type.String({ minLength: 1 }),
+  contributor_user_id: Type.Optional(Type.String({ format: "uuid" })),
+  contributor_github_login: Type.Optional(Type.String({ minLength: 1 })),
+  contributor_github_login_snapshot: Type.Optional(Type.String({ minLength: 1 })),
+  proposal_id: Type.Optional(Type.String({ minLength: 1 })),
+});
+
 export const ManagedObjectOriginSchema = Type.Object({
   version_id: Type.String(),
   scope_kind: Type.Optional(Type.Union([
@@ -207,6 +221,8 @@ export const ManagedObjectOriginSchema = Type.Object({
     agent_platform: Type.Optional(Type.String()),
   }))),
   agent_platform: Type.Optional(Type.String()),
+  automation_identity: Type.Optional(ManagedAutomationIdentitySchema),
+  repair_sources: Type.Optional(Type.Array(ManagedRepairSourceSchema)),
   git_head: Type.Optional(Type.String()),
   head_repository: Type.Optional(Type.String()),
   head_ref: Type.Optional(Type.String()),
@@ -243,6 +259,8 @@ export const ManagedObjectProvenanceSchema = Type.Object({
     agent_platform: Type.Optional(Type.String()),
   }))),
   agent_platform: Type.Optional(Type.String()),
+  automation_identity: Type.Optional(ManagedAutomationIdentitySchema),
+  repair_sources: Type.Optional(Type.Array(ManagedRepairSourceSchema)),
   git_head: Type.Optional(Type.String()),
   head_repository: Type.Optional(Type.String()),
   head_ref: Type.Optional(Type.String()),
@@ -654,13 +672,15 @@ export const MemoryCommitRecordSchema = Type.Object({
   scope_id: Type.String(),
   scope_name: Type.String(),
   state: MemoryCommitStateSchema,
-  author: UserSchema,
+  author: Type.Optional(UserSchema),
   author_github_login_snapshot: Type.Optional(Type.String()),
   session_refs: Type.Array(Type.Object({
     id: Type.String(),
     agent_platform: Type.Optional(Type.String()),
   })),
   agent_platform: Type.Optional(Type.String()),
+  automation_identity: Type.Optional(ManagedAutomationIdentitySchema),
+  repair_sources: Type.Optional(Type.Array(ManagedRepairSourceSchema)),
   git: Type.Optional(MemoryCommitMetadataSchema),
   code_pr: Type.Optional(CodePrReferenceSchema),
   memory_pr_id: Type.Optional(Type.String()),
@@ -950,6 +970,8 @@ export type ManagedGraphContext = Static<typeof GraphContextSchema>;
 export type ManagedGraphViewData = Static<typeof GraphViewDataSchema>;
 export type ManagedProposalReview = Static<typeof ProposalReviewSchema>;
 export type ManagedGraphView = Static<typeof ManagedGraphViewSchema>;
+export type ManagedAutomationIdentity = Static<typeof ManagedAutomationIdentitySchema>;
+export type ManagedRepairSource = Static<typeof ManagedRepairSourceSchema>;
 export type ManagedObjectOrigin = Static<typeof ManagedObjectOriginSchema>;
 export type ManagedObjectProvenance = Static<typeof ManagedObjectProvenanceSchema>;
 export type ManagedMemoryCommit = Static<typeof MemoryCommitRecordSchema>;

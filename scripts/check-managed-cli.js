@@ -65,6 +65,41 @@ const proposalRecord = {
   proposal: { title: "Rename-safe provenance" },
   created_at: now,
 };
+const automatedRepairProposalRecord = {
+  id: "proposal-automated-repair",
+  memory_commit: {
+    id: "memory-commit-automated-repair",
+    proposal_id: "proposal-automated-repair",
+    scope_id: "repair-scope-1",
+    scope_name: "repair/memory-pr-1",
+    state: "promoted",
+    session_refs: [{
+      id: "managed-repair:job-1:1",
+      agent_platform: "managed-repair",
+    }],
+    agent_platform: "managed-repair",
+    automation_identity: {
+      kind: "managed_repair_agent",
+      reconciliation_job_id: "job-1",
+      repair_attempt: 1,
+    },
+    repair_sources: [{
+      memory_commit_id: "source-commit-alice",
+      contributor_user_id: "30000000-0000-4000-8000-000000000000",
+      contributor_github_login: "alice",
+      proposal_id: "source-proposal-alice",
+    }, {
+      memory_commit_id: "source-commit-bob",
+      contributor_user_id: "40000000-0000-4000-8000-000000000000",
+      contributor_github_login: "bob",
+      proposal_id: "source-proposal-bob",
+    }],
+    created_at: now,
+    promoted_at: now,
+  },
+  proposal: { title: "Automated merged-code repair" },
+  created_at: now,
+};
 
 const server = createServer(async (request, response) => {
   requestCount += 1;
@@ -221,7 +256,7 @@ const server = createServer(async (request, response) => {
     return;
   }
   if (request.method === "GET" && request.url === `/v1/repos/${managedRepoId}/proposals`) {
-    send(200, [proposalRecord]);
+    send(200, [proposalRecord, automatedRepairProposalRecord]);
     return;
   }
   if (
@@ -229,6 +264,13 @@ const server = createServer(async (request, response) => {
     request.url === `/v1/repos/${managedRepoId}/proposals/proposal-renamed-author`
   ) {
     send(200, proposalRecord);
+    return;
+  }
+  if (
+    request.method === "GET" &&
+    request.url === `/v1/repos/${managedRepoId}/proposals/proposal-automated-repair`
+  ) {
+    send(200, automatedRepairProposalRecord);
     return;
   }
   if (request.method === "GET" && request.url === `/v1/repos/${managedRepoId}/memory-prs`) {
@@ -433,6 +475,8 @@ try {
     "human proposal list output must expose the immutable Git head");
   assert.match(proposalList.stdout, /agent:codex/,
     "human proposal list output must expose the creating agent platform");
+  assert.match(proposalList.stdout, /managed_repair_agent \[sources: alice,bob\]/,
+    "automated repair summaries must identify automation and every source contributor without a fake human author");
   const proposalShow = await run(
     process.execPath,
     [cliPath, "proposal", "show", "proposal-renamed-author"],
@@ -443,6 +487,14 @@ try {
     "human proposal show output must expose the immutable Git head");
   assert.match(proposalShow.stdout, /agent:codex/,
     "human proposal show output must expose the creating agent platform");
+  const automatedProposalShow = await run(
+    process.execPath,
+    [cliPath, "proposal", "show", "proposal-automated-repair"],
+    managedRepo,
+    env,
+  );
+  assert.match(automatedProposalShow.stdout, /managed_repair_agent \[sources: alice,bob\]/,
+    "proposal show must remain usable when an automated repair has no human author");
 
   const selectedContext = await run(process.execPath, [
     cliPath,

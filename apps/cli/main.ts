@@ -1455,11 +1455,20 @@ function printProposalSummary(proposal: ManagedProposal): void {
     ...commit.session_refs.map((session) => session.agent_platform),
   ].filter((value): value is string => value !== undefined);
   const agents = [...new Set(agentPlatforms)].join(",") || "-";
-  const currentLogin = commit.author.github_login;
+  const currentLogin = commit.author?.github_login;
   const historicalLogin = commit.author_github_login_snapshot;
-  const author = historicalLogin === undefined || historicalLogin === currentLogin
-    ? currentLogin
-    : `${currentLogin} (formerly ${historicalLogin})`;
+  const humanAuthor = currentLogin === undefined
+    ? historicalLogin
+    : historicalLogin === undefined || historicalLogin === currentLogin
+      ? currentLogin
+      : `${currentLogin} (formerly ${historicalLogin})`;
+  const sourceAuthors = [...new Set((commit.repair_sources ?? [])
+    .map((source) => source.contributor_github_login ?? source.contributor_github_login_snapshot)
+    .filter((value): value is string => value !== undefined))];
+  const author = humanAuthor ??
+    (commit.automation_identity === undefined
+      ? "unknown"
+      : `${commit.automation_identity.kind} [sources: ${sourceAuthors.join(",") || "-"}]`);
   console.log([
     proposal.id,
     commit.state,

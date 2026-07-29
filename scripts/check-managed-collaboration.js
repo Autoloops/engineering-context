@@ -153,12 +153,27 @@ const fetchImpl = async (input, init) => {
           provenance: {
             version_id: "context-version-1",
             scope_kind: "working",
-            author_github_login: "alice",
-            author_github_login_snapshot: "alice-old",
             proposal_id: "context-proposal-1",
             memory_commit_id: "context-commit-1",
-            session_refs: [{ id: "codex-session:context-1", agent_platform: "codex" }],
-            agent_platform: "codex",
+            session_refs: [{ id: "managed-repair:job-1:1", agent_platform: "managed-repair" }],
+            agent_platform: "managed-repair",
+            automation_identity: {
+              kind: "managed_repair_agent",
+              reconciliation_job_id: "job-1",
+              repair_attempt: 1,
+            },
+            repair_sources: [{
+              memory_commit_id: "source-commit-alice",
+              contributor_user_id: "11111111-1111-4111-8111-111111111111",
+              contributor_github_login: "alice",
+              contributor_github_login_snapshot: "alice-old",
+              proposal_id: "source-proposal-alice",
+            }, {
+              memory_commit_id: "source-commit-bob",
+              contributor_user_id: "22222222-2222-4222-8222-222222222222",
+              contributor_github_login: "bob",
+              proposal_id: "source-proposal-bob",
+            }],
             git_head: mergeSha,
             head_repository: "example/project",
             head_ref: "feature",
@@ -171,6 +186,30 @@ const fetchImpl = async (input, init) => {
             promotion_id: "promotion-1",
             quarantine_reason: "superseded repair",
             origins: [{
+              version_id: "repair-version-1",
+              scope_kind: "working",
+              proposal_id: "repair-proposal-1",
+              memory_commit_id: "repair-commit-1",
+              session_refs: [{ id: "managed-repair:job-1:1", agent_platform: "managed-repair" }],
+              agent_platform: "managed-repair",
+              automation_identity: {
+                kind: "managed_repair_agent",
+                reconciliation_job_id: "job-1",
+                repair_attempt: 1,
+              },
+              repair_sources: [{
+                memory_commit_id: "source-commit-alice",
+                contributor_user_id: "11111111-1111-4111-8111-111111111111",
+                contributor_github_login: "alice",
+                contributor_github_login_snapshot: "alice-old",
+                proposal_id: "source-proposal-alice",
+              }, {
+                memory_commit_id: "source-commit-bob",
+                contributor_user_id: "22222222-2222-4222-8222-222222222222",
+                contributor_github_login: "bob",
+                proposal_id: "source-proposal-bob",
+              }],
+            }, {
               version_id: "source-version-bob",
               scope_kind: "working",
               author_user_id: "22222222-2222-4222-8222-222222222222",
@@ -223,12 +262,27 @@ const fetchImpl = async (input, init) => {
           provenance: {
             version_id: "context-version-1",
             scope_kind: "working",
-            author_github_login: "alice",
-            author_github_login_snapshot: "alice-old",
             proposal_id: "context-proposal-1",
             memory_commit_id: "context-commit-1",
-            session_refs: [{ id: "codex-session:context-1", agent_platform: "codex" }],
-            agent_platform: "codex",
+            session_refs: [{ id: "managed-repair:job-1:1", agent_platform: "managed-repair" }],
+            agent_platform: "managed-repair",
+            automation_identity: {
+              kind: "managed_repair_agent",
+              reconciliation_job_id: "job-1",
+              repair_attempt: 1,
+            },
+            repair_sources: [{
+              memory_commit_id: "source-commit-alice",
+              contributor_user_id: "11111111-1111-4111-8111-111111111111",
+              contributor_github_login: "alice",
+              contributor_github_login_snapshot: "alice-old",
+              proposal_id: "source-proposal-alice",
+            }, {
+              memory_commit_id: "source-commit-bob",
+              contributor_user_id: "22222222-2222-4222-8222-222222222222",
+              contributor_github_login: "bob",
+              proposal_id: "source-proposal-bob",
+            }],
             git_head: mergeSha,
             head_repository: "example/project",
             head_ref: "feature",
@@ -241,6 +295,30 @@ const fetchImpl = async (input, init) => {
             promotion_id: "promotion-1",
             quarantine_reason: "superseded repair",
             origins: [{
+              version_id: "repair-version-1",
+              scope_kind: "working",
+              proposal_id: "repair-proposal-1",
+              memory_commit_id: "repair-commit-1",
+              session_refs: [{ id: "managed-repair:job-1:1", agent_platform: "managed-repair" }],
+              agent_platform: "managed-repair",
+              automation_identity: {
+                kind: "managed_repair_agent",
+                reconciliation_job_id: "job-1",
+                repair_attempt: 1,
+              },
+              repair_sources: [{
+                memory_commit_id: "source-commit-alice",
+                contributor_user_id: "11111111-1111-4111-8111-111111111111",
+                contributor_github_login: "alice",
+                contributor_github_login_snapshot: "alice-old",
+                proposal_id: "source-proposal-alice",
+              }, {
+                memory_commit_id: "source-commit-bob",
+                contributor_user_id: "22222222-2222-4222-8222-222222222222",
+                contributor_github_login: "bob",
+                proposal_id: "source-proposal-bob",
+              }],
+            }, {
               version_id: "source-version-bob",
               scope_kind: "working",
               author_user_id: "22222222-2222-4222-8222-222222222222",
@@ -350,7 +428,10 @@ const contextMarkdown = renderGraphContextMarkdown(contextResult);
 assert.match(contextMarkdown, /version context-version-1/);
 assert.match(contextMarkdown, /formerly @alice-old/);
 assert.match(contextMarkdown, /proposal context-proposal-1/);
-assert.match(contextMarkdown, /session codex-session:context-1/);
+assert.match(contextMarkdown, /session managed-repair:job-1:1/);
+assert.match(contextMarkdown, /automation managed_repair_agent \(job job-1, attempt 1\)/);
+assert.match(contextMarkdown, /repair source commit source-commit-alice by @alice \(formerly @alice-old\)/);
+assert.match(contextMarkdown, /repair source commit source-commit-bob by @bob/);
 assert.match(contextMarkdown, /branch feature/);
 assert.match(contextMarkdown, /head repository example\/project/);
 assert.match(contextMarkdown, /head ref feature/);
@@ -358,7 +439,10 @@ assert.match(contextMarkdown, /clean working tree/);
 assert.match(contextMarkdown, /code PR #7/);
 assert.match(contextMarkdown, /promotion promotion-1/);
 assert.match(contextMarkdown, /quarantine superseded repair/);
-assert.match(contextMarkdown, /Origins: \[working; version source-version-bob; @bob; formerly @bob-old/);
+assert.match(contextMarkdown, /Origins: \[working; version repair-version-1; proposal repair-proposal-1; commit repair-commit-1/);
+assert.match(contextMarkdown, /Origins: .*automation managed_repair_agent \(job job-1, attempt 1\)/);
+assert.match(contextMarkdown, /Origins: .*repair source commit source-commit-alice by @alice \(formerly @alice-old\) proposal source-proposal-alice/);
+assert.match(contextMarkdown, /\[working; version source-version-bob; @bob; formerly @bob-old/);
 assert.match(contextMarkdown, /origin-proposal-bob/);
 assert.match(contextMarkdown, /claude-session:origin-bob/);
 assert.match(contextMarkdown, /head repository bob\/project/);
@@ -482,12 +566,27 @@ const html = buildGraphViewHtmlFromData({
     provenance: {
       version_id: "version-1",
       scope_kind: "working",
-      author_github_login: "alice",
-      author_github_login_snapshot: "alice-old",
       proposal_id: "proposal-1",
       memory_commit_id: "commit-1",
-      session_refs: [{ id: "codex-session:session-1", agent_platform: "codex" }],
-      agent_platform: "codex",
+      session_refs: [{ id: "managed-repair:job-1:1", agent_platform: "managed-repair" }],
+      agent_platform: "managed-repair",
+      automation_identity: {
+        kind: "managed_repair_agent",
+        reconciliation_job_id: "job-1",
+        repair_attempt: 1,
+      },
+      repair_sources: [{
+        memory_commit_id: "source-commit-alice",
+        contributor_user_id: "11111111-1111-4111-8111-111111111111",
+        contributor_github_login: "alice",
+        contributor_github_login_snapshot: "alice-old",
+        proposal_id: "source-proposal-alice",
+      }, {
+        memory_commit_id: "source-commit-bob",
+        contributor_user_id: "22222222-2222-4222-8222-222222222222",
+        contributor_github_login: "bob",
+        proposal_id: "source-proposal-bob",
+      }],
       git_head: mergeSha,
       head_repository: "example/project",
       head_ref: "feature",
@@ -499,6 +598,30 @@ const html = buildGraphViewHtmlFromData({
       commit_role: "repair",
       promotion_id: "promotion-1",
       origins: [{
+        version_id: "repair-origin-version-1",
+        scope_kind: "working",
+        proposal_id: "repair-proposal-1",
+        memory_commit_id: "repair-commit-1",
+        session_refs: [{ id: "managed-repair:job-1:1", agent_platform: "managed-repair" }],
+        agent_platform: "managed-repair",
+        automation_identity: {
+          kind: "managed_repair_agent",
+          reconciliation_job_id: "job-1",
+          repair_attempt: 1,
+        },
+        repair_sources: [{
+          memory_commit_id: "source-commit-alice",
+          contributor_user_id: "11111111-1111-4111-8111-111111111111",
+          contributor_github_login: "alice",
+          contributor_github_login_snapshot: "alice-old",
+          proposal_id: "source-proposal-alice",
+        }, {
+          memory_commit_id: "source-commit-bob",
+          contributor_user_id: "22222222-2222-4222-8222-222222222222",
+          contributor_github_login: "bob",
+          proposal_id: "source-proposal-bob",
+        }],
+      }, {
         version_id: "origin-version-1",
         scope_kind: "working",
         author_github_login: "carol",
@@ -539,9 +662,15 @@ const html = buildGraphViewHtmlFromData({
 });
 assert.match(html, /data-version-id="version-1"/);
 assert.match(html, /data-version-id="version-2"/);
-assert.match(html, /data-author="alice,carol"/);
+assert.match(html, /data-author="alice,bob,carol"/);
+assert.match(html, /data-memory-commit-id="commit-1,source-commit-alice,source-commit-bob,repair-commit-1,origin-commit-1"/);
 assert.match(html, /provenance-badge[^>]*>repair</);
 assert.match(html, /formerly @alice-old/);
+assert.match(html, /automation managed_repair_agent job job-1 attempt 1/);
+assert.match(html, /repair source commit source-commit-alice by @alice \(formerly @alice-old\)/);
+assert.match(html, /repair source commit source-commit-bob by @bob/);
+assert.match(html, /origin automation managed_repair_agent job job-1 attempt 1/);
+assert.match(html, /origin repair source commit source-commit-alice by @alice \(formerly @alice-old\) proposal source-proposal-alice/);
 assert.match(html, /origin @carol/);
 assert.match(html, /origin formerly @carol-old/);
 assert.match(html, /origin proposal origin-proposal-1/);
@@ -561,6 +690,7 @@ assert.match(html, /id="claims-filter-author-snapshot"/);
 assert.match(html, /id="claims-filter-proposal"/);
 assert.match(html, /id="claims-filter-memory-commit"/);
 assert.match(html, /id="claims-filter-agent"/);
+assert.match(html, /id="claims-filter-automation"/);
 assert.match(html, /id="claims-filter-branch"/);
 assert.match(html, /id="claims-filter-head-repository"/);
 assert.match(html, /id="claims-filter-head-ref"/);
@@ -613,11 +743,14 @@ assert.equal(builtViewData.flows[0].provenance.version_id, "flow-version-built")
 const attestations = [];
 const rejections = [];
 const rejectedMemoryPrIds = new Set();
+const redirectedAttestationBodies = [];
 let candidateCalls = 0;
 let forcePushMode = false;
 let codeMergeFailureMode = false;
 let codeMergeFailureSha = unrelatedCodeMergeSha;
 let codeMergeFailureMemoryPrId = "memory-pr-code-merge-away";
+let redirectAttestationUrl;
+let redirectOidcUrl;
 const server = createServer(async (incoming, response) => {
   const url = new URL(incoming.url, "http://127.0.0.1");
   const chunks = [];
@@ -629,6 +762,11 @@ const server = createServer(async (incoming, response) => {
   };
   if (url.pathname === "/oidc") {
     assert.equal(incoming.headers.authorization, "Bearer oidc-request-token");
+    if (redirectOidcUrl !== undefined) {
+      response.writeHead(307, { location: redirectOidcUrl });
+      response.end();
+      return;
+    }
     assert.equal(url.searchParams.get("audience"), "greplica-managed");
     send(200, { value: "github-oidc-token" });
     return;
@@ -803,6 +941,11 @@ const server = createServer(async (incoming, response) => {
     return;
   }
   if (url.pathname.endsWith("/memory/reconcile/attest")) {
+    if (redirectAttestationUrl !== undefined) {
+      response.writeHead(307, { location: redirectAttestationUrl });
+      response.end();
+      return;
+    }
     attestations.push(body);
     send(200, {
       accepted: true,
@@ -831,10 +974,49 @@ await new Promise((resolve, reject) => {
   server.once("error", reject);
   server.listen(0, "127.0.0.1", resolve);
 });
+const redirectSink = createServer(async (incoming, response) => {
+  const chunks = [];
+  for await (const chunk of incoming) chunks.push(chunk);
+  redirectedAttestationBodies.push(Buffer.concat(chunks).toString("utf8"));
+  response.writeHead(200, { "content-type": "application/json" });
+  response.end(JSON.stringify({ accepted: true }));
+});
+await new Promise((resolve, reject) => {
+  redirectSink.once("error", reject);
+  redirectSink.listen(0, "127.0.0.1", resolve);
+});
 try {
   const address = server.address();
+  const redirectSinkAddress = redirectSink.address();
   assert.ok(address && typeof address === "object");
+  assert.ok(redirectSinkAddress && typeof redirectSinkAddress === "object");
   const apiUrl = `http://127.0.0.1:${address.port}`;
+  redirectOidcUrl = `http://127.0.0.1:${redirectSinkAddress.port}/capture-oidc`;
+  await assert.rejects(
+    run(process.execPath, [
+      cliPath,
+      "memory",
+      "reconcile",
+      "--managed-repo",
+      installation.managedRepoId,
+      "--merge-sha",
+      mergeSha,
+      "--api-url",
+      apiUrl,
+    ], repoRoot, {
+      ...process.env,
+      ACTIONS_ID_TOKEN_REQUEST_URL: `${apiUrl}/oidc?api-version=1`,
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-request-token",
+      GITHUB_REPOSITORY: "example/project",
+      GITHUB_REF: `refs/heads/${defaultBranch}`,
+      GITHUB_RUN_ID: "122",
+    }),
+    /fetch failed/,
+  );
+  redirectOidcUrl = undefined;
+  assert.deepEqual(redirectedAttestationBodies, [],
+    "an OIDC redirect must never reach another origin with the request-token exchange");
+
   const result = await run(process.execPath, [
     cliPath,
     "memory",
@@ -979,6 +1161,35 @@ try {
     featureSha,
     "PR-head proof must fetch the base repository pull ref even when the object already exists",
   );
+
+  redirectAttestationUrl = `http://127.0.0.1:${redirectSinkAddress.port}/capture`;
+  const attestationsBeforeRedirect = attestations.length;
+  await assert.rejects(
+    run(process.execPath, [
+      cliPath,
+      "memory",
+      "reconcile",
+      "--managed-repo",
+      installation.managedRepoId,
+      "--merge-sha",
+      mergeSha,
+      "--api-url",
+      apiUrl,
+    ], repoRoot, {
+      ...process.env,
+      ACTIONS_ID_TOKEN_REQUEST_URL: `${apiUrl}/oidc?api-version=1`,
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-request-token",
+      GITHUB_REPOSITORY: "example/project",
+      GITHUB_REF: `refs/heads/${defaultBranch}`,
+      GITHUB_RUN_ID: "129",
+    }),
+    /fetch failed/,
+  );
+  redirectAttestationUrl = undefined;
+  assert.equal(attestations.length, attestationsBeforeRedirect,
+    "a redirected attestation must not be accepted by the original service");
+  assert.deepEqual(redirectedAttestationBodies, [],
+    "a 307 response must never forward the signed attestation body to another origin");
 
   exec("git", [
     "-C",
@@ -1152,7 +1363,10 @@ try {
   assert.equal(candidateCalls, candidateCallsBeforeReplay,
     "a historical workflow rerun must fail before requesting a reconciliation candidate");
 } finally {
-  await new Promise((resolve) => server.close(resolve));
+  await Promise.all([
+    new Promise((resolve) => server.close(resolve)),
+    new Promise((resolve) => redirectSink.close(resolve)),
+  ]);
 }
 
 console.log("Managed collaboration checks passed.");

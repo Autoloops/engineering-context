@@ -630,6 +630,7 @@ async function githubOidcToken(audience: string): Promise<string> {
   url.searchParams.set("audience", audience);
   const response = await fetch(url, {
     headers: { authorization: `Bearer ${requestToken}`, accept: "application/json" },
+    redirect: "error",
   });
   const payload = await response.json() as unknown;
   if (!response.ok || !isRecord(payload) || typeof payload.value !== "string") {
@@ -639,7 +640,10 @@ async function githubOidcToken(audience: string): Promise<string> {
 }
 
 async function jsonRequest<T>(url: string, init: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
+  const response = await fetch(url, {
+    ...init,
+    redirect: "error",
+  });
   const text = await response.text();
   let payload: unknown = {};
   if (text.length > 0) {

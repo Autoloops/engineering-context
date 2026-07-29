@@ -85,6 +85,7 @@ function provenanceLabel(object: object): string {
 function provenanceValues(provenance: ManagedObjectProvenance | ManagedObjectOrigin): string[] {
   const currentLogin = provenance.author_github_login;
   const historicalLogin = provenance.author_github_login_snapshot;
+  const automation = provenance.automation_identity;
   const values = [
     provenance.scope_kind,
     `version ${provenance.version_id}`,
@@ -94,6 +95,20 @@ function provenanceValues(provenance: ManagedObjectProvenance | ManagedObjectOri
     provenance.memory_commit_id === undefined ? undefined : `commit ${provenance.memory_commit_id}`,
     ...(provenance.session_refs ?? []).map((session) => `session ${session.id}`),
     provenance.agent_platform === undefined ? undefined : `agent ${provenance.agent_platform}`,
+    automation === undefined
+      ? undefined
+      : `automation ${automation.kind} (job ${automation.reconciliation_job_id}, attempt ${automation.repair_attempt})`,
+    ...(provenance.repair_sources ?? []).map((source) => {
+      const current = source.contributor_github_login;
+      const snapshot = source.contributor_github_login_snapshot;
+      const contributor = current === undefined
+        ? snapshot === undefined ? "" : ` by @${snapshot}`
+        : snapshot === undefined || snapshot === current
+          ? ` by @${current}`
+          : ` by @${current} (formerly @${snapshot})`;
+      const proposal = source.proposal_id === undefined ? "" : ` proposal ${source.proposal_id}`;
+      return `repair source commit ${source.memory_commit_id}${contributor}${proposal}`;
+    }),
     provenance.branch === undefined ? undefined : `branch ${provenance.branch}`,
     provenance.git_head === undefined ? undefined : `git ${provenance.git_head}`,
     provenance.head_repository === undefined ? undefined : `head repository ${provenance.head_repository}`,
