@@ -332,6 +332,21 @@ export const GraphReadSchema = Type.Object({
 
 export const MemoryProposalSchema = Type.Object({}, { additionalProperties: true });
 
+export const ReconciliationCodeEvidenceOmissionReasonSchema = Type.Union([
+  Type.Literal("missing_file"),
+  Type.Literal("no_resolved_span"),
+  Type.Literal("sensitive_path"),
+  Type.Literal("binary"),
+  Type.Literal("file_too_large"),
+  Type.Literal("unreadable"),
+  Type.Literal("total_budget"),
+  Type.Literal("submodule"),
+  Type.Literal("sensitive_content"),
+  Type.Literal("not_in_attested_tree"),
+  Type.Literal("symlink"),
+  Type.Literal("not_regular_blob"),
+]);
+
 export const AnchorAuditIssueSchema = Type.Object({
   claim_id: Type.String(),
   anchor: Type.Optional(CodeAnchorSchema),
@@ -342,7 +357,9 @@ export const AnchorAuditIssueSchema = Type.Object({
     Type.Literal("ambiguous_symbol"),
     Type.Literal("unsupported_language"),
     Type.Literal("drifted"),
+    Type.Literal("unverifiable"),
   ]),
+  omission_reason: Type.Optional(ReconciliationCodeEvidenceOmissionReasonSchema),
 });
 export const AnchorAuditSchema = Type.Object({
   missing_anchors: Type.Array(AnchorAuditIssueSchema),
@@ -351,6 +368,7 @@ export const AnchorAuditSchema = Type.Object({
   ambiguous_symbols: Type.Array(AnchorAuditIssueSchema),
   unsupported_languages: Type.Array(AnchorAuditIssueSchema),
   drifted: Type.Array(AnchorAuditIssueSchema),
+  unverifiable: Type.Optional(Type.Array(AnchorAuditIssueSchema)),
 });
 export const ProposalAnchorAuditSchema = Type.Object({
   result: AnchorAuditSchema,
@@ -384,20 +402,7 @@ export const ReconciliationCodeEvidenceEntrySchema = Type.Object({
   snippet_sha256: Type.Optional(Type.String({ pattern: "^[0-9a-f]{64}$" })),
   anchor_fingerprint: Type.Optional(Type.String({ pattern: "^[0-9a-f]{16}$" })),
   truncated: Type.Optional(Type.Boolean()),
-  omission_reason: Type.Optional(Type.Union([
-    Type.Literal("missing_file"),
-    Type.Literal("no_resolved_span"),
-    Type.Literal("sensitive_path"),
-    Type.Literal("binary"),
-    Type.Literal("file_too_large"),
-    Type.Literal("unreadable"),
-    Type.Literal("total_budget"),
-    Type.Literal("submodule"),
-    Type.Literal("sensitive_content"),
-    Type.Literal("not_in_attested_tree"),
-    Type.Literal("symlink"),
-    Type.Literal("not_regular_blob"),
-  ])),
+  omission_reason: Type.Optional(ReconciliationCodeEvidenceOmissionReasonSchema),
 });
 
 export const ReconciliationCodeEvidenceSchema = Type.Object({

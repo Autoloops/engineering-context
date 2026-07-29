@@ -58,7 +58,8 @@ exec("git", ["init", "--quiet", repoRoot]);
 exec("git", ["-C", repoRoot, "config", "user.email", "test@example.com"]);
 exec("git", ["-C", repoRoot, "config", "user.name", "Test"]);
 writeFileSync(join(repoRoot, "example.ts"), "export function example() { return 0; }\n");
-exec("git", ["-C", repoRoot, "add", "example.ts"]);
+writeFileSync(join(repoRoot, ".env"), "MANAGED_ACTION_SECRET_MUST_NOT_LEAK=1\n");
+exec("git", ["-C", repoRoot, "add", "example.ts", ".env"]);
 exec("git", ["-C", repoRoot, "commit", "--quiet", "-m", "example"]);
 const baseSha = exec("git", ["-C", repoRoot, "rev-parse", "HEAD"]).trim();
 const defaultBranch = exec("git", ["-C", repoRoot, "branch", "--show-current"]).trim();
@@ -789,6 +790,14 @@ const server = createServer(async (incoming, response) => {
           name: "Missing component anchor",
           code_anchor: "missing-component.ts",
         },
+      }, {
+        version_id: "version-component-sensitive",
+        baseline_fingerprints: {},
+        component: {
+          id: "component.sensitive",
+          name: "Sensitive component anchor",
+          code_anchor: ".env",
+        },
       }],
     });
     return;
@@ -846,8 +855,8 @@ try {
   });
   assert.match(result.stdout, /"accepted": true/);
   assert.match(result.stdout, /"reconciliation_count": 2/);
-  assert.match(result.stdout, /"audited_component_versions": 2/);
-  assert.match(result.stdout, /"code_evidence_entries": 3/);
+  assert.match(result.stdout, /"audited_component_versions": 3/);
+  assert.match(result.stdout, /"code_evidence_entries": 4/);
   assert.match(result.stdout, /"skipped_count": 2/);
   assert.match(result.stdout, /"reason": "git_head_not_in_pr_delta"/);
   assert.equal(candidateCalls, 5);
@@ -897,12 +906,24 @@ try {
     issue.anchor.file === "missing-component.ts"
   ), "missing component anchors must fail under immutable component version IDs");
   assert.deepEqual(attestations[0].anchor_audit.fingerprints["version-component-missing"], {});
+  assert.deepEqual(attestations[0].anchor_audit.fingerprints["version-component-sensitive"], {});
+  assert.deepEqual(attestations[0].anchor_audit.result.unverifiable, [{
+    claim_id: "version-component-sensitive",
+    anchor: { file: ".env" },
+    status: "unverifiable",
+    omission_reason: "sensitive_path",
+  }], "evidence policy omissions must be explicit failing audit issues");
   assert.equal(attestations[0].repository, "example/project");
   assert.equal(attestations[0].code_evidence.managed_repo_id, installation.managedRepoId);
   assert.equal(attestations[0].code_evidence.repository, "example/project");
   assert.equal(attestations[0].code_evidence.attested_git_sha, mergeSha);
-  assert.equal(attestations[0].code_evidence.entries.length, 3,
+  assert.equal(attestations[0].code_evidence.entries.length, 4,
     "duplicate component anchors must not inflate the repair evidence packet");
+  assert.doesNotMatch(
+    JSON.stringify(attestations[0]),
+    /MANAGED_ACTION_SECRET_MUST_NOT_LEAK/,
+    "sensitive anchor bytes must not enter either evidence or its derived audit",
+  );
   const {
     evidence_sha256: submittedEvidenceHash,
     ...submittedEvidencePayload
@@ -933,6 +954,12 @@ try {
   );
   assert.equal(missingComponentEvidence.status, "missing_file");
   assert.equal(Object.hasOwn(missingComponentEvidence, "snippet"), false);
+  const sensitiveComponentEvidence = attestations[0].code_evidence.entries.find((entry) =>
+    entry.version_id === "version-component-sensitive"
+  );
+  assert.equal(sensitiveComponentEvidence.status, "omitted");
+  assert.equal(sensitiveComponentEvidence.omission_reason, "sensitive_path");
+  assert.equal(Object.hasOwn(sensitiveComponentEvidence, "snippet"), false);
   assert.deepEqual(attestations[1].ancestry, [{
     memory_commit_id: "commit-2",
     git_head: baseSha,
@@ -945,6 +972,8 @@ try {
     "legacy attestations must not send unsupported proof fields");
   assert.equal(Object.hasOwn(attestations[1], "code_evidence"), false,
     "legacy candidates must retain their exact attestation shape");
+  assert.equal(Object.hasOwn(attestations[1].anchor_audit.result, "unverifiable"), false,
+    "legacy anchor audits must retain their exact result shape");
   assert.equal(
     exec("git", ["-C", repoRoot, "rev-parse", "FETCH_HEAD"]).trim(),
     featureSha,

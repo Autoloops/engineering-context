@@ -1,13 +1,20 @@
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { auditClaimCodeAnchors } from "../../libs/knowledge-graph/code-anchors/audit.js";
-import { buildReconciliationCodeEvidence } from "../../libs/knowledge-graph/code-anchors/evidence.js";
-import { fingerprintClaimAnchors } from "../../libs/knowledge-graph/code-anchors/fingerprint.js";
+import {
+  buildReconciliationCodeEvidence,
+  isReconciliationCodeEvidenceEntryActionable,
+} from "../../libs/knowledge-graph/code-anchors/evidence.js";
+import {
+  anchorFingerprintKey,
+  fingerprintClaimAnchors,
+} from "../../libs/knowledge-graph/code-anchors/fingerprint.js";
 import { ensureGreplicaConfig, managedApiUrl } from "../../libs/config/greplica-config.js";
 import type {
   ManagedReconciliationAttestation,
   ManagedReconciliationAttestationResult,
   ManagedReconciliationCandidate,
+  ManagedReconciliationCodeEvidence,
   ManagedReconciliationRejection,
   ManagedReconciliationRejectionResult,
 } from "../../libs/managed/protocol.js";
@@ -219,21 +226,6 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
         .filter(({ baseline_fingerprints }) => baseline_fingerprints !== undefined)
         .map(({ version_id, baseline_fingerprints }) => [version_id, baseline_fingerprints!]),
     );
-    const result = await auditClaimCodeAnchors(
-      repoRoot,
-      auditedObjects,
-      undefined,
-      baselineFingerprints,
-    );
-    const fingerprints: Record<string, Record<string, string>> = {};
-    for (const claim of auditClaims) {
-      if (claim.code_anchors === undefined || claim.code_anchors.length === 0) continue;
-      const values = await fingerprintClaimAnchors(repoRoot, claim.code_anchors);
-      if (Object.keys(values).length > 0) fingerprints[claim.id] = values;
-    }
-    for (const component of componentAuditClaims) {
-      fingerprints[component.id] = await fingerprintClaimAnchors(repoRoot, component.code_anchors);
-    }
     const codeEvidence = candidate.code_evidence_required === true
       ? await buildReconciliationCodeEvidence(repoRoot, {
         managedRepoId,
@@ -257,6 +249,27 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
         ],
       })
       : undefined;
+    let anchorAudit: ManagedReconciliationAttestation["anchor_audit"];
+    if (codeEvidence !== undefined) {
+      anchorAudit = anchorAuditFromCodeEvidence(candidate, codeEvidence);
+    } else {
+      const result = await auditClaimCodeAnchors(
+        repoRoot,
+        auditedObjects,
+        undefined,
+        baselineFingerprints,
+      );
+      const fingerprints: Record<string, Record<string, string>> = {};
+      for (const claim of auditClaims) {
+        if (claim.code_anchors === undefined || claim.code_anchors.length === 0) continue;
+        const values = await fingerprintClaimAnchors(repoRoot, claim.code_anchors);
+        if (Object.keys(values).length > 0) fingerprints[claim.id] = values;
+      }
+      for (const component of componentAuditClaims) {
+        fingerprints[component.id] = await fingerprintClaimAnchors(repoRoot, component.code_anchors);
+      }
+      anchorAudit = { result, fingerprints };
+    }
     const observedDefaultHeadSha = assertCurrentRemoteDefaultHead(
       repoRoot,
       mergeSha,
@@ -272,7 +285,7 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
       memory_commit_ids: candidate.memory_commit_ids,
       ancestry,
       audit_key: "version_id",
-      anchor_audit: { result, fingerprints },
+      anchor_audit: anchorAudit,
       code_evidence: codeEvidence,
       observed_default_head_sha: observedDefaultHeadSha,
       ref: process.env.GITHUB_REF,
@@ -374,6 +387,87 @@ function verifyCandidate(candidate: ManagedReconciliationCandidate, mergeSha: st
   }
 }
 
+function anchorAuditFromCodeEvidence(
+  candidate: ManagedReconciliationCandidate,
+  evidence: ManagedReconciliationCodeEvidence,
+): ManagedReconciliationAttestation["anchor_audit"] {
+  type AuditResult = ManagedReconciliationAttestation["anchor_audit"]["result"];
+  const unverifiable: NonNullable<AuditResult["unverifiable"]> = [];
+  const result: AuditResult = {
+    missing_anchors: candidate.claim_versions
+      .filter(({ claim }) =>
+        claim.truth === "code_verified" &&
+        (claim.code_anchors === undefined || claim.code_anchors.length === 0)
+      )
+      .map(({ version_id }) => ({
+        claim_id: version_id,
+        status: "missing_anchors" as const,
+      }))
+      .sort((left, right) => compareText(left.claim_id, right.claim_id)),
+    missing_files: [],
+    missing_symbols: [],
+    ambiguous_symbols: [],
+    unsupported_languages: [],
+    drifted: [],
+    unverifiable,
+  };
+  const fingerprints: ManagedReconciliationAttestation["anchor_audit"]["fingerprints"] = {};
+  const baselines = new Map(
+    [...candidate.claim_versions, ...(candidate.component_versions ?? [])]
+      .map(({ version_id, baseline_fingerprints }) => [version_id, baseline_fingerprints]),
+  );
+
+  for (const entry of evidence.entries) {
+    fingerprints[entry.version_id] ??= {};
+    if (entry.anchor_fingerprint !== undefined) {
+      fingerprints[entry.version_id][anchorFingerprintKey(entry.anchor)] = entry.anchor_fingerprint;
+    }
+    const issue = {
+      claim_id: entry.version_id,
+      anchor: entry.anchor,
+    };
+    switch (entry.status) {
+      case "missing_file":
+        result.missing_files.push({ ...issue, status: "missing_file" });
+        break;
+      case "missing_symbol":
+        result.missing_symbols.push({ ...issue, status: "missing_symbol" });
+        break;
+      case "ambiguous_symbol":
+        result.ambiguous_symbols.push({ ...issue, status: "ambiguous_symbol" });
+        break;
+      case "unsupported_language":
+        result.unsupported_languages.push({ ...issue, status: "unsupported_language" });
+        break;
+      case "omitted":
+        unverifiable.push({
+          ...issue,
+          status: "unverifiable",
+          omission_reason: entry.omission_reason ?? "no_resolved_span",
+        });
+        break;
+      case "resolved":
+      case "file_only": {
+        if (!isReconciliationCodeEvidenceEntryActionable(entry)) {
+          unverifiable.push({
+            ...issue,
+            status: "unverifiable",
+            omission_reason: entry.omission_reason ?? "no_resolved_span",
+          });
+          break;
+        }
+        const stored = baselines.get(entry.version_id)?.[anchorFingerprintKey(entry.anchor)];
+        if (stored !== undefined && stored !== entry.anchor_fingerprint) {
+          result.drifted.push({ ...issue, status: "drifted" });
+        }
+        break;
+      }
+    }
+  }
+
+  return { result, fingerprints };
+}
+
 function componentCodeAnchors(codeAnchor: string | undefined): Array<{ file: string }> {
   if (codeAnchor === undefined) return [];
   return codeAnchor
@@ -381,6 +475,10 @@ function componentCodeAnchors(codeAnchor: string | undefined): Array<{ file: str
     .map((file) => file.trim())
     .filter((file) => file.length > 0)
     .map((file) => ({ file }));
+}
+
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function isAncestor(repoRoot: string, gitHead: string, mergeSha: string): boolean {
