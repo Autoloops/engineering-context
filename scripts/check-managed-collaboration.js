@@ -464,6 +464,66 @@ assert.deepEqual(applyBody.context.session_refs, [{ id: "codex-session:session-1
 assert.equal("author" in applyBody, false);
 assert.equal("username" in applyBody, false);
 
+await client.applyProposal({
+  title: "Source-free code memory",
+  creates: {
+    claims: [{
+      id: "claim-source-free-code",
+      kind: "fact",
+      text: "The example function is present.",
+      truth: "code_verified",
+      intent: "intended",
+      code_anchors: [{ file: "example.ts", symbol: "example" }],
+    }],
+  },
+});
+assert.equal(applyBody.context.agent_platform, undefined);
+assert.equal(applyBody.context.session_refs, undefined);
+
+await client.applyProposal({
+  title: "GitHub artifact memory",
+  creates: {
+    sources: [{
+      id: "source-github-pr",
+      kind: "session",
+      ref: "https://github.com/example/project/pull/7",
+    }],
+  },
+});
+assert.equal(applyBody.context.agent_platform, undefined);
+assert.equal(applyBody.context.session_refs, undefined,
+  "an evidence URL is not the proposal-producing agent session");
+
+await client.applyProposal({
+  title: "Mixed session and artifact memory",
+  creates: {
+    sources: [{
+      id: "source-codex",
+      kind: "session",
+      ref: "codex-session:session-2",
+    }, {
+      id: "source-github",
+      kind: "session",
+      ref: "https://github.com/example/project/issues/8",
+    }],
+  },
+});
+assert.equal(applyBody.context.agent_platform, "codex");
+assert.deepEqual(applyBody.context.session_refs, [{
+  id: "codex-session:session-2",
+  agent_platform: "codex",
+}]);
+
+await client.applyProposal({
+  title: "Unrecognized session-shaped memory",
+  creates: {
+    sources: [{ id: "source-unrecognized", kind: "session", ref: "session:forged" }],
+  },
+});
+assert.equal(applyBody.context.agent_platform, undefined);
+assert.equal(applyBody.context.session_refs, undefined,
+  "an arbitrary evidence ref must not be re-labelled as agent provenance");
+
 await client.listProposals();
 await client.showProposal("proposal/1");
 await client.listMemoryPrs();

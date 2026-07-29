@@ -371,7 +371,12 @@ function legacyCommitContext(context: ProposalCommitContext | undefined): Propos
 function proposalSessionRefs(proposal: unknown): string[] {
   if (!isRecord(proposal) || !isRecord(proposal.creates) || !Array.isArray(proposal.creates.sources)) return [];
   const refs = proposal.creates.sources.flatMap((source) =>
-    isRecord(source) && source.kind === "session" && typeof source.ref === "string" ? [source.ref] : []);
+    isRecord(source) &&
+      source.kind === "session" &&
+      typeof source.ref === "string" &&
+      platformForSessionRef(source.ref) !== undefined
+      ? [source.ref]
+      : []);
   return [...new Set(refs)];
 }
 
@@ -381,12 +386,16 @@ function proposalAgentPlatform(sessionRefs: string[]): string | undefined {
 }
 
 function platformForSessionRef(ref: string): string | undefined {
-  const separator = ref.indexOf(":");
-  if (separator <= 0) return undefined;
-  const prefix = ref.slice(0, separator);
-  if (prefix === "claude-code-session") return "claude";
-  if (prefix === "factory-droid-session") return "factory-droid";
-  return prefix.endsWith("-session") ? prefix.slice(0, -"-session".length) : prefix;
+  const prefixes = [
+    ["claude-code-session:", "claude"],
+    ["factory-droid-session:", "factory-droid"],
+    ["codex-session:", "codex"],
+    ["copilot-session:", "copilot"],
+    ["cursor-session:", "cursor"],
+    ["opencode-session:", "opencode"],
+    ["openhands-session:", "openhands"],
+  ] as const;
+  return prefixes.find(([prefix]) => ref.startsWith(prefix))?.[1];
 }
 
 function githubRepository(remoteUrl: string | undefined): string | undefined {
