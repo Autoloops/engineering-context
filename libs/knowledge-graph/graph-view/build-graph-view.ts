@@ -6,6 +6,7 @@ import type { Edge } from "../edge.js";
 import type { GraphReadResult } from "../service.js";
 import type { Component, Flow, Source } from "../schema.js";
 import type { ClaimProvenanceRecord } from "../repository.js";
+import type { ManagedGraphView, ManagedObjectProvenance } from "../../managed/protocol.js";
 
 const require = createRequire(import.meta.url);
 
@@ -55,16 +56,7 @@ export interface GraphViewClaimRow {
   flowIds: string[];
   createdAt: string | null;
   memoryCommitId: string | null;
-  provenance?: {
-    version_id: string;
-    scope_kind: "main" | "working" | "memory_pr" | "quarantine";
-    scope_name?: string;
-    author_github_login?: string;
-    author_github_login_snapshot?: string;
-    memory_commit_state?: "active" | "promoted" | "quarantined";
-    memory_pr_id?: string;
-    commit_role?: "direct" | "dependency" | "repair";
-  };
+  provenance?: ManagedObjectProvenance;
 }
 
 export interface GraphViewTimelineEvent {
@@ -77,6 +69,7 @@ export interface GraphViewTimelineEvent {
 
 export interface GraphViewData {
   generatedAt: string;
+  view?: ManagedGraphView;
   counts: {
     components: number;
     flows: number;
@@ -154,6 +147,7 @@ export function buildGraphViewData(
       flowIds: flowIdsForClaim(claim.id, graph.edges),
       createdAt: record?.created_at ?? null,
       memoryCommitId: record?.memory_commit_id ?? null,
+      provenance: managedProvenance(claim),
     };
   };
 
@@ -180,6 +174,10 @@ export function buildGraphViewData(
     supersededClaims: superseded,
     claimsTimeline: buildClaimsTimeline(claims),
   };
+}
+
+function managedProvenance(value: object): ManagedObjectProvenance | undefined {
+  return (value as { provenance?: ManagedObjectProvenance }).provenance;
 }
 
 export function buildGraphViewHtml(
@@ -403,21 +401,33 @@ function kindColor(kind: string): string {
 function renderClaimRow(claim: GraphViewClaimRow): string {
   const badge = `<span class="kind-badge" style="background:${kindColor(claim.kind)}">${escapeHtml(claim.kind)}</span>`;
   const provenance = claim.provenance;
+  const currentLogin = provenance?.author_github_login;
+  const historicalLogin = provenance?.author_github_login_snapshot;
   const provenanceBadges = provenance === undefined
     ? ""
     : `<div class="provenance-badges">${[
         provenance.scope_kind,
-        provenance.author_github_login ?? provenance.author_github_login_snapshot,
+        currentLogin === undefined ? undefined : `@${currentLogin}`,
+        historicalLogin === undefined || historicalLogin === currentLogin ? undefined : `formerly @${historicalLogin}`,
+        provenance.proposal_id === undefined ? undefined : `proposal ${provenance.proposal_id}`,
+        provenance.memory_commit_id === undefined ? undefined : `commit ${provenance.memory_commit_id}`,
+        ...(provenance.session_refs ?? []).map((session) => `session ${session.id}`),
+        provenance.agent_platform === undefined ? undefined : `agent ${provenance.agent_platform}`,
+        provenance.git_head === undefined ? undefined : `git ${provenance.git_head}`,
+        provenance.branch === undefined ? undefined : `branch ${provenance.branch}`,
+        provenance.code_pr_number === undefined ? undefined : `code PR #${provenance.code_pr_number}`,
         provenance.commit_role,
         provenance.memory_commit_state,
         provenance.memory_pr_id === undefined ? undefined : `Memory PR ${provenance.memory_pr_id}`,
+        provenance.promotion_id === undefined ? undefined : `promotion ${provenance.promotion_id}`,
+        provenance.quarantine_reason === undefined ? undefined : `quarantine: ${provenance.quarantine_reason}`,
       ].filter((value): value is string => value !== undefined)
         .map((value) => `<span class="provenance-badge">${escapeHtml(value)}</span>`)
         .join("")}</div>`;
   const version = provenance === undefined
     ? ""
     : ` <span class="claim-version">version <code>${escapeHtml(provenance.version_id)}</code></span>`;
-  return `          <tr data-id="${escapeHtml(claim.id)}" data-version-id="${escapeHtml(provenance?.version_id ?? "")}" data-scope="${escapeHtml(provenance?.scope_kind ?? "")}" data-author="${escapeHtml(provenance?.author_github_login ?? provenance?.author_github_login_snapshot ?? "")}" data-memory-state="${escapeHtml(provenance?.memory_commit_state ?? "")}" data-commit-role="${escapeHtml(provenance?.commit_role ?? "")}" data-memory-pr-id="${escapeHtml(provenance?.memory_pr_id ?? "")}" data-kind="${escapeHtml(claim.kind)}" data-source="${escapeHtml(claim.source)}" data-freshness="${escapeHtml(claim.freshness)}" data-memory-commit-id="${escapeHtml(claim.memoryCommitId ?? "")}"><td class="claim-text">${escapeHtml(claim.text)}<div class="claim-id"><code>${escapeHtml(claim.id)}</code>${version}</div>${provenanceBadges}</td><td class="session">${escapeHtml(claim.session)}</td><td class="kind-cell">${badge}</td><td class="created">${escapeHtml(formatDateTime(claim.createdAt))}</td></tr>`;
+  return `          <tr data-id="${escapeHtml(claim.id)}" data-version-id="${escapeHtml(provenance?.version_id ?? "")}" data-scope="${escapeHtml(provenance?.scope_kind ?? "")}" data-author="${escapeHtml(currentLogin ?? historicalLogin ?? "")}" data-author-snapshot="${escapeHtml(historicalLogin ?? "")}" data-proposal-id="${escapeHtml(provenance?.proposal_id ?? "")}" data-agent="${escapeHtml(provenance?.agent_platform ?? "")}" data-branch="${escapeHtml(provenance?.branch ?? "")}" data-code-pr="${escapeHtml(provenance?.code_pr_number?.toString() ?? "")}" data-promotion="${escapeHtml(provenance?.promotion_id ?? "")}" data-memory-state="${escapeHtml(provenance?.memory_commit_state ?? "")}" data-commit-role="${escapeHtml(provenance?.commit_role ?? "")}" data-memory-pr-id="${escapeHtml(provenance?.memory_pr_id ?? "")}" data-kind="${escapeHtml(claim.kind)}" data-source="${escapeHtml(claim.source)}" data-freshness="${escapeHtml(claim.freshness)}" data-memory-commit-id="${escapeHtml(provenance?.memory_commit_id ?? claim.memoryCommitId ?? "")}"><td class="claim-text">${escapeHtml(claim.text)}<div class="claim-id"><code>${escapeHtml(claim.id)}</code>${version}</div>${provenanceBadges}</td><td class="session">${escapeHtml(claim.session)}</td><td class="kind-cell">${badge}</td><td class="created">${escapeHtml(formatDateTime(claim.createdAt))}</td></tr>`;
 }
 
 function renderHtml(data: GraphViewData, title: string): string {
@@ -915,9 +925,16 @@ ${flowRows}
           <div class="provenance-filters" aria-label="Provenance filters">
             <label>Scope<select id="claims-filter-scope" class="provenance-filter"><option value="">All scopes</option></select></label>
             <label>Author<select id="claims-filter-author" class="provenance-filter"><option value="">All authors</option></select></label>
+            <label>Historical author<select id="claims-filter-author-snapshot" class="provenance-filter"><option value="">All historical authors</option></select></label>
+            <label>Proposal<select id="claims-filter-proposal" class="provenance-filter"><option value="">All proposals</option></select></label>
+            <label>Memory commit<select id="claims-filter-memory-commit" class="provenance-filter"><option value="">All commits</option></select></label>
+            <label>Agent<select id="claims-filter-agent" class="provenance-filter"><option value="">All agents</option></select></label>
+            <label>Branch<select id="claims-filter-branch" class="provenance-filter"><option value="">All branches</option></select></label>
+            <label>Code PR<select id="claims-filter-code-pr" class="provenance-filter"><option value="">All code PRs</option></select></label>
             <label>Memory state<select id="claims-filter-memory-state" class="provenance-filter"><option value="">All states</option></select></label>
             <label>Memory PR<select id="claims-filter-memory-pr" class="provenance-filter"><option value="">All Memory PRs</option></select></label>
             <label>Commit role<select id="claims-filter-commit-role" class="provenance-filter"><option value="">All roles</option></select></label>
+            <label>Promotion<select id="claims-filter-promotion" class="provenance-filter"><option value="">All promotions</option></select></label>
           </div>
         </div>
         <p class="meta claims-meta" id="claims-meta">${escapeHtml(defaultClaimsMeta)}</p>
@@ -982,9 +999,16 @@ ${timelineEvents}
     const provenanceFilterSelects = {
       scope: document.getElementById("claims-filter-scope"),
       author: document.getElementById("claims-filter-author"),
+      authorSnapshot: document.getElementById("claims-filter-author-snapshot"),
+      proposalId: document.getElementById("claims-filter-proposal"),
+      memoryCommitId: document.getElementById("claims-filter-memory-commit"),
+      agent: document.getElementById("claims-filter-agent"),
+      branch: document.getElementById("claims-filter-branch"),
+      codePr: document.getElementById("claims-filter-code-pr"),
       memoryState: document.getElementById("claims-filter-memory-state"),
       memoryPrId: document.getElementById("claims-filter-memory-pr"),
       commitRole: document.getElementById("claims-filter-commit-role"),
+      promotion: document.getElementById("claims-filter-promotion"),
     };
     const defaultClaimsMeta = ${JSON.stringify(defaultClaimsMeta)};
 
@@ -994,9 +1018,15 @@ ${timelineEvents}
     const FRESHNESS_COLORS = { active: "#59a14f", superseded: "#bab0ac" };
 
     const allClaims = graphData.claims.concat(graphData.supersededClaims);
-    const claimTextById = new Map(allClaims.map((claim) => [claim.id, claim.text]));
-    const componentIdsByClaim = new Map(graphData.claims.map((claim) => [claim.id, claim.componentIds || []]));
-    const flowIdsByClaim = new Map(graphData.claims.map((claim) => [claim.id, claim.flowIds || []]));
+    const claimVersionKey = (claim) => (claim.provenance && claim.provenance.version_id) || claim.id;
+    const rowVersionKey = (row) => row.dataset.versionId || row.dataset.id || "";
+    const claimTextByVersion = new Map(allClaims.map((claim) => [claimVersionKey(claim), claim.text]));
+    const componentIdsByClaimVersion = new Map(
+      graphData.claims.map((claim) => [claimVersionKey(claim), claim.componentIds || []])
+    );
+    const flowIdsByClaimVersion = new Map(
+      graphData.claims.map((claim) => [claimVersionKey(claim), claim.flowIds || []])
+    );
     const componentNameById = new Map(graphData.components.map((component) => [component.id, component.name]));
     const flowNameById = new Map(graphData.flows.map((flow) => [flow.id, flow.name]));
 
@@ -1006,9 +1036,16 @@ ${timelineEvents}
       const provenance = claim.provenance || {};
       if (key === "scope") return provenance.scope_kind || "";
       if (key === "author") return provenance.author_github_login || provenance.author_github_login_snapshot || "";
+      if (key === "authorSnapshot") return provenance.author_github_login_snapshot || "";
+      if (key === "proposalId") return provenance.proposal_id || "";
+      if (key === "memoryCommitId") return provenance.memory_commit_id || claim.memoryCommitId || "";
+      if (key === "agent") return provenance.agent_platform || "";
+      if (key === "branch") return provenance.branch || "";
+      if (key === "codePr") return provenance.code_pr_number ? String(provenance.code_pr_number) : "";
       if (key === "memoryState") return provenance.memory_commit_state || "";
       if (key === "memoryPrId") return provenance.memory_pr_id || "";
       if (key === "commitRole") return provenance.commit_role || "";
+      if (key === "promotion") return provenance.promotion_id || "";
       return "";
     }
 
@@ -1267,10 +1304,10 @@ ${timelineEvents}
       if (filter.type === "source") return row.dataset.source === filter.value;
       if (filter.type === "commit") return row.dataset.memoryCommitId === filter.value;
       if (filter.type === "component") {
-        return (componentIdsByClaim.get(row.dataset.id) || []).includes(filter.value);
+        return (componentIdsByClaimVersion.get(rowVersionKey(row)) || []).includes(filter.value);
       }
       if (filter.type === "flow") {
-        return (flowIdsByClaim.get(row.dataset.id) || []).includes(filter.value);
+        return (flowIdsByClaimVersion.get(rowVersionKey(row)) || []).includes(filter.value);
       }
       return true;
     }
@@ -1293,7 +1330,7 @@ ${timelineEvents}
       for (const row of claimRows) {
         const id = row.dataset.id || "";
         const matchesFilter = rowMatchesFilter(row, filter);
-        const text = (claimTextById.get(id) || "").toLowerCase();
+        const text = (claimTextByVersion.get(rowVersionKey(row)) || "").toLowerCase();
         const matchesSearch = !query || id.toLowerCase().includes(query) || text.includes(query);
         const vis = matchesFilter && matchesSearch && rowMatchesProvenanceFilters(row);
         row.classList.toggle("claim-row-hidden", !vis);

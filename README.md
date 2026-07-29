@@ -79,6 +79,14 @@ Replace `codex` with your agent platform. Login uses GitHub's browser device flo
 
 Organization admins and members inherit read access to every organization repository. Guests can read only explicitly granted repositories. A `contributor` writes proposals to their own persistent personal working scope; `memory_admin` additionally manages repository memory access. Managed graph data stays on the server, while local SQLite stores only the repository binding, role cache, hook policy, and runtime session metadata.
 
+Managed retrieval defaults to canonical `main` plus your own persistent working memory. Add other contributors explicitly when reviewing related work:
+
+```bash
+greplica graph context "How does authentication work?" \
+  --with-working alice \
+  --with-working bob
+```
+
 Managed GitHub repositories reconcile Memory PRs against exact default-branch code through the official reusable workflow. Pin the reusable workflow to a full commit SHA; do not use a branch or movable tag:
 
 ```yaml
@@ -87,6 +95,9 @@ name: Greplica memory
 on:
   push:
     branches: [main] # Replace with the repository's default branch.
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -103,7 +114,7 @@ jobs:
       merge-sha: ${{ github.sha }}
 ```
 
-The workflow checks out `merge-sha` with full history, installs an immutable Greplica Action revision, audits every eligible Memory PR and its version-keyed anchors, and attests through GitHub OIDC. It does not use a repository or model secret. Managed Greplica must allowlist both signed reusable-workflow claims for the pinned revision:
+The push trigger reconciles immediately after default-branch updates; the hourly schedule retries unmatched and stalled work without a human memory-admin step. The workflow checks out `merge-sha` with full history, installs an immutable Greplica Action revision, audits every eligible Memory PR and its version-keyed anchors (including code drift from stored baselines), and attests through GitHub OIDC. It does not use a repository or model secret. Managed Greplica must allowlist both signed reusable-workflow claims for the pinned revision:
 
 - `job_workflow_ref=Autoloops/greplica/.github/workflows/reconcile.yml@<full-40-character-commit-sha>`
 - `job_workflow_sha=<the-same-full-40-character-commit-sha>`
@@ -196,19 +207,25 @@ greplica install --mode managed [--platform codex|claude|copilot|cursor|opencode
 greplica install --invite-link <url> --platform codex|claude|copilot|cursor|opencode|openhands|factory-droid|antigravity
 greplica repo invite-link create|list
 greplica repo invite-link revoke --link <uuid>
+greplica repo invite-contributor --github-user <login>
+greplica repo grant-contributor --user <managed-user-id>
+greplica repo revoke-contributor --user <managed-user-id>
 greplica logout
 greplica whoami
 greplica repo status
 greplica config
 greplica doctor [--check-embeddings]
 greplica embeddings prewarm
-greplica graph read
-greplica graph context "<query>" [--debug]
+greplica graph read [--with-working <login>...] [--memory-pr <id>] [--main-only] [--include-quarantined] [--json]
+greplica graph context "<query>" [--with-working <login>...] [--memory-pr <id>] [--main-only] [--include-quarantined] [--json|--debug]
 greplica graph audit anchors
-greplica graph view [--out <file>] [--no-open]
+greplica graph view [--with-working <login>...] [--memory-pr <id>] [--main-only] [--include-quarantined] [--json] [--out <file>] [--no-open]
 greplica graph export <dir>
 greplica proposal validate <proposal.json>
 greplica proposal apply <proposal.json>
+greplica proposal list|show
+greplica memory pr list|show|context|retry
+greplica memory status [--json]
 greplica session mark-memory-current --session-ref <ref>
 greplica transcript bundle --platform codex|claude|copilot|opencode --file <path> [--file <path>...] --out <bundle.md>
 ```

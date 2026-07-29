@@ -32,6 +32,8 @@ let importedSnapshot;
 
 const server = createServer(async (request, response) => {
   requestCount += 1;
+  assert.equal(request.headers["x-greplica-client-version"], "0.2.1");
+  assert.match(request.headers["x-greplica-capabilities"] ?? "", /personal-working-v1/);
   const chunks = [];
   for await (const chunk of request) chunks.push(chunk);
   const body = chunks.length === 0 ? undefined : JSON.parse(Buffer.concat(chunks).toString("utf8"));

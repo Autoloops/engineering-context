@@ -11,16 +11,6 @@ on:
         description: Exact default-branch commit to audit.
         required: true
         type: string
-      api-url:
-        description: Managed Greplica API URL.
-        required: false
-        default: https://memory.autoloops.ai
-        type: string
-      oidc-audience:
-        description: GitHub OIDC audience expected by the managed service.
-        required: false
-        default: greplica-managed
-        type: string
 
 permissions:
   contents: read
@@ -46,5 +36,7 @@ jobs:
         with:
           managed-repo: ${{ inputs.managed-repo }}
           merge-sha: ${{ inputs.merge-sha }}
-          api-url: ${{ inputs.api-url }}
-          oidc-audience: ${{ inputs.oidc-audience }}
+          # These trust endpoints are deliberately not caller-controlled: the
+          # Action sends its short-lived GitHub OIDC bearer to this API.
+          api-url: https://memory.autoloops.ai
+          oidc-audience: greplica-managed

@@ -1,5 +1,16 @@
 import { Type, type Static, type TSchema } from "@sinclair/typebox";
 
+export const managedClientVersion = "0.2.1";
+export const managedClientCapabilities = [
+  "personal-working-v1",
+  "graph-selectors-v1",
+  "memory-pr-v1",
+  "oidc-reconciliation-v1",
+] as const;
+export type ManagedClientCapability = (typeof managedClientCapabilities)[number];
+export const managedClientVersionHeader = "x-greplica-client-version";
+export const managedCapabilitiesHeader = "x-greplica-capabilities";
+
 export const managedErrorCodes = [
   "invalid_request",
   "authentication_required",
@@ -619,10 +630,17 @@ export const ReconciliationCandidateSchema = Type.Object({
     git_head: Type.String({ minLength: 7 }),
     head_repository: Type.Optional(Type.String()),
     head_ref: Type.Optional(Type.String()),
+    proof_mode: Type.Optional(Type.Union([
+      Type.Literal("pr_head"),
+      Type.Literal("default_ancestry"),
+    ])),
+    code_pr_number: Type.Optional(Type.Integer({ minimum: 1 })),
+    verified_head_sha: Type.Optional(Type.String({ minLength: 7 })),
   }), { minItems: 1 }),
   claim_versions: Type.Array(Type.Object({
     version_id: Type.String(),
     claim: ClaimSchema,
+    baseline_fingerprints: Type.Optional(Type.Record(Type.String(), Type.String())),
   })),
 });
 
@@ -636,10 +654,14 @@ export const ReconciliationAttestationSchema = Type.Object({
     memory_commit_id: Type.String(),
     git_head: Type.String({ minLength: 7 }),
     is_ancestor: Type.Boolean(),
+    proof_mode: Type.Optional(Type.Union([
+      Type.Literal("pr_head"),
+      Type.Literal("default_ancestry"),
+    ])),
+    verified_head_sha: Type.Optional(Type.String({ minLength: 7 })),
   }), { minItems: 1 }),
   audit_key: Type.Literal("version_id"),
   anchor_audit: ProposalAnchorAuditSchema,
-  repair_proposal: Type.Optional(MemoryProposalSchema),
   ref: Type.Optional(Type.String()),
   run_id: Type.Optional(Type.String()),
   run_attempt: Type.Optional(Type.String()),

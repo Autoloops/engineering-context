@@ -14,12 +14,24 @@ process.env.GREPLICA_HOME = join(temporary, "greplica-home");
 
 const { ManagedGraphMemoryClient } = await import("../dist/libs/knowledge-graph/managed-client.js");
 const { canScheduleMemoryUpdates } = await import("../dist/libs/install/repo-installation-store.js");
-const { buildGraphViewHtmlFromData } = await import("../dist/libs/knowledge-graph/graph-view/build-graph-view.js");
+const {
+  buildGraphViewData,
+  buildGraphViewHtmlFromData,
+} = await import("../dist/libs/knowledge-graph/graph-view/build-graph-view.js");
+const { renderGraphContextMarkdown } = await import(
+  "../dist/libs/knowledge-graph/graph-context/render.js"
+);
+const { fingerprintClaimAnchors } = await import(
+  "../dist/libs/knowledge-graph/code-anchors/fingerprint.js"
+);
 const { migrate } = await import("../dist/libs/storage/sqlite/migrate.js");
 
 const action = readFileSync(fileURLToPath(new URL("../action.yml", import.meta.url)), "utf8");
 assert.match(action, /npm ci --prefix "\$GITHUB_ACTION_PATH" --include=dev/);
 assert.match(action, /node "\$GITHUB_ACTION_PATH\/dist\/apps\/cli\/main\.js" memory reconcile/);
+assert.match(action, /actions\/checkout@11d5960a326750d5838078e36cf38b85af677262/);
+assert.match(action, /actions\/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020/);
+assert.doesNotMatch(action, /uses: actions\/(?:checkout|setup-node)@v\d/);
 assert.doesNotMatch(action, /greplica@latest/);
 const reusableWorkflow = readFileSync(
   fileURLToPath(new URL("../.github/workflows/reconcile.yml", import.meta.url)),
@@ -28,6 +40,9 @@ const reusableWorkflow = readFileSync(
 assert.match(reusableWorkflow, /workflow_call:/);
 assert.match(reusableWorkflow, /contents: read/);
 assert.match(reusableWorkflow, /id-token: write/);
+assert.match(reusableWorkflow, /api-url: https:\/\/memory\.autoloops\.ai/);
+assert.match(reusableWorkflow, /oidc-audience: greplica-managed/);
+assert.doesNotMatch(reusableWorkflow, /\$\{\{ inputs\.(?:api-url|oidc-audience) \}\}/);
 assert.match(
   reusableWorkflow,
   /uses: Autoloops\/greplica@38e477bbc10ac01ff01d497e2011cfecb5e33897/,
@@ -38,10 +53,36 @@ const repoRoot = join(temporary, "repo");
 exec("git", ["init", "--quiet", repoRoot]);
 exec("git", ["-C", repoRoot, "config", "user.email", "test@example.com"]);
 exec("git", ["-C", repoRoot, "config", "user.name", "Test"]);
-writeFileSync(join(repoRoot, "example.ts"), "export const example = true;\n");
+writeFileSync(join(repoRoot, "example.ts"), "export function example() { return 0; }\n");
 exec("git", ["-C", repoRoot, "add", "example.ts"]);
 exec("git", ["-C", repoRoot, "commit", "--quiet", "-m", "example"]);
+const baseSha = exec("git", ["-C", repoRoot, "rev-parse", "HEAD"]).trim();
+const defaultBranch = exec("git", ["-C", repoRoot, "branch", "--show-current"]).trim();
+exec("git", ["-C", repoRoot, "checkout", "--quiet", "-b", "feature"]);
+writeFileSync(join(repoRoot, "example.ts"), "export function example() { return 1; }\n");
+exec("git", ["-C", repoRoot, "add", "example.ts"]);
+exec("git", ["-C", repoRoot, "commit", "--quiet", "-m", "feature"]);
+const featureSha = exec("git", ["-C", repoRoot, "rev-parse", "HEAD"]).trim();
+exec("git", ["-C", repoRoot, "checkout", "--quiet", defaultBranch]);
+writeFileSync(join(repoRoot, "example.ts"), "export function example() { return 2; }\n");
+exec("git", ["-C", repoRoot, "add", "example.ts"]);
+exec("git", ["-C", repoRoot, "commit", "--quiet", "-m", "squash feature"]);
 const mergeSha = exec("git", ["-C", repoRoot, "rev-parse", "HEAD"]).trim();
+assert.equal(gitIsAncestor(repoRoot, featureSha, mergeSha), false, "fixture must model a squash/rebase merge");
+const originRoot = join(temporary, "origin.git");
+exec("git", ["init", "--quiet", "--bare", originRoot]);
+exec("git", ["-C", repoRoot, "remote", "add", "origin", originRoot]);
+exec("git", ["-C", repoRoot, "push", "--quiet", "origin", `${defaultBranch}:refs/heads/${defaultBranch}`]);
+exec("git", ["-C", repoRoot, "push", "--quiet", "origin", `${featureSha}:refs/pull/7/head`]);
+const versionOneAnchor = { file: "example.ts", symbol: "example" };
+exec("git", ["-C", repoRoot, "checkout", "--quiet", "--detach", featureSha]);
+const versionOneBaseline = await fingerprintClaimAnchors(repoRoot, [versionOneAnchor]);
+exec("git", ["-C", repoRoot, "checkout", "--quiet", "--detach", mergeSha]);
+assert.notEqual(
+  (await fingerprintClaimAnchors(repoRoot, [versionOneAnchor]))["example.ts#example"],
+  versionOneBaseline["example.ts#example"],
+  "fixture must change the anchored symbol body on the merged checkout",
+);
 
 const calls = [];
 let applyBody;
@@ -58,7 +99,7 @@ const viewData = {
 const fetchImpl = async (input, init) => {
   const url = String(input);
   const body = init?.body === undefined ? undefined : JSON.parse(String(init.body));
-  calls.push({ url, method: init?.method, body });
+  calls.push({ url, method: init?.method, body, headers: new Headers(init?.headers) });
   if (url.endsWith("/proposals/review")) {
     return jsonResponse({
       valid: true,
@@ -84,10 +125,106 @@ const fetchImpl = async (input, init) => {
       query: body.query,
       search_config_version: "test",
       embedding_status: { checked_objects: 0, created: 0, reused: 0 },
-      claims: [],
+      claims: [{
+        object: {
+          id: "claim.conflict",
+          kind: "fact",
+          text: "First personal version",
+          truth: "code_verified",
+          intent: "intended",
+          code_anchors: [{ file: "example.ts", symbol: "example" }],
+          provenance: {
+            version_id: "context-version-1",
+            scope_kind: "working",
+            author_github_login: "alice",
+            author_github_login_snapshot: "alice-old",
+            proposal_id: "context-proposal-1",
+            memory_commit_id: "context-commit-1",
+            session_refs: [{ id: "codex-session:context-1", agent_platform: "codex" }],
+            agent_platform: "codex",
+            git_head: mergeSha,
+            branch: "feature",
+            code_pr_number: 7,
+            memory_pr_id: "memory-pr-1",
+            commit_role: "repair",
+            memory_commit_state: "active",
+            promotion_id: "promotion-1",
+            quarantine_reason: "superseded repair",
+          },
+        },
+        code_anchors: [],
+        about: [],
+        evidence: [],
+      }, {
+        object: {
+          id: "claim.conflict",
+          kind: "fact",
+          text: "Second personal version",
+          truth: "code_verified",
+          intent: "intended",
+          code_anchors: [{ file: "example.ts", symbol: "notThere" }],
+          provenance: {
+            version_id: "context-version-2",
+            scope_kind: "working",
+            author_github_login: "bob",
+          },
+        },
+        code_anchors: [],
+        about: [],
+        evidence: [],
+      }],
       components: [],
       flows: [],
-      ranked_results: [],
+      ranked_results: [{
+        type: "claim",
+        object: {
+          id: "claim.conflict",
+          kind: "fact",
+          text: "First personal version",
+          truth: "code_verified",
+          intent: "intended",
+          code_anchors: [{ file: "example.ts", symbol: "example" }],
+          provenance: {
+            version_id: "context-version-1",
+            scope_kind: "working",
+            author_github_login: "alice",
+            author_github_login_snapshot: "alice-old",
+            proposal_id: "context-proposal-1",
+            memory_commit_id: "context-commit-1",
+            session_refs: [{ id: "codex-session:context-1", agent_platform: "codex" }],
+            agent_platform: "codex",
+            git_head: mergeSha,
+            branch: "feature",
+            code_pr_number: 7,
+            memory_pr_id: "memory-pr-1",
+            commit_role: "repair",
+            memory_commit_state: "active",
+            promotion_id: "promotion-1",
+            quarantine_reason: "superseded repair",
+          },
+        },
+        code_anchors: [],
+        about: [],
+        evidence: [],
+      }, {
+        type: "claim",
+        object: {
+          id: "claim.conflict",
+          kind: "fact",
+          text: "Second personal version",
+          truth: "code_verified",
+          intent: "intended",
+          code_anchors: [{ file: "example.ts", symbol: "notThere" }],
+          provenance: {
+            version_id: "context-version-2",
+            scope_kind: "working",
+            author_github_login: "bob",
+          },
+        },
+        code_anchors: [],
+        about: [],
+        evidence: [],
+      }],
       sources: [],
     });
   }
@@ -147,8 +284,21 @@ const client = new ManagedGraphMemoryClient(installation, {
 await client.readGraph({ base: "main", working_users: [] });
 let request = new URL(calls.at(-1).url);
 assert.equal(request.searchParams.get("main_only"), "true");
-await client.contextGraph("auth", { base: "main", working_users: ["alice", "alice"] });
+assert.match(calls.at(-1).headers.get("x-greplica-capabilities"), /graph-selectors-v1/);
+assert.equal(calls.at(-1).headers.get("x-greplica-client-version"), "0.2.1");
+const contextResult = await client.contextGraph("auth", { base: "main", working_users: ["alice", "alice"] });
 assert.deepEqual(calls.at(-1).body.view.working_users, ["me", "alice"]);
+assert.equal(contextResult.ranked_results[0].code_anchors[0].status, "resolved");
+assert.equal(contextResult.ranked_results[1].code_anchors[0].status, "missing_symbol");
+const contextMarkdown = renderGraphContextMarkdown(contextResult);
+assert.match(contextMarkdown, /version context-version-1/);
+assert.match(contextMarkdown, /formerly @alice-old/);
+assert.match(contextMarkdown, /proposal context-proposal-1/);
+assert.match(contextMarkdown, /session codex-session:context-1/);
+assert.match(contextMarkdown, /branch feature/);
+assert.match(contextMarkdown, /code PR #7/);
+assert.match(contextMarkdown, /promotion promotion-1/);
+assert.match(contextMarkdown, /quarantine superseded repair/);
 await client.viewData({ base: "main", memory_pr_id: "memory-pr-1" });
 request = new URL(calls.at(-1).url);
 assert.equal(request.searchParams.get("memory_pr_id"), "memory-pr-1");
@@ -161,6 +311,7 @@ assert.equal(applyBody.working_revision, 3);
 assert.equal(applyBody.main_head, "main-1");
 assert.equal(applyBody.context.git_head, mergeSha);
 assert.equal(applyBody.context.head_repository, "example/project");
+assert.equal(applyBody.context.dirty, false);
 assert.deepEqual(applyBody.context.session_refs, [{ id: "codex-session:session-1", agent_platform: "codex" }]);
 assert.equal("author" in applyBody, false);
 assert.equal("username" in applyBody, false);
@@ -176,6 +327,21 @@ assert.ok(calls.some((call) => call.url.endsWith("/memory-prs/memory%2Fpr/retry"
 
 assert.equal(canScheduleMemoryUpdates(installation), true);
 assert.equal(canScheduleMemoryUpdates({ ...installation, managedRole: "reader" }), false);
+
+const legacySelectorClient = new ManagedGraphMemoryClient(installation, {
+  repo_root: repoRoot,
+  remote_url: installation.remoteUrl,
+  repo_name: "project",
+  default_branch: "main",
+}, {
+  apiUrl: "https://legacy-memory.example.test",
+  token: "managed-token",
+  fetchImpl: async () => jsonResponse(graph, false),
+});
+await assert.rejects(
+  legacySelectorClient.readGraph({ base: "main", working_users: [] }),
+  /does not acknowledge graph-selectors-v1/,
+);
 
 const legacyDb = new Database(":memory:");
 legacyDb.exec(`
@@ -225,9 +391,37 @@ const html = buildGraphViewHtmlFromData({
       version_id: "version-1",
       scope_kind: "working",
       author_github_login: "alice",
+      author_github_login_snapshot: "alice-old",
+      proposal_id: "proposal-1",
+      memory_commit_id: "commit-1",
+      session_refs: [{ id: "codex-session:session-1", agent_platform: "codex" }],
+      agent_platform: "codex",
+      git_head: mergeSha,
+      branch: "feature",
+      code_pr_number: 7,
       memory_commit_state: "active",
       memory_pr_id: "memory-pr-1",
       commit_role: "repair",
+      promotion_id: "promotion-1",
+    },
+  }, {
+    id: "claim.logical",
+    text: "A conflicting personal draft",
+    kind: "decision",
+    session: "claude-session:session-2",
+    source: "session",
+    freshness: "active",
+    componentIds: ["component.other"],
+    flowIds: [],
+    createdAt: "2026-07-28T00:01:00.000Z",
+    memoryCommitId: "commit-2",
+    provenance: {
+      version_id: "version-2",
+      scope_kind: "working",
+      author_github_login: "bob",
+      memory_commit_id: "commit-2",
+      memory_commit_state: "active",
+      commit_role: "direct",
     },
   }],
   claimsTimeline: {
@@ -236,15 +430,47 @@ const html = buildGraphViewHtmlFromData({
   },
 });
 assert.match(html, /data-version-id="version-1"/);
+assert.match(html, /data-version-id="version-2"/);
 assert.match(html, /data-author="alice"/);
 assert.match(html, /provenance-badge[^>]*>repair</);
+assert.match(html, /formerly @alice-old/);
+assert.match(html, /code PR #7/);
+assert.match(html, /claimTextByVersion/);
+assert.match(html, /componentIdsByClaimVersion/);
 assert.match(html, /id="claims-filter-scope"/);
 assert.match(html, /id="claims-filter-author"/);
+assert.match(html, /id="claims-filter-author-snapshot"/);
+assert.match(html, /id="claims-filter-proposal"/);
+assert.match(html, /id="claims-filter-memory-commit"/);
+assert.match(html, /id="claims-filter-agent"/);
+assert.match(html, /id="claims-filter-branch"/);
+assert.match(html, /id="claims-filter-code-pr"/);
 assert.match(html, /id="claims-filter-memory-state"/);
 assert.match(html, /id="claims-filter-memory-pr"/);
 assert.match(html, /id="claims-filter-commit-role"/);
+assert.match(html, /id="claims-filter-promotion"/);
 
-let attestation;
+const builtViewData = buildGraphViewData({
+  components: [],
+  flows: [],
+  claims: [{
+    id: "claim.provenance",
+    kind: "fact",
+    text: "Managed provenance survives row construction",
+    truth: "source_verified",
+    intent: "intended",
+    provenance: {
+      version_id: "version-built",
+      scope_kind: "main",
+      memory_commit_state: "promoted",
+    },
+  }],
+  sources: [],
+  edges: [],
+}, [], []);
+assert.equal(builtViewData.claims[0].provenance.version_id, "version-built");
+
+const attestations = [];
 let candidateCalls = 0;
 const server = createServer(async (incoming, response) => {
   const url = new URL(incoming.url, "http://127.0.0.1");
@@ -262,35 +488,84 @@ const server = createServer(async (incoming, response) => {
     return;
   }
   assert.equal(incoming.headers.authorization, "Bearer github-oidc-token");
+  assert.match(incoming.headers["x-greplica-capabilities"], /oidc-reconciliation-v1/);
+  assert.equal(incoming.headers["x-greplica-client-version"], "0.2.1");
   if (url.pathname.endsWith("/memory/reconcile/candidate")) {
     candidateCalls += 1;
     assert.equal(url.searchParams.get("merge_sha"), mergeSha);
-    if (url.searchParams.has("exclude_memory_pr")) {
-      assert.deepEqual(url.searchParams.getAll("exclude_memory_pr"), ["memory-pr-1"]);
+    const excluded = url.searchParams.getAll("exclude_memory_pr");
+    if (excluded.length === 3) {
+      assert.deepEqual(excluded, ["memory-pr-1", "memory-pr-2", "memory-pr-3"]);
       send(404, { message: "No Memory PR is ready for this merged checkout." });
+      return;
+    }
+    if (excluded.length === 2) {
+      assert.deepEqual(excluded, ["memory-pr-1", "memory-pr-2"]);
+      send(200, {
+        memory_pr_id: "memory-pr-3",
+        merge_sha: mergeSha,
+        memory_commit_ids: ["commit-3"],
+        commits: [{
+          memory_commit_id: "commit-3",
+          git_head: featureSha,
+          head_repository: "example/project",
+          proof_mode: "default_ancestry",
+        }],
+        claim_versions: [],
+      });
+      return;
+    }
+    if (excluded.length === 1) {
+      assert.deepEqual(excluded, ["memory-pr-1"]);
+      send(200, {
+        memory_pr_id: "memory-pr-2",
+        merge_sha: mergeSha,
+        memory_commit_ids: ["commit-2"],
+        commits: [{
+          memory_commit_id: "commit-2",
+          git_head: baseSha,
+          head_repository: "example/project",
+          proof_mode: "default_ancestry",
+        }],
+        claim_versions: [],
+      });
       return;
     }
     send(200, {
       memory_pr_id: "memory-pr-1",
       merge_sha: mergeSha,
       memory_commit_ids: ["commit-1"],
-      commits: [{ memory_commit_id: "commit-1", git_head: mergeSha, head_repository: "example/project" }],
+      commits: [{
+        memory_commit_id: "commit-1",
+        git_head: featureSha,
+        head_repository: "example/project",
+        proof_mode: "pr_head",
+        code_pr_number: 7,
+        verified_head_sha: featureSha,
+      }],
       claim_versions: [{
         version_id: "version-1",
+        baseline_fingerprints: versionOneBaseline,
         claim: {
           id: "claim.logical",
           kind: "fact",
           text: "Version-keyed audit",
           truth: "code_verified",
           intent: "intended",
+          code_anchors: [versionOneAnchor],
         },
       }],
     });
     return;
   }
   if (url.pathname.endsWith("/memory/reconcile/attest")) {
-    attestation = body;
-    send(200, { accepted: true, memory_pr_id: "memory-pr-1", job_id: "job-1", state: "queued" });
+    attestations.push(body);
+    send(200, {
+      accepted: true,
+      memory_pr_id: body.memory_pr_id,
+      job_id: `job-${attestations.length}`,
+      state: "queued",
+    });
     return;
   }
   send(404, { message: `Unexpected ${incoming.method} ${url.pathname}` });
@@ -322,13 +597,72 @@ try {
     GITHUB_RUN_ID: "123",
   });
   assert.match(result.stdout, /"accepted": true/);
-  assert.match(result.stdout, /"reconciliation_count": 1/);
-  assert.equal(candidateCalls, 2);
-  assert.equal(attestation.audit_key, "version_id");
-  assert.deepEqual(attestation.memory_commit_ids, ["commit-1"]);
-  assert.deepEqual(attestation.ancestry, [{ memory_commit_id: "commit-1", git_head: mergeSha, is_ancestor: true }]);
-  assert.equal(attestation.anchor_audit.result.missing_anchors[0].claim_id, "version-1");
-  assert.equal(attestation.repository, "example/project");
+  assert.match(result.stdout, /"reconciliation_count": 2/);
+  assert.match(result.stdout, /"skipped_count": 1/);
+  assert.equal(candidateCalls, 4);
+  assert.equal(attestations[0].audit_key, "version_id");
+  assert.deepEqual(attestations[0].memory_commit_ids, ["commit-1"]);
+  assert.deepEqual(attestations[0].ancestry, [{
+    memory_commit_id: "commit-1",
+    git_head: featureSha,
+    proof_mode: "pr_head",
+    verified_head_sha: featureSha,
+    is_ancestor: true,
+  }]);
+  assert.equal(attestations[0].anchor_audit.result.drifted[0].claim_id, "version-1");
+  assert.notEqual(
+    attestations[0].anchor_audit.fingerprints["version-1"]["example.ts#example"],
+    versionOneBaseline["example.ts#example"],
+  );
+  assert.equal(attestations[0].repository, "example/project");
+  assert.deepEqual(attestations[1].ancestry, [{
+    memory_commit_id: "commit-2",
+    git_head: baseSha,
+    proof_mode: "default_ancestry",
+    is_ancestor: true,
+  }]);
+  assert.equal(
+    exec("git", ["-C", repoRoot, "rev-parse", "FETCH_HEAD"]).trim(),
+    featureSha,
+    "PR-head proof must fetch the base repository pull ref even when the object already exists",
+  );
+
+  exec("git", [
+    "-C",
+    repoRoot,
+    "push",
+    "--quiet",
+    "--force",
+    "origin",
+    `${mergeSha}:refs/pull/7/head`,
+  ]);
+  const attestationsBeforeMismatch = attestations.length;
+  await assert.rejects(
+    run(process.execPath, [
+      cliPath,
+      "memory",
+      "reconcile",
+      "--managed-repo",
+      installation.managedRepoId,
+      "--merge-sha",
+      mergeSha,
+      "--api-url",
+      apiUrl,
+    ], repoRoot, {
+      ...process.env,
+      ACTIONS_ID_TOKEN_REQUEST_URL: `${apiUrl}/oidc?api-version=1`,
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: "oidc-request-token",
+      GITHUB_REPOSITORY: "example/project",
+      GITHUB_REF: "refs/heads/main",
+      GITHUB_RUN_ID: "124",
+    }),
+    /does not match verified head/,
+  );
+  assert.equal(
+    attestations.length,
+    attestationsBeforeMismatch,
+    "a mismatched base-repository PR ref must never be attested",
+  );
 } finally {
   await new Promise((resolve) => server.close(resolve));
 }
@@ -339,11 +673,27 @@ function exec(command, args) {
   return execFileSync(command, args, { encoding: "utf8" });
 }
 
-function jsonResponse(value) {
+function jsonResponse(value, capabilities = true) {
   return new Response(JSON.stringify(value), {
     status: 200,
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(capabilities
+        ? { "x-greplica-capabilities": "personal-working-v1,graph-selectors-v1,memory-pr-v1" }
+        : {}),
+    },
   });
+}
+
+function gitIsAncestor(repoRoot, ancestor, descendant) {
+  try {
+    execFileSync("git", ["-C", repoRoot, "merge-base", "--is-ancestor", ancestor, descendant], {
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function run(command, args, cwd, env) {

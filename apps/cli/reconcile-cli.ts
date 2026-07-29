@@ -1,5 +1,4 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { auditClaimCodeAnchors } from "../../libs/knowledge-graph/code-anchors/audit.js";
 import { fingerprintClaimAnchors } from "../../libs/knowledge-graph/code-anchors/fingerprint.js";
@@ -8,6 +7,12 @@ import type {
   ManagedReconciliationAttestation,
   ManagedReconciliationAttestationResult,
   ManagedReconciliationCandidate,
+} from "../../libs/managed/protocol.js";
+import {
+  managedCapabilitiesHeader,
+  managedClientCapabilities,
+  managedClientVersion,
+  managedClientVersionHeader,
 } from "../../libs/managed/protocol.js";
 
 const defaultOidcAudience = "greplica-managed";
@@ -28,16 +33,9 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
   const headers = {
     authorization: `Bearer ${oidcToken}`,
     accept: "application/json",
+    [managedClientVersionHeader]: managedClientVersion,
+    [managedCapabilitiesHeader]: managedClientCapabilities.join(","),
   };
-  const repairProposalPath = optionalOption(args, "--repair-proposal");
-  const repairProposalValue = repairProposalPath === undefined
-    ? undefined
-    : JSON.parse(readFileSync(resolve(repairProposalPath), "utf8")) as unknown;
-  if (repairProposalValue !== undefined && !isRecord(repairProposalValue)) {
-    throw new Error("--repair-proposal must contain a JSON object.");
-  }
-  const repairProposal = repairProposalValue;
-
   const reconciliations: Array<{
     response: ManagedReconciliationAttestationResult;
     memory_pr_id: string;
@@ -63,11 +61,19 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
       throw new Error(`Managed reconciliation returned duplicate Memory PR ${candidate.memory_pr_id}.`);
     }
     verifyCandidate(candidate, mergeSha);
-    const ancestry = candidate.commits.map((commit) => ({
-      memory_commit_id: commit.memory_commit_id,
-      git_head: commit.git_head,
-      is_ancestor: isAncestor(repoRoot, commit.git_head, mergeSha),
-    }));
+    const ancestry = candidate.commits.map((commit) => {
+      const proofMode = commit.proof_mode ?? "default_ancestry";
+      const targetSha = proofMode === "pr_head"
+        ? verifiedPrHead(repoRoot, commit.code_pr_number, commit.verified_head_sha)
+        : mergeSha;
+      return {
+        memory_commit_id: commit.memory_commit_id,
+        git_head: commit.git_head,
+        proof_mode: proofMode,
+        ...(proofMode === "pr_head" ? { verified_head_sha: targetSha } : {}),
+        is_ancestor: isAncestor(repoRoot, commit.git_head, targetSha),
+      };
+    });
     const nonAncestors = ancestry.filter((entry) => !entry.is_ancestor);
     if (nonAncestors.length > 0) {
       skipped.push({
@@ -79,7 +85,17 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
       continue;
     }
     const auditClaims = candidate.claim_versions.map(({ version_id, claim }) => ({ ...claim, id: version_id }));
-    const result = await auditClaimCodeAnchors(repoRoot, auditClaims);
+    const baselineFingerprints = new Map(
+      candidate.claim_versions
+        .filter(({ baseline_fingerprints }) => baseline_fingerprints !== undefined)
+        .map(({ version_id, baseline_fingerprints }) => [version_id, baseline_fingerprints!]),
+    );
+    const result = await auditClaimCodeAnchors(
+      repoRoot,
+      auditClaims,
+      undefined,
+      baselineFingerprints,
+    );
     const fingerprints: Record<string, Record<string, string>> = {};
     for (const claim of auditClaims) {
       if (claim.code_anchors === undefined || claim.code_anchors.length === 0) continue;
@@ -95,7 +111,6 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
       ancestry,
       audit_key: "version_id",
       anchor_audit: { result, fingerprints },
-      ...(repairProposal === undefined ? {} : { repair_proposal: repairProposal }),
       ref: process.env.GITHUB_REF,
       run_id: process.env.GITHUB_RUN_ID,
       run_attempt: process.env.GITHUB_RUN_ATTEMPT,
@@ -116,14 +131,16 @@ export async function runMemoryReconcile(args: string[]): Promise<void> {
     });
     excludedMemoryPrIds.push(candidate.memory_pr_id);
   }
+  const accepted = reconciliations.every(({ response }) => response.accepted);
   console.log(JSON.stringify({
-    accepted: reconciliations.every(({ response }) => response.accepted),
+    accepted,
     merge_sha: mergeSha,
     reconciliation_count: reconciliations.length,
     skipped_count: skipped.length,
     reconciliations,
     skipped,
   }, null, 2));
+  if (!accepted) process.exitCode = 1;
 }
 
 async function reconciliationCandidate(
@@ -156,6 +173,15 @@ function verifyCandidate(candidate: ManagedReconciliationCandidate, mergeSha: st
   if (JSON.stringify(candidateIds) !== JSON.stringify(commitIds)) {
     throw new Error("Managed reconciliation candidate commit metadata does not match its selected commit IDs.");
   }
+  for (const commit of candidate.commits) {
+    if (!/^[0-9a-f]{40}$/i.test(commit.git_head)) {
+      throw new Error(`Memory commit ${commit.memory_commit_id} has an invalid Git head.`);
+    }
+    if (commit.proof_mode === "pr_head" &&
+        (commit.code_pr_number === undefined || commit.verified_head_sha === undefined)) {
+      throw new Error(`Memory commit ${commit.memory_commit_id} is missing its verified PR-head proof.`);
+    }
+  }
 }
 
 function isAncestor(repoRoot: string, gitHead: string, mergeSha: string): boolean {
@@ -163,6 +189,50 @@ function isAncestor(repoRoot: string, gitHead: string, mergeSha: string): boolea
     execFileSync("git", ["-C", repoRoot, "merge-base", "--is-ancestor", gitHead, mergeSha], {
       stdio: "ignore",
     });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function verifiedPrHead(
+  repoRoot: string,
+  pullRequestNumber: number | undefined,
+  verifiedHeadSha: string | undefined,
+): string {
+  if (pullRequestNumber === undefined || !Number.isSafeInteger(pullRequestNumber) || pullRequestNumber < 1) {
+    throw new Error("PR-head proof is missing a valid code PR number.");
+  }
+  if (verifiedHeadSha === undefined || !/^[0-9a-f]{40}$/i.test(verifiedHeadSha)) {
+    throw new Error(`PR #${pullRequestNumber} proof is missing a full verified head SHA.`);
+  }
+  try {
+    execFileSync(
+      "git",
+      ["-C", repoRoot, "fetch", "--no-tags", "origin", `refs/pull/${pullRequestNumber}/head`],
+      { stdio: "ignore" },
+    );
+  } catch {
+    throw new Error(`Could not fetch the verified head for PR #${pullRequestNumber}.`);
+  }
+  const fetchedHead = execFileSync("git", ["-C", repoRoot, "rev-parse", "FETCH_HEAD"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim().toLowerCase();
+  if (fetchedHead !== verifiedHeadSha.toLowerCase()) {
+    throw new Error(
+      `PR #${pullRequestNumber} head ${fetchedHead} does not match verified head ${verifiedHeadSha}.`,
+    );
+  }
+  if (!hasGitCommit(repoRoot, verifiedHeadSha)) {
+    throw new Error(`Verified head ${verifiedHeadSha} for PR #${pullRequestNumber} is unavailable.`);
+  }
+  return verifiedHeadSha.toLowerCase();
+}
+
+function hasGitCommit(repoRoot: string, sha: string): boolean {
+  try {
+    execFileSync("git", ["-C", repoRoot, "cat-file", "-e", `${sha}^{commit}`], { stdio: "ignore" });
     return true;
   } catch {
     return false;

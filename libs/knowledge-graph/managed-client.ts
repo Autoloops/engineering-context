@@ -23,6 +23,13 @@ import type {
   ManagedMemoryStatus,
   ManagedProposal,
 } from "../managed/protocol.js";
+import {
+  managedCapabilitiesHeader,
+  managedClientCapabilities,
+  managedClientVersion,
+  managedClientVersionHeader,
+  type ManagedClientCapability,
+} from "../managed/protocol.js";
 
 export interface ManagedGraphClientOptions {
   apiUrl: string;
@@ -84,30 +91,42 @@ export class ManagedGraphMemoryClient implements GraphMemoryProvider {
   private readonly credentials?: ManagedCredentials;
 
   readGraph(view?: ManagedGraphView): Promise<GraphReadResult> {
-    return this.request(`/graph${viewQuery(this.requestView(view))}`, { method: "GET" });
+    return this.request(
+      `/graph${viewQuery(this.requestView(view))}`,
+      { method: "GET" },
+      view === undefined ? undefined : "graph-selectors-v1",
+    );
   }
 
   async contextGraph(query: string, view?: ManagedGraphView): Promise<GraphContextResult> {
     const requestView = this.requestView(view);
-    const result = await this.request<GraphContextResult>("/graph/context", {
-      method: "POST",
-      body: { query, ...(requestView === undefined ? {} : { view: requestView }) },
-    });
+    const result = await this.request<GraphContextResult>(
+      "/graph/context",
+      {
+        method: "POST",
+        body: { query, ...(requestView === undefined ? {} : { view: requestView }) },
+      },
+      view === undefined ? undefined : "graph-selectors-v1",
+    );
     const resolver = new CodeAnchorResolver();
     const resolved = new Map<string, Awaited<ReturnType<CodeAnchorResolver["resolveMany"]>>>();
     for (const claim of result.claims) {
       const anchors = await resolver.resolveMany(this.repo.repo_root, claim.object.code_anchors);
       claim.code_anchors = anchors;
-      resolved.set(claim.object.id, anchors);
+      resolved.set(managedObjectKey(claim.object), anchors);
     }
     for (const item of result.ranked_results) {
-      if (item.type === "claim") item.code_anchors = resolved.get(item.object.id) ?? [];
+      if (item.type === "claim") item.code_anchors = resolved.get(managedObjectKey(item.object)) ?? [];
     }
     return result;
   }
 
   viewData(view?: ManagedGraphView): Promise<GraphViewData> {
-    return this.request(`/graph/view-data${viewQuery(this.requestView(view))}`, { method: "GET" });
+    return this.request(
+      `/graph/view-data${viewQuery(this.requestView(view))}`,
+      { method: "GET" },
+      view === undefined ? undefined : "graph-selectors-v1",
+    );
   }
 
   async buildGraphView(view?: ManagedGraphView): Promise<string> {
@@ -218,6 +237,7 @@ export class ManagedGraphMemoryClient implements GraphMemoryProvider {
   private async request<T>(
     path: string,
     input: { method: "GET" | "POST"; body?: unknown },
+    requiredCapability?: ManagedClientCapability,
   ): Promise<T> {
     const managedRepoId = this.installation.managedRepoId as string;
     const response = await this.fetchImpl(`${this.apiUrl}/v1/repos/${encodeURIComponent(managedRepoId)}${path}`, {
@@ -225,11 +245,19 @@ export class ManagedGraphMemoryClient implements GraphMemoryProvider {
       headers: {
         authorization: `Bearer ${this.token}`,
         accept: "application/json",
+        [managedClientVersionHeader]: managedClientVersion,
+        [managedCapabilitiesHeader]: managedClientCapabilities.join(","),
         ...(input.body === undefined ? {} : { "content-type": "application/json" }),
       },
       body: input.body === undefined ? undefined : JSON.stringify(input.body),
     });
     await this.captureResponseMetadata(response, managedRepoId);
+    if (response.ok && requiredCapability !== undefined && !responseCapabilities(response).has(requiredCapability)) {
+      throw new Error(
+        `Managed Greplica server does not acknowledge ${requiredCapability}; ` +
+        "upgrade the server before using personal graph selectors.",
+      );
+    }
     const payload = await readJson(response);
     if (!response.ok) {
       const message = isRecord(payload) && typeof payload.message === "string"
@@ -304,20 +332,20 @@ function localProposalContext(repo: RepoRef, proposal: unknown): ProposalCommitC
       agent_platform: agentPlatform,
     };
   }
-  const git = (args: string[]): string | undefined => {
+  const git = (args: string[], preserveEmpty = false): string | undefined => {
     try {
       const value = execFileSync("git", ["-C", repoRoot, ...args], {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"],
       }).trim();
-      return value.length === 0 ? undefined : value;
+      return value.length === 0 && !preserveEmpty ? undefined : value;
     } catch {
       return undefined;
     }
   };
   const gitHead = git(["rev-parse", "HEAD"]);
   const branch = git(["branch", "--show-current"]);
-  const dirtyOutput = git(["status", "--porcelain"]);
+  const dirtyOutput = git(["status", "--porcelain"], true);
   if (gitHead === undefined && branch === undefined && dirtyOutput === undefined &&
       sessionRefs.length === 0 && agentPlatform === undefined && headRepository === undefined) return undefined;
   return {
@@ -377,4 +405,18 @@ function viewQuery(view: ManagedGraphView | undefined): string {
   if (view.memory_pr_id !== undefined) query.set("memory_pr_id", view.memory_pr_id);
   if (view.include_quarantined === true) query.set("include_quarantined", "true");
   return `?${query.toString()}`;
+}
+
+function responseCapabilities(response: Response): Set<string> {
+  return new Set(
+    (response.headers.get(managedCapabilitiesHeader) ?? "")
+      .split(",")
+      .map((capability) => capability.trim())
+      .filter(Boolean),
+  );
+}
+
+function managedObjectKey(object: { id: string }): string {
+  const provenance = (object as { provenance?: { version_id?: unknown } }).provenance;
+  return typeof provenance?.version_id === "string" ? provenance.version_id : object.id;
 }

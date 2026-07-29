@@ -19,6 +19,12 @@ import type {
   ManagedRepoGrant,
   ManagedUser,
 } from "./protocol.js";
+import {
+  managedCapabilitiesHeader,
+  managedClientCapabilities,
+  managedClientVersion,
+  managedClientVersionHeader,
+} from "./protocol.js";
 
 export interface DeviceLoginStart {
   device_code: string;
@@ -269,6 +275,8 @@ export class ManagedControlClient {
       method,
       headers: {
         accept: "application/json",
+        [managedClientVersionHeader]: managedClientVersion,
+        [managedCapabilitiesHeader]: managedClientCapabilities.join(","),
         ...(authenticated ? { authorization: `Bearer ${this.token}` } : {}),
         ...(body === undefined ? {} : { "content-type": "application/json" }),
       },

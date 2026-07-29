@@ -285,7 +285,7 @@ const cliCommands = [
   {
     key: "memoryReconcile",
     path: ["memory", "reconcile"],
-    usage: "memory reconcile --managed-repo <id> --merge-sha <sha> [--api-url <url>] [--oidc-audience <audience>] [--repair-proposal <file>]",
+    usage: "memory reconcile --managed-repo <id> --merge-sha <sha> [--api-url <url>] [--oidc-audience <audience>]",
     handler: runMemoryReconcile,
     showInTopLevelHelp: true,
   },
@@ -561,8 +561,15 @@ async function runProposalApplyCommand(args: string[], getContext: CommandContex
   const proposal = readProposal(file);
   const result = await service.applyProposal(proposal);
   console.log("Applied proposal to working memory.");
+  if (result.author !== undefined) console.log(`Author: ${result.author.github_login} (${result.author.id})`);
+  if (result.proposal_id !== undefined) console.log(`Proposal: ${result.proposal_id}`);
   console.log(`Memory commit: ${result.memory_commit_id}`);
   console.log(`Scope: ${result.scope_id}`);
+  if (result.working_scope_revision !== undefined) {
+    console.log(`Working revision: ${result.working_scope_revision}`);
+  }
+  if (result.memory_commit_state !== undefined) console.log(`State: ${result.memory_commit_state}`);
+  if (result.memory_pr_id !== undefined) console.log(`Memory PR: ${result.memory_pr_id}`);
   console.log(`Components: ${result.created.components}`);
   console.log(`Flows: ${result.created.flows}`);
   console.log(`Claims: ${result.created.claims}`);
