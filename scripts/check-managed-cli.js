@@ -241,6 +241,24 @@ const server = createServer(async (request, response) => {
     });
     return;
   }
+  const retryMatch = request.url.match(
+    new RegExp(`^/v1/repos/${managedRepoId}/memory-prs/(queued|running|neutral)-memory-pr/retry$`),
+  );
+  if (request.method === "POST" && retryMatch !== null) {
+    const responseKind = retryMatch[1];
+    send(200, {
+      id: `${responseKind}-memory-pr`,
+      state: responseKind === "neutral" ? "open" : "reconciling",
+      direct_commit_ids: [`${responseKind}-commit`],
+      dependency_commit_ids: [],
+      repair_commit_ids: [],
+      contributor_logins: ["contributor-current"],
+      ...(responseKind === "neutral" ? {} : { latest_job_state: responseKind }),
+      created_at: now,
+      updated_at: now,
+    });
+    return;
+  }
   if (request.method === "POST" && request.url === `/v1/repos/${managedRepoId}/import`) {
     importedSnapshot = body;
     send(200, {
@@ -391,6 +409,46 @@ try {
     /contributor-current \(formerly contributor-old\) \[10000000-0000-4000-8000-000000000000\]: cleared 3 objects; 2 active working commits remain; 4 active working objects remain/,
     "cleanup output must use the friendly current login while retaining stable user identity and rename history",
   );
+  const queuedRetry = await run(
+    process.execPath,
+    [cliPath, "memory", "pr", "retry", "queued-memory-pr"],
+    managedRepo,
+    env,
+  );
+  assert.match(queuedRetry.stdout, /^Memory PR queued-memory-pr is queued for reconciliation\./);
+  assert.doesNotMatch(queuedRetry.stdout, /Queued Memory PR/,
+    "retry output must not claim the client itself queued an already-queued job");
+  const runningRetry = await run(
+    process.execPath,
+    [cliPath, "memory", "pr", "retry", "running-memory-pr"],
+    managedRepo,
+    env,
+  );
+  assert.match(runningRetry.stdout, /^Memory PR running-memory-pr reconciliation is already running\./);
+  assert.doesNotMatch(runningRetry.stdout, /queued for reconciliation/);
+  const neutralRetry = await run(
+    process.execPath,
+    [cliPath, "memory", "pr", "retry", "neutral-memory-pr"],
+    managedRepo,
+    env,
+  );
+  assert.match(
+    neutralRetry.stdout,
+    /^Memory PR neutral-memory-pr reconciliation state is open\./,
+  );
+  assert.doesNotMatch(neutralRetry.stdout, /queued for reconciliation/);
+  const queuedRetryJson = await run(
+    process.execPath,
+    [cliPath, "memory", "pr", "retry", "queued-memory-pr", "--json"],
+    managedRepo,
+    env,
+  );
+  const queuedRetryRecord = JSON.parse(queuedRetryJson.stdout);
+  assert.equal(queuedRetryRecord.id, "queued-memory-pr");
+  assert.equal(queuedRetryRecord.latest_job_state, "queued");
+  assert.equal(queuedRetryRecord.state, "reconciling");
+  assert.doesNotMatch(queuedRetryJson.stdout, /queued for reconciliation/,
+    "JSON mode must remain a plain ManagedMemoryPr response without status prose");
 
   const requestsBeforeHook = requestCount;
   const hook = await run(process.execPath, [cliPath, "hook", "ingest", "--platform", "codex"], managedRepo, env, JSON.stringify({

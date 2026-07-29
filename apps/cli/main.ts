@@ -642,7 +642,15 @@ async function runMemoryPrRetryCommand(args: string[], getContext: CommandContex
   const memoryPr = await getContext().service.retryMemoryPr(positional);
   if (json) console.log(JSON.stringify(memoryPr, null, 2));
   else {
-    console.log(`Queued Memory PR ${memoryPr.id} for reconciliation.`);
+    if (memoryPr.latest_job_state === "queued") {
+      console.log(`Memory PR ${memoryPr.id} is queued for reconciliation.`);
+    } else if (memoryPr.latest_job_state === "running") {
+      console.log(`Memory PR ${memoryPr.id} reconciliation is already running.`);
+    } else {
+      console.log(
+        `Memory PR ${memoryPr.id} reconciliation state is ${memoryPr.latest_job_state ?? memoryPr.state}.`,
+      );
+    }
     printMemoryPrSummary(memoryPr);
   }
 }
