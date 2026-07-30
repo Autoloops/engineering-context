@@ -1,6 +1,6 @@
 import { Type, type Static, type TSchema } from "@sinclair/typebox";
 
-export const managedClientVersion = "0.2.1";
+export const managedClientVersion = "0.3.0";
 export const managedClientCapabilities = [
   "personal-working-v1",
   "graph-selectors-v1",

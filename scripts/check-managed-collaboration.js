@@ -418,7 +418,7 @@ await client.readGraph({ base: "main", working_users: [] });
 let request = new URL(calls.at(-1).url);
 assert.equal(request.searchParams.get("main_only"), "true");
 assert.match(calls.at(-1).headers.get("x-greplica-capabilities"), /graph-selectors-v1/);
-assert.equal(calls.at(-1).headers.get("x-greplica-client-version"), "0.2.1");
+assert.equal(calls.at(-1).headers.get("x-greplica-client-version"), "0.3.0");
 const contextResult = await client.contextGraph("auth", { base: "main", working_users: ["alice", "alice"] });
 assert.deepEqual(calls.at(-1).body.view.working_users, ["alice"],
   "the server adds the authenticated user's working scope; the client sends only explicit overlays");
@@ -834,7 +834,7 @@ const server = createServer(async (incoming, response) => {
   assert.equal(incoming.headers.authorization, "Bearer github-oidc-token");
   assert.match(incoming.headers["x-greplica-capabilities"], /oidc-reconciliation-v1/);
   assert.match(incoming.headers["x-greplica-capabilities"], /reconciliation-code-evidence-v1/);
-  assert.equal(incoming.headers["x-greplica-client-version"], "0.2.1");
+  assert.equal(incoming.headers["x-greplica-client-version"], "0.3.0");
   if (url.pathname.endsWith("/memory/reconcile/candidate")) {
     candidateCalls += 1;
     assert.equal(url.searchParams.get("merge_sha"), mergeSha);
