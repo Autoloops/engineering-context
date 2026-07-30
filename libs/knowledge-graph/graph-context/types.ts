@@ -1,6 +1,7 @@
 import type { Claim } from "../claim.js";
 import type { ResolvedCodeAnchor } from "../code-anchors/types.js";
 import type { Component, Flow, Source } from "../schema.js";
+import type { StaleReason } from "../code-anchors/freshness.js";
 
 export interface EmbeddingStatus {
   checked_objects: number;
@@ -47,6 +48,7 @@ export interface ClaimContextResult {
   about: Array<{ type: "component" | "flow"; id: string }>;
   evidence: ClaimEvidenceResult[];
   code_anchors: ResolvedCodeAnchor[];
+  freshness?: { reason: StaleReason };
 }
 
 export interface GraphObjectContextResult<TObject> {

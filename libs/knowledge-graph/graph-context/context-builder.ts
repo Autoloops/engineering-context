@@ -19,6 +19,7 @@ import type { ClaimContextResult, ClaimEvidenceResult, ComponentContextResult, E
 import { rankPacketResults, roundRankedSignals, selectGraphObjects } from "./packet-rank.js";
 import { CodeAnchorResolver } from "../code-anchors/resolver.js";
 import type { ResolvedCodeAnchor } from "../code-anchors/types.js";
+import { attachStaleClaims } from "./claim-freshness.js";
 
 export interface BuildGraphContextOptions {
   warnOnCreatedEmbeddings?: boolean;
@@ -52,7 +53,7 @@ export class GraphContextBuilder {
 
     const queryEmbedding = await embedder.embed(query);
     const embeddings = this.loadEmbeddings(repoId, config);
-    return this.buildFromVectors(graph, query, queryEmbedding, embeddings, {
+    return this.buildFromVectors(repoId, graph, query, queryEmbedding, embeddings, {
       ...options,
       config,
       embeddingStatus,
@@ -60,6 +61,7 @@ export class GraphContextBuilder {
   }
 
   async buildFromVectors(
+    repoId: string,
     graph: GraphReadResult,
     query: string,
     queryEmbedding: number[],
@@ -85,29 +87,38 @@ export class GraphContextBuilder {
       options.repoRoot,
       options.resolveCodeAnchors ?? true,
     );
+    const claimsWithFreshness = this.repository === undefined
+      ? selectedClaims
+      : await attachStaleClaims(
+        selectedClaims,
+        this.repository,
+        repoId,
+        options.repoRoot,
+        this.codeAnchorResolver,
+      );
     const selectedComponents = selectGraphObjects(
       ranked.components,
-      selectedClaims,
+      claimsWithFreshness,
       "component",
       config,
     ) as ComponentContextResult[];
     const selectedFlows = selectGraphObjects(
       ranked.flows,
-      selectedClaims,
+      claimsWithFreshness,
       "flow",
       config,
     ) as FlowContextResult[];
-    const rankedResults = rankPacketResults(selectedClaims, selectedComponents, selectedFlows, graph, config);
+    const rankedResults = rankPacketResults(claimsWithFreshness, selectedComponents, selectedFlows, graph, config);
 
     return {
       query,
       search_config_version: config.version,
       embedding_status: options.embeddingStatus,
-      claims: selectedClaims,
+      claims: claimsWithFreshness,
       components: selectedComponents,
       flows: selectedFlows,
       ranked_results: rankedResults,
-      sources: selectedEvidenceSources(selectedClaims),
+      sources: selectedEvidenceSources(claimsWithFreshness),
       debug: {
         ranked_results: rankedResults,
         base_ranked_claims: baseRanked.claims.map((document, index) => toRankedDebugResult(document, index) as RankedContextDebugResult<Claim>),

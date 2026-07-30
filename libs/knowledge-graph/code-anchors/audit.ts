@@ -1,4 +1,5 @@
 import type { Claim, ClaimCodeAnchor } from "../claim.js";
+import { anchorContentDrift } from "./freshness.js";
 import { anchorFingerprintKey, fingerprintAnchor } from "./fingerprint.js";
 import { CodeAnchorResolver } from "./resolver.js";
 import type { ClaimAnchorAuditResult } from "./types.js";
@@ -73,5 +74,5 @@ async function hasDrifted(
   const stored = baseline[anchorFingerprintKey(anchor)];
   if (stored === undefined) return false;
   const current = await fingerprintAnchor(repoRoot, anchor, resolver);
-  return current !== undefined && current !== stored;
+  return anchorContentDrift(stored, current);
 }
