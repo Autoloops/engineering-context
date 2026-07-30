@@ -47,7 +47,7 @@ interface CaseConfig {
   };
 }
 
-interface SessionSpec {
+export interface SessionSpec {
   index: number;
   sessionId: string;
   createdAt: string;
@@ -87,7 +87,7 @@ interface Replay {
   edits: ExtractedEdits;
 }
 
-interface ExtractedEdits {
+export interface ExtractedEdits {
   files: Array<{ path: string; original: string; final: string; editCount: number }>;
   warnings: string[];
 }
@@ -418,7 +418,7 @@ function sessionSpecs(context: Context): SessionSpec[] {
   }));
 }
 
-function extractClaudeEdits(transcript: string, repoDirName: string): ExtractedEdits {
+export function extractClaudeEdits(transcript: string, repoDirName: string): ExtractedEdits {
   const states = new Map<string, { original: string; current: string; editCount: number }>();
   const warnings: string[] = [];
   for (const [lineIndex, line] of transcript.split("\n").entries()) {
@@ -463,7 +463,7 @@ function extractClaudeEdits(transcript: string, repoDirName: string): ExtractedE
   };
 }
 
-function claudeTranscriptToMarkdown(transcript: string, spec: SessionSpec): string {
+export function claudeTranscriptToMarkdown(transcript: string, spec: SessionSpec): string {
   const sections = [
     "# Historical SWE-chat Session Transcript",
     "",

@@ -25,7 +25,7 @@ import { runCodexAgent } from "../../libs/agent-runner/codex.js";
 import type { AgentRunResult } from "../../libs/agent-runner/types.js";
 import { loadRepoEnv } from "../../libs/env/load-local-env.js";
 
-type RunnerName = "baseline" | "greplica" | "docs";
+type RunnerName = "baseline" | "greplica" | "docs" | "notes";
 type JudgeKey =
   | "is_actionable_engineering_plan"
   | "identifies_relevant_systems"
@@ -58,6 +58,9 @@ interface CaseConfig {
   memory?: {
     manifest_path?: string;
   };
+  notes?: {
+    seed_path?: string;
+  };
 }
 
 interface Args {
@@ -79,6 +82,9 @@ interface RunContext {
   codexHomeDir: string;
   docsMemoryDir: string;
   docsMemoryStatsPath: string;
+  notesSeedPath: string;
+  notesMemoryPath: string;
+  notesMemoryStatsPath: string;
   transcriptPath: string;
   finalPlanPath: string;
   judgeInputPath: string;
@@ -100,6 +106,9 @@ interface TranscriptAudit {
   first_docs_memory_command?: string;
   docs_memory_commands?: string[];
   docs_memory_first_navigation_used?: boolean;
+  first_notes_memory_command?: string;
+  notes_memory_commands?: string[];
+  notes_memory_first_navigation_used?: boolean;
 }
 
 interface DocsMemoryStats {
@@ -110,6 +119,12 @@ interface DocsMemoryStats {
   raw_proposal_chars: number;
   raw_proposal_estimated_tokens: number;
   largest_files: Array<{ path: string; chars: number }>;
+}
+
+interface NotesMemoryStats {
+  path: string;
+  notes_chars: number;
+  notes_estimated_tokens: number;
 }
 
 interface JudgeChecks extends Record<JudgeKey, boolean> {
@@ -152,6 +167,7 @@ export async function main(argv = process.argv.slice(2), defaultCaseId?: string)
 
   const seedCommands = args.runner === "greplica" || args.runner === "docs" ? seedGreplicaMemory(context) : [];
   const docsMemorySetup = args.runner === "docs" ? setupDocsMemory(context) : null;
+  const notesMemorySetup = args.runner === "notes" ? setupNotesMemory(context) : null;
   installToolGuards(context.guardDir, args.runner, context.greplicaCommand);
   const generation = await runPlanningAgent(context, args);
   const changedFiles = changedFilesInRepo(context.targetRepoDir);
@@ -212,6 +228,9 @@ export async function main(argv = process.argv.slice(2), defaultCaseId?: string)
     docs_memory_dir: docsMemorySetup?.stats.directory,
     docs_memory_stats_path: docsMemorySetup === null ? undefined : context.docsMemoryStatsPath,
     docs_memory_stats: docsMemorySetup?.stats,
+    notes_memory_path: notesMemorySetup?.path,
+    notes_memory_stats_path: notesMemorySetup === null ? undefined : context.notesMemoryStatsPath,
+    notes_memory_stats: notesMemorySetup ?? undefined,
     fixture_prep: fixturePrep,
     generation,
     final_plan_path: context.finalPlanPath,
@@ -256,6 +275,9 @@ function prepareRun(args: Args): RunContext {
     codexHomeDir: resolve(runDir, "greplica-setup-codex-home"),
     docsMemoryDir: resolve(runDir, "target-repo", "greplica-memory-docs"),
     docsMemoryStatsPath: resolve(runDir, "docs-memory-stats.json"),
+    notesSeedPath: resolve(caseDir, config.notes?.seed_path ?? "notes-seeds/agent-notes.md"),
+    notesMemoryPath: resolve(runDir, "target-repo", "docs", "agent-notes.md"),
+    notesMemoryStatsPath: resolve(runDir, "notes-memory-stats.json"),
     transcriptPath: resolve(runDir, "agent-events.jsonl"),
     finalPlanPath: resolve(runDir, "final-plan.md"),
     judgeInputPath: resolve(runDir, "judge-input.json"),
@@ -360,6 +382,23 @@ function collectDocsMemoryStats(context: RunContext): DocsMemoryStats {
   };
 }
 
+function setupNotesMemory(context: RunContext): NotesMemoryStats {
+  if (!existsSync(context.notesSeedPath)) {
+    throw new Error(`Notes seed missing: ${context.notesSeedPath}. Generate it with swechat-plan build-notes --case ${context.config.case_id}.`);
+  }
+  const notes = readFileSync(context.notesSeedPath, "utf8");
+  if (notes.trim().length === 0) throw new Error(`Notes seed is empty: ${context.notesSeedPath}`);
+  mkdirSync(dirname(context.notesMemoryPath), { recursive: true });
+  writeFileSync(context.notesMemoryPath, notes);
+  const stats: NotesMemoryStats = {
+    path: relative(context.runDir, context.notesMemoryPath),
+    notes_chars: notes.length,
+    notes_estimated_tokens: Math.ceil(notes.length / 4),
+  };
+  writeJson(context.notesMemoryStatsPath, stats);
+  return stats;
+}
+
 async function runPlanningAgent(context: RunContext, args: Args): Promise<AgentRunResult> {
   return runCodexAgent({
     cwd: context.targetRepoDir,
@@ -389,7 +428,12 @@ function agentPrompt(context: RunContext, runner: RunnerName): string {
 - Treat the docs as navigation context, then verify only the repo files needed for the plan.
 - Do not use Greplica commands.
 - Do not use CodeGraph commands.`
-      : `- Do not use Greplica commands or Greplica memory.
+      : runner === "notes"
+        ? `- Use docs/agent-notes.md as your repo memory map: read it before broad manual exploration.
+- Treat the notes as remembered navigation context rather than final truth, then verify only the repo files needed for the plan.
+- Do not use Greplica commands.
+- Do not use CodeGraph commands.`
+        : `- Do not use Greplica commands or Greplica memory.
 - Do not use CodeGraph commands.`;
   return `You are running a local-only planning benchmark.
 
@@ -450,6 +494,8 @@ function auditTranscript(transcriptPath: string, runner: RunnerName): Transcript
   const greplica_context_commands: string[] = [];
   let first_docs_memory_command: string | undefined;
   const docs_memory_commands: string[] = [];
+  let first_notes_memory_command: string | undefined;
+  const notes_memory_commands: string[] = [];
   for (const [index, line] of readOptional(transcriptPath).split("\n").entries()) {
     if (!line.trim()) continue;
     let event: unknown;
@@ -467,6 +513,10 @@ function auditTranscript(transcriptPath: string, runner: RunnerName): Transcript
         first_docs_memory_command ??= command;
         docs_memory_commands.push(command);
       }
+      if (commandTouchesNotesMemory(command)) {
+        first_notes_memory_command ??= command;
+        notes_memory_commands.push(command);
+      }
       const violation = auditCommand(command, runner);
       if (violation) violations.push(`line ${index + 1}: ${violation}: ${command}`);
     }
@@ -481,6 +531,9 @@ function auditTranscript(transcriptPath: string, runner: RunnerName): Transcript
     first_docs_memory_command,
     docs_memory_commands,
     docs_memory_first_navigation_used: runner === "docs" && first_command !== undefined && commandTouchesDocsMemory(first_command),
+    first_notes_memory_command,
+    notes_memory_commands,
+    notes_memory_first_navigation_used: runner === "notes" && first_command !== undefined && commandTouchesNotesMemory(first_command),
   };
 }
 
@@ -497,6 +550,7 @@ function auditCommand(command: string, runner: RunnerName): string | undefined {
     return "forbidden_codegraph_command";
   }
   if (normalized.includes("greplica-memory-docs") && runner !== "docs") return "forbidden_docs_memory_access";
+  if (normalized.includes("agent-notes.md") && runner !== "notes") return "forbidden_notes_memory_access";
   if (/\bnpx\s+.*codegraph\b/.test(normalized) || /\bnpm\s+(exec|install)\b.*codegraph\b/.test(normalized)) return "forbidden_codegraph_registry_or_setup";
   if (/\bgit\s+(clone|fetch|pull|log|show|reflog|blame|bisect)\b/.test(normalized)) return "forbidden_git_history_or_network";
   if (normalized.includes(".context/swechat") || normalized.includes("judge-input") || normalized.includes("case.json") || normalized.includes("judge.md")) return "hidden_eval_artifact_access";
@@ -506,6 +560,10 @@ function auditCommand(command: string, runner: RunnerName): string | undefined {
 
 function commandTouchesDocsMemory(command: string): boolean {
   return command.toLowerCase().includes("greplica-memory-docs");
+}
+
+function commandTouchesNotesMemory(command: string): boolean {
+  return command.toLowerCase().includes("agent-notes.md");
 }
 
 function commandInvokesTool(command: string, tool: "greplica" | "codegraph"): boolean {
@@ -642,9 +700,9 @@ function extractOutputText(body: Record<string, unknown>): string {
 
 function parseArgs(argv: string[], defaultCaseId?: string): Args {
   const caseId = valueAfter(argv, "--case") ?? defaultCaseId;
-  if (!caseId) throw new Error("Usage: swechat-plan run --case <case-id> --runner baseline|greplica|docs");
+  if (!caseId) throw new Error("Usage: swechat-plan run --case <case-id> --runner baseline|greplica|docs|notes");
   const runner = valueAfter(argv, "--runner") ?? "baseline";
-  if (runner !== "baseline" && runner !== "greplica" && runner !== "docs") throw new Error("Only --runner baseline|greplica|docs is supported.");
+  if (runner !== "baseline" && runner !== "greplica" && runner !== "docs" && runner !== "notes") throw new Error("Only --runner baseline|greplica|docs|notes is supported.");
   return {
     caseId,
     runner,
