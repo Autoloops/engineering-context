@@ -1,12 +1,20 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const root = new URL("..", import.meta.url);
+const cliPath = fileURLToPath(new URL("dist/apps/cli/main.js", root));
 const { CodeAnchorResolver } = await import(new URL("dist/libs/knowledge-graph/code-anchors/resolver.js", root));
 const { fingerprintClaimAnchors } = await import(new URL("dist/libs/knowledge-graph/code-anchors/fingerprint.js", root));
 const { auditClaimCodeAnchors } = await import(new URL("dist/libs/knowledge-graph/code-anchors/audit.js", root));
+const { detectRepoContext } = await import(new URL("dist/apps/cli/repo-context.js", root));
+const { RepoInstallationStore } = await import(new URL("dist/libs/install/repo-installation-store.js", root));
+const { KnowledgeGraphService } = await import(new URL("dist/libs/knowledge-graph/service.js", root));
+const { openDatabase } = await import(new URL("dist/libs/storage/sqlite/db.js", root));
+const { SqliteRepository } = await import(new URL("dist/libs/storage/sqlite/repository.js", root));
 
 const repo = mkdtempSync(join(tmpdir(), "greplica-anchor-drift-test-"));
 const file = join(repo, "mod.py");
@@ -126,5 +134,47 @@ for (const fileName of ["limits.hh", "limits.hxx"]) {
     "// threshold\nconstexpr int limit = 8;\n",
   );
 }
+
+// The user-facing audit must surface content drift and fail even when every
+// anchor still resolves, so automation cannot mistake changed code for a
+// structurally clean graph.
+const greplicaHome = mkdtempSync(join(tmpdir(), "greplica-anchor-drift-cli-home-"));
+const repoRef = detectRepoContext(repo);
+const db = openDatabase(join(greplicaHome, "graph.db"));
+try {
+  new RepoInstallationStore(db).activateLocal(repoRef, {
+    hooksEnabled: false,
+    autoMemoryUpdates: false,
+  });
+  const repository = new SqliteRepository(db);
+  const initialized = new KnowledgeGraphService(repository).initRepo(repoRef);
+  const working = repository.requireWorkingScope(initialized.repo_id);
+  const commit = repository.createMemoryCommit({
+    scope_id: working.id,
+    title: "Seed content drift CLI check",
+  });
+  repository.createProposalRecords(
+    working.id,
+    commit.id,
+    {
+      title: "Seed content drift CLI check",
+      creates: { claims: [claim] },
+    },
+    baseline,
+  );
+} finally {
+  db.close();
+}
+
+writeFileSync(file, "def foo():\n    # returns the threshold\n    return 8\n");
+const cliAudit = spawnSync(process.execPath, [cliPath, "graph", "audit", "anchors"], {
+  cwd: repo,
+  encoding: "utf8",
+  env: { ...process.env, GREPLICA_HOME: greplicaHome },
+});
+assert.equal(cliAudit.status, 1, cliAudit.stderr);
+assert.match(cliAudit.stdout, /Content drift:\n- claim\.foo -> mod\.py#foo/);
+assert.match(cliAudit.stdout, /Invalid files:\n- None\./);
+assert.match(cliAudit.stdout, /Missing symbols:\n- None\./);
 
 console.log("check-anchor-drift: ok");

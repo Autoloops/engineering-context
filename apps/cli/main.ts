@@ -673,6 +673,7 @@ function printAnchorAudit(result: ClaimAnchorAuditResult): void {
   printAuditSection("Missing symbols", result.missing_symbols, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
   printAuditSection("Ambiguous symbols", result.ambiguous_symbols, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
   printAuditSection("Unsupported languages", result.unsupported_languages, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
+  printAuditSection("Content drift", result.drifted, (issue) => `${issue.claim_id} -> ${formatAuditAnchor(issue.anchor)}`);
 }
 
 function anchorAuditIssueCount(result: ClaimAnchorAuditResult): number {
@@ -680,7 +681,8 @@ function anchorAuditIssueCount(result: ClaimAnchorAuditResult): number {
     result.missing_files.length +
     result.missing_symbols.length +
     result.ambiguous_symbols.length +
-    result.unsupported_languages.length;
+    result.unsupported_languages.length +
+    result.drifted.length;
 }
 
 function printAuditSection<T>(title: string, items: T[], render: (item: T) => string): void {
