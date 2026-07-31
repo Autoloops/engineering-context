@@ -3,11 +3,18 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ClaimedMemoryUpdateAttempt } from "./types.js";
+import { inspectAnchorDriftCheckout, runAnchorDriftPass } from "./anchor-drift.js";
 import { LocalAgentRuntimeStore } from "./runtime-store.js";
 import { WorkerLease } from "../utils/worker-lease.js";
-import { ensureGreplicaConfig } from "../config/greplica-config.js";
-import { canScheduleMemoryUpdates, type RepoInstallation } from "../install/repo-installation-store.js";
+import { ensureGreplicaConfig, type GreplicaConfig } from "../config/greplica-config.js";
+import {
+  canScheduleMemoryUpdates,
+  RepoInstallationStore,
+  type RepoInstallation,
+} from "../install/repo-installation-store.js";
 import { platformInstaller } from "../install/platforms/index.js";
+import { createGraphMemoryProvider } from "../knowledge-graph/provider-factory.js";
+import type { RepoRef } from "../knowledge-graph/service.js";
 import { openDatabase } from "../storage/sqlite/db.js";
 
 const hookWorkerLockName = "hook-memory-update-worker";
@@ -51,6 +58,16 @@ export async function runHookWorker(): Promise<void> {
     const runtimeStore = new LocalAgentRuntimeStore(db, config.session);
     if (!lease.renew()) return;
     const attempts = runtimeStore.claimDueMemoryUpdateAttempts();
+    const installations = new Map(new RepoInstallationStore(db).list().map((installation) => [installation.id, installation]));
+    const latestAttemptByRepo = new Map<string, ClaimedMemoryUpdateAttempt>();
+    for (const attempt of attempts) latestAttemptByRepo.set(attempt.session.repo_id, attempt);
+
+    for (const attempt of latestAttemptByRepo.values()) {
+      if (!leaseValid || !lease.renew()) return;
+      const installation = installations.get(attempt.session.repo_id);
+      if (installation !== undefined) await maybeDemoteAnchorDrift(attempt, installation, config);
+    }
+
     for (const attempt of attempts) {
       if (!leaseValid || !lease.renew()) return;
       await maybeUpdateWorkingMemory(attempt);
@@ -59,6 +76,33 @@ export async function runHookWorker(): Promise<void> {
     if (heartbeat !== undefined) clearInterval(heartbeat);
     if (acquired) lease.release();
     db.close();
+  }
+}
+
+async function maybeDemoteAnchorDrift(
+  attempt: ClaimedMemoryUpdateAttempt,
+  installation: RepoInstallation,
+  config: GreplicaConfig,
+): Promise<void> {
+  const checkout = inspectAnchorDriftCheckout(attempt.session.cwd, installation.defaultBranch);
+  if (!checkout.eligible) return;
+
+  const repo = {
+    repo_root: checkout.repoRoot,
+    remote_url: installation.remoteUrl,
+    repo_name: installation.repoName,
+    default_branch: installation.defaultBranch,
+  } satisfies RepoRef;
+
+  try {
+    const provider = createGraphMemoryProvider(repo, config);
+    try {
+      await runAnchorDriftPass(provider, checkout.gitHead);
+    } finally {
+      provider.close();
+    }
+  } catch {
+    // Background drift checks must not block transcript memory updates. A later due run retries.
   }
 }
 
