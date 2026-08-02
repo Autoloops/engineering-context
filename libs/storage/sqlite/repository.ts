@@ -12,7 +12,7 @@ import type { ClaimProvenanceRecord, GraphReadRepository } from "../../knowledge
 
 export type RepoStatus = "active" | "inactive";
 export type RepoMode = "local" | "managed";
-export type ManagedRepoRole = "reader" | "memory_admin";
+export type ManagedRepoRole = "reader" | "contributor" | "memory_admin";
 export type ManagedAccessStatus = "active" | "pending" | "suspended" | "revoked";
 
 export interface RepoRecord {

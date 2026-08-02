@@ -48,6 +48,16 @@ export interface GraphReadResult {
 export interface ApplyProposalResult {
   memory_commit_id: string;
   scope_id: string;
+  proposal_id?: string;
+  author?: {
+    id: string;
+    github_user_id: string;
+    github_login: string;
+    created_at: string;
+  };
+  working_scope_revision?: number;
+  memory_commit_state?: "active" | "promoted" | "quarantined";
+  memory_pr_id?: string;
   embedding_status: EmbeddingStatus;
   created: {
     components: number;

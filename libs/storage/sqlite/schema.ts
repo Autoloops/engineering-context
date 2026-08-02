@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS repos (
   status TEXT NOT NULL DEFAULT 'inactive' CHECK(status IN ('active', 'inactive')),
   active_mode TEXT NOT NULL DEFAULT 'local' CHECK(active_mode IN ('local', 'managed')),
   managed_repo_id TEXT,
-  managed_role TEXT CHECK(managed_role IN ('reader', 'memory_admin')),
+  managed_role TEXT CHECK(managed_role IN ('reader', 'contributor', 'memory_admin')),
   managed_access_status TEXT CHECK(managed_access_status IN ('active', 'pending', 'suspended', 'revoked')),
   managed_access_refreshed_at TEXT,
   hooks_enabled INTEGER NOT NULL DEFAULT 1 CHECK(hooks_enabled IN (0, 1)),

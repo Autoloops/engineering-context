@@ -213,6 +213,14 @@ export async function runRepoInviteReader(args: string[]): Promise<void> {
   console.log(`Reader invitation ${invite.id} targets ${invite.target_github_login}.`);
 }
 
+export async function runRepoInviteContributor(args: string[]): Promise<void> {
+  const invite = await controlClient().inviteRepoContributor(
+    repoBinding().managedRepoId,
+    required(args, "--github-user"),
+  );
+  console.log(`Contributor invitation ${invite.id} targets ${invite.target_github_login}.`);
+}
+
 export async function runRepoInviteLinkCreate(args: string[]): Promise<void> {
   requireNoArgs(args, "Usage: greplica repo invite-link create");
   const created = await controlClient().createRepoInviteLink(repoBinding().managedRepoId);
@@ -240,6 +248,24 @@ export async function runRepoInviteLinkRevoke(args: string[]): Promise<void> {
 export async function runRepoGrantMemoryAdmin(args: string[]): Promise<void> {
   const grant = await controlClient().grantRepoRole(repoBinding().managedRepoId, required(args, "--user"), "memory_admin");
   console.log(`${grant.user.github_login} is now memory_admin for this memory.`);
+}
+
+export async function runRepoGrantContributor(args: string[]): Promise<void> {
+  const grant = await controlClient().grantRepoRole(
+    repoBinding().managedRepoId,
+    required(args, "--user"),
+    "contributor",
+  );
+  console.log(`${grant.user.github_login} is now contributor for this memory.`);
+}
+
+export async function runRepoRevokeContributor(args: string[]): Promise<void> {
+  const result = await controlClient().revokeRepoRole(
+    repoBinding().managedRepoId,
+    required(args, "--user"),
+    "contributor",
+  );
+  console.log(result.revoked ? "contributor grant revoked." : "No contributor grant existed.");
 }
 
 export async function runRepoRevokeMemoryAdmin(args: string[]): Promise<void> {
