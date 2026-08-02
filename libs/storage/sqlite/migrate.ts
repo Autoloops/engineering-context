@@ -6,10 +6,65 @@ export function migrate(db: Database.Database): void {
   db.exec(schemaSql);
   migrateReposTable(db);
   migrateRepoInstallationState(db);
+  migrateManagedRepoRoleConstraint(db);
   migrateClaimsTable(db);
   migrateGraphObjectTables(db);
   migrateSourceMemberships(db);
   migrateClaimAnchorFingerprints(db);
+}
+
+function migrateManagedRepoRoleConstraint(db: Database.Database): void {
+  const table = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'repos'",
+  ).get() as { sql: string | null } | undefined;
+  if (table?.sql?.includes("'contributor'")) return;
+
+  const foreignKeys = db.pragma("foreign_keys", { simple: true }) as number;
+  db.pragma("foreign_keys = OFF");
+  try {
+    db.exec(`
+      BEGIN;
+      CREATE TABLE repos_with_contributor (
+        id TEXT PRIMARY KEY,
+        repo_key TEXT UNIQUE,
+        remote_url TEXT UNIQUE,
+        root_path TEXT UNIQUE,
+        repo_name TEXT NOT NULL,
+        default_branch TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'inactive' CHECK(status IN ('active', 'inactive')),
+        active_mode TEXT NOT NULL DEFAULT 'local' CHECK(active_mode IN ('local', 'managed')),
+        managed_repo_id TEXT,
+        managed_role TEXT CHECK(managed_role IN ('reader', 'contributor', 'memory_admin')),
+        managed_access_status TEXT CHECK(managed_access_status IN ('active', 'pending', 'suspended', 'revoked')),
+        managed_access_refreshed_at TEXT,
+        hooks_enabled INTEGER NOT NULL DEFAULT 1 CHECK(hooks_enabled IN (0, 1)),
+        auto_memory_updates INTEGER NOT NULL DEFAULT 1 CHECK(auto_memory_updates IN (0, 1)),
+        created_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z',
+        updated_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z'
+      );
+      INSERT INTO repos_with_contributor (
+        id, repo_key, remote_url, root_path, repo_name, default_branch, status, active_mode,
+        managed_repo_id, managed_role, managed_access_status, managed_access_refreshed_at,
+        hooks_enabled, auto_memory_updates, created_at, updated_at
+      )
+      SELECT
+        id, repo_key, remote_url, root_path, repo_name, default_branch, status, active_mode,
+        managed_repo_id, managed_role, managed_access_status, managed_access_refreshed_at,
+        hooks_enabled, auto_memory_updates, created_at, updated_at
+      FROM repos;
+      DROP TABLE repos;
+      ALTER TABLE repos_with_contributor RENAME TO repos;
+      CREATE UNIQUE INDEX IF NOT EXISTS repos_repo_key_idx ON repos(repo_key) WHERE repo_key IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS repos_managed_repo_idx ON repos(managed_repo_id);
+      CREATE INDEX IF NOT EXISTS repos_status_idx ON repos(status, active_mode);
+      COMMIT;
+    `);
+  } catch (error) {
+    db.exec("ROLLBACK;");
+    throw error;
+  } finally {
+    db.pragma(`foreign_keys = ${foreignKeys ? "ON" : "OFF"}`);
+  }
 }
 
 function migrateRepoInstallationState(db: Database.Database): void {

@@ -64,7 +64,7 @@ export class LocalAgentRuntimeStore {
              repos.active_mode = 'local'
              OR (
                repos.active_mode = 'managed'
-               AND repos.managed_role = 'memory_admin'
+               AND repos.managed_role IN ('contributor', 'memory_admin')
                AND repos.managed_access_status = 'active'
              )
            )

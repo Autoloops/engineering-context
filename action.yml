@@ -1,0 +1,44 @@
+name: Reconcile Greplica memory
+description: Audit a Memory PR against an exact GitHub merge SHA and attest the result with GitHub OIDC.
+inputs:
+  managed-repo:
+    description: Managed Greplica repository UUID.
+    required: true
+  merge-sha:
+    description: Exact merged/default-branch commit to check out and audit.
+    required: true
+  api-url:
+    description: Managed Greplica API URL.
+    required: false
+    default: https://memory.autoloops.ai
+  oidc-audience:
+    description: GitHub OIDC audience expected by the managed service.
+    required: false
+    default: greplica-managed
+runs:
+  using: composite
+  steps:
+    - name: Check out exact merge commit
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: ${{ inputs.merge-sha }}
+        fetch-depth: 0
+    - name: Set up Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: "22"
+    - name: Audit and attest Memory PR
+      shell: bash
+      env:
+        GREPLICA_ACTION_MANAGED_REPO: ${{ inputs.managed-repo }}
+        GREPLICA_ACTION_MERGE_SHA: ${{ inputs.merge-sha }}
+        GREPLICA_ACTION_API_URL: ${{ inputs.api-url }}
+        GREPLICA_ACTION_OIDC_AUDIENCE: ${{ inputs.oidc-audience }}
+      run: |
+        npm ci --prefix "$GITHUB_ACTION_PATH" --include=dev
+        npm run --prefix "$GITHUB_ACTION_PATH" build
+        node "$GITHUB_ACTION_PATH/dist/apps/cli/main.js" memory reconcile \
+          --managed-repo "$GREPLICA_ACTION_MANAGED_REPO" \
+          --merge-sha "$GREPLICA_ACTION_MERGE_SHA" \
+          --api-url "$GREPLICA_ACTION_API_URL" \
+          --oidc-audience "$GREPLICA_ACTION_OIDC_AUDIENCE"

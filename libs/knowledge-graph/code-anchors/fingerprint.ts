@@ -26,8 +26,14 @@ export async function fingerprintAnchor(
   anchor: ClaimCodeAnchor,
   resolver: CodeAnchorResolver,
 ): Promise<string | undefined> {
-  const signature = await resolver.codeSignatureForAnchor(repoRoot, anchor);
-  return signature === undefined ? undefined : hashText(signature);
+  try {
+    const signature = await resolver.codeSignatureForAnchor(repoRoot, anchor);
+    return signature === undefined ? undefined : hashText(signature);
+  } catch {
+    // Existing directory anchors and transient unreadable paths can resolve as
+    // navigation targets without yielding a stable content signature.
+    return undefined;
+  }
 }
 
 /**

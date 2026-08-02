@@ -19,6 +19,12 @@ import type {
   ManagedRepoGrant,
   ManagedUser,
 } from "./protocol.js";
+import {
+  managedCapabilitiesHeader,
+  managedClientCapabilities,
+  managedClientVersion,
+  managedClientVersionHeader,
+} from "./protocol.js";
 
 export interface DeviceLoginStart {
   device_code: string;
@@ -165,6 +171,13 @@ export class ManagedControlClient {
     return this.request("POST", `/v1/repos/${encodeURIComponent(repoId)}/invites`, { github_user: githubUser }, true, repoId);
   }
 
+  inviteRepoContributor(repoId: string, githubUser: string): Promise<ManagedInvitation> {
+    return this.request("POST", `/v1/repos/${encodeURIComponent(repoId)}/invites`, {
+      github_user: githubUser,
+      role: "contributor",
+    }, true, repoId);
+  }
+
   createRepoInviteLink(repoId: string): Promise<ManagedRepoInviteLinkCreated> {
     return this.request("POST", `/v1/repos/${encodeURIComponent(repoId)}/invite-links`, {}, true, repoId);
   }
@@ -187,11 +200,11 @@ export class ManagedControlClient {
     return this.request("POST", "/v1/invite-links/claim", { token });
   }
 
-  grantRepoRole(repoId: string, userId: string, role: "reader" | "memory_admin"): Promise<ManagedRepoGrant> {
+  grantRepoRole(repoId: string, userId: string, role: "reader" | "contributor" | "memory_admin"): Promise<ManagedRepoGrant> {
     return this.request("POST", `/v1/repos/${encodeURIComponent(repoId)}/grants`, { user_id: userId, role }, true, repoId);
   }
 
-  revokeRepoRole(repoId: string, userId: string, role: "reader" | "memory_admin"): Promise<{ revoked: boolean }> {
+  revokeRepoRole(repoId: string, userId: string, role: "reader" | "contributor" | "memory_admin"): Promise<{ revoked: boolean }> {
     return this.request("DELETE", `/v1/repos/${encodeURIComponent(repoId)}/grants`, { user_id: userId, role }, true, repoId);
   }
 
@@ -262,6 +275,8 @@ export class ManagedControlClient {
       method,
       headers: {
         accept: "application/json",
+        [managedClientVersionHeader]: managedClientVersion,
+        [managedCapabilitiesHeader]: managedClientCapabilities.join(","),
         ...(authenticated ? { authorization: `Bearer ${this.token}` } : {}),
         ...(body === undefined ? {} : { "content-type": "application/json" }),
       },
@@ -300,14 +315,14 @@ export class ManagedControlClient {
   private captureRepoAccess(response: Response, managedRepoId: string): void {
     const role = response.headers.get("x-greplica-repo-role");
     const status = response.headers.get("x-greplica-access-status");
-    if ((role !== "reader" && role !== "memory_admin") ||
+    if ((role !== "reader" && role !== "contributor" && role !== "memory_admin") ||
         (status !== "active" && status !== "pending" && status !== "suspended" && status !== "revoked")) return;
     this.updateRepoAccess(managedRepoId, role, status);
   }
 
   private updateRepoAccess(
     managedRepoId: string,
-    role: "reader" | "memory_admin" | undefined,
+    role: "reader" | "contributor" | "memory_admin" | undefined,
     status: "active" | "pending" | "suspended" | "revoked",
   ): void {
     const db = openDatabase();
@@ -322,9 +337,10 @@ export class ManagedControlClient {
 function isRepositoryAccessPayload(
   value: unknown,
   managedRepoId: string,
-): value is { id: string; effective_role: "reader" | "memory_admin"; access_status: "active" | "pending" | "suspended" | "revoked" } {
+): value is { id: string; effective_role: "reader" | "contributor" | "memory_admin"; access_status: "active" | "pending" | "suspended" | "revoked" } {
   if (!isRecord(value) || value.id !== managedRepoId) return false;
-  return (value.effective_role === "reader" || value.effective_role === "memory_admin") &&
+  return (value.effective_role === "reader" || value.effective_role === "contributor" ||
+      value.effective_role === "memory_admin") &&
     (value.access_status === "active" || value.access_status === "pending" ||
       value.access_status === "suspended" || value.access_status === "revoked");
 }

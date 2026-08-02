@@ -208,7 +208,7 @@ async function checkRichGraphIsSelfContained() {
     // Token Store is nested under Auth Service via "contains", so it's rolled
     // up into the parent's subcomponent count rather than shown as its own
     // top-level row — this exercises the contains-edge path in buildGraphViewData.
-    const authRowMatch = html.match(/<tr data-id="component\.auth">[\s\S]*?<\/tr>/);
+    const authRowMatch = html.match(/<tr data-id="component\.auth"[^>]*>[\s\S]*?<\/tr>/);
     assert.ok(authRowMatch, "expected a table row for component.auth");
     assert.match(authRowMatch[0], /<td class="count">1<\/td><\/tr>$/, "expected Auth Service to report 1 subcomponent");
     assert.match(html, /Login Flow/);

@@ -132,7 +132,8 @@ export class RepoInstallationStore {
       )
       .run(role ?? null, accessStatus, refreshedAt.toISOString(), refreshedAt.toISOString(), managedRepoId);
 
-    if (role === "memory_admin" && before.some((row) => row.managed_role !== "memory_admin")) {
+    if ((role === "contributor" || role === "memory_admin") &&
+        before.some((row) => row.managed_role !== "contributor" && row.managed_role !== "memory_admin")) {
       this.db
         .prepare(
           `UPDATE agent_sessions
@@ -216,7 +217,8 @@ export class RepoInstallationStore {
 export function canScheduleMemoryUpdates(installation: RepoInstallation): boolean {
   if (installation.status !== "active" || !installation.hooksEnabled || !installation.autoMemoryUpdates) return false;
   if (installation.activeMode === "local") return true;
-  return installation.managedRole === "memory_admin" && installation.managedAccessStatus === "active";
+  return (installation.managedRole === "contributor" || installation.managedRole === "memory_admin") &&
+    installation.managedAccessStatus === "active";
 }
 
 function toInstallation(row: RepoRecord): RepoInstallation {
