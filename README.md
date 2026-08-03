@@ -9,7 +9,7 @@
   <img alt="Agents" src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code-2563eb">
   <img alt="Storage" src="https://img.shields.io/badge/storage-local%20SQLite-475569">
   <img alt="Embeddings" src="https://img.shields.io/badge/embeddings-local%20%7C%20OpenAI-16a34a">
-  <a href="https://discord.gg/q2R6AYXh9"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2"></a>
+  <a href="https://discord.gg/eNXJwHwYk8"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2"></a>
 </p>
 
 </div>
