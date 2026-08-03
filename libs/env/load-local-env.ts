@@ -26,7 +26,7 @@ export type EnvVarSource =
 
 export function loadRepoEnv(repoRoot: string): LoadedRepoEnv {
   const initialEnvKeys = new Set(Object.keys(process.env).filter(hasEnvValue));
-  const repoEnvKeys = new Set(["OPENAI_API_KEY", "OPENAI_MODEL"]);
+  const repoEnvKeys = new Set(["OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL"]);
   const files = [".env.local", ".env"]
     .map((file) => loadEnvFile(resolve(repoRoot, file), repoEnvKeys))
     .filter((file): file is LoadedEnvFile => file !== undefined);
