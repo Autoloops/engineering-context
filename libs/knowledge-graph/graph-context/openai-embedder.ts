@@ -1,10 +1,23 @@
 import { HttpRequestError, withRetry } from "../../utils/retry.js";
 
+export const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
+
 export interface OpenAIEmbedderOptions {
   apiKey?: string;
+  baseUrl?: string;
   model: string;
   dimensions: number;
   batchSize: number;
+}
+
+/**
+ * Resolves the OpenAI-compatible API root used for embeddings.
+ * Falls back to OPENAI_BASE_URL, then to OpenAI itself, mirroring how the API key is resolved.
+ */
+export function resolveOpenAIBaseUrl(baseUrl?: string): string {
+  const configured = (baseUrl ?? process.env.OPENAI_BASE_URL)?.trim();
+  if (!configured) return DEFAULT_OPENAI_BASE_URL;
+  return configured.replace(/\/+$/, "");
 }
 
 interface OpenAIEmbeddingResponse {
@@ -14,6 +27,7 @@ interface OpenAIEmbeddingResponse {
 
 export class OpenAIEmbedder {
   private readonly apiKey: string;
+  private readonly baseUrl: string;
 
   constructor(private readonly options: OpenAIEmbedderOptions) {
     if (typeof options.batchSize !== "number" || options.batchSize < 1) {
@@ -27,6 +41,7 @@ export class OpenAIEmbedder {
       throw new Error("OPENAI_API_KEY is required for graph context embeddings. Set it in the environment, target-root .env.local, or target-root .env.");
     }
     this.apiKey = apiKey;
+    this.baseUrl = resolveOpenAIBaseUrl(options.baseUrl);
   }
 
   async embed(text: string): Promise<number[]> {
@@ -48,7 +63,7 @@ export class OpenAIEmbedder {
 
     return withRetry(
       async () => {
-        const response = await fetch("https://api.openai.com/v1/embeddings", {
+        const response = await fetch(`${this.baseUrl}/embeddings`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${this.apiKey}`,

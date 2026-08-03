@@ -21,6 +21,7 @@ import type {
   ManagedProposal,
 } from "../../libs/managed/protocol.js";
 import { createEmbedder } from "../../libs/knowledge-graph/graph-context/embedder.js";
+import { resolveOpenAIBaseUrl } from "../../libs/knowledge-graph/graph-context/openai-embedder.js";
 import { renderGraphContextMarkdown } from "../../libs/knowledge-graph/graph-context/render.js";
 import { buildGraphFolderExport } from "../../libs/knowledge-graph/folder-export.js";
 import { buildTranscriptBundle } from "../../libs/session-transcript/bundle.js";
@@ -890,6 +891,7 @@ async function runDoctor(args: string[], getContext: CommandContextProvider): Pr
     } else {
       console.log(`OPENAI_API_KEY: found in ${source.path}`);
     }
+    console.log(`Embeddings endpoint: ${resolveOpenAIBaseUrl()}/embeddings`);
   }
 
   if (installation.activeMode === "local" && (args.includes("--check-embeddings") || args.includes("--check-openai"))) {
