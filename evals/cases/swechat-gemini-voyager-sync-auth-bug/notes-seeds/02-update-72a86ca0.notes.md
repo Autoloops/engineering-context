@@ -1,0 +1,67 @@
+# Gemini Voyager Repo Notes
+
+## Project Shape
+- `gemini-voyager` is a Bun/Vite/React browser extension that enhances Gemini with timeline navigation, folders, prompt vault, export, and sync; package metadata and scripts live in `package.json`.
+- The extension targets Chrome MV3 with popup, options page, background service worker, and content script entries declared in `manifest.json`; Firefox/Safari/Edge builds use `vite.config.firefox.ts`, `vite.config.safari.ts`, `vite.config.chrome.ts`, and `scripts/build-edge.js`.
+- Runtime hosts are Gemini, Gemini Business, AI Studio, Google APIs, and image hosts through `host_permissions` in `manifest.json`; optional host permissions support custom prompt-manager websites via `src/pages/background/index.ts`.
+- Shared CSS and web-accessible scripts/assets are in `public/contentStyle.css`, `public/katex-config.js`, `public/fetchInterceptor.js`, and `public/prevent-auto-scroll.js`, referenced by `manifest.json`.
+
+## Entrypoints
+- `src/pages/content/index.tsx` is the main content orchestrator: it initializes i18n/KaTeX, staggers feature startup, checks supported/custom hosts, special-cases Gemini Enterprise, and starts Gemini-only, AI-Studio-only, and shared modules.
+- `src/pages/background/index.ts` is the service worker: it registers custom content scripts and the MAIN-world fetch interceptor, serializes starred-message and fork-node writes, brokers Google Drive sync, opens the popup, proxies IDE sync/status calls, and fetches images for export.
+- `src/pages/popup/Popup.tsx` is the settings UI for feature toggles, widths, sync, account isolation, starred history, custom websites, update reminders, AI Studio enablement, and reorderable popup sections; it replaces `{modifier}` placeholders in shortcut copy using `getModifierKey()` from `src/core/utils/browser.ts`.
+- `src/pages/options/Options.tsx`, `src/pages/panel/Panel.tsx`, and `src/pages/devtools/index.ts` are additional extension pages wired by their sibling `index.tsx` or `index.ts` files and Vite page HTML files.
+
+## Core Services And Types
+- Storage keys, branded IDs, and the `Result` type are centralized in `src/core/types/common.ts`; storage key additions should start there.
+- `src/core/services/StorageService.ts` provides sync/local Chrome storage wrappers plus a localStorage fallback; exported singletons are `storageService` for sync-sized settings/folder data and `promptStorageService` for large prompt data.
+- `src/core/services/GoogleDriveSyncService.ts` handles OAuth through `chrome.identity`, token caching in `chrome.storage.local`, Drive folder/file discovery, retries, and upload/download of folder, AI Studio folder, prompt, starred, and fork JSON files.
+- `src/core/services/AccountIsolationService.ts` resolves per-account scope and storage key behavior used by background sync and popup account-isolation settings.
+- `src/core/services/DataBackupService.ts` is a localStorage-based recovery helper with primary, emergency, and beforeunload backups; `src/features/backup/services/BackupService.ts` creates user-selected filesystem or ZIP backups for prompts/folders.
+- `src/core/services/LoggerService.ts`, `src/core/services/DOMService.ts`, `src/core/services/KeyboardShortcutService.ts`, and `src/core/services/StorageMonitor.ts` provide shared logging, DOM, shortcuts, and storage monitoring support.
+- `src/core/utils/browser.ts` centralizes browser/platform detection helpers; `isChrome()` detects Chrome/Chromium while excluding Safari, Edge, and Firefox, and `isMac()`/`getModifierKey()` drive platform-appropriate shortcut labels (Command symbol on macOS, `Ctrl` elsewhere).
+
+## Main Feature Areas
+- Folder management is under `src/pages/content/folder/`: `manager.ts` renders and manages folders, `index.ts` starts it, `aistudio.ts` handles AI Studio, `storage/FolderStorageAdapter.ts` abstracts storage, and `README.md` documents 2-level nesting, drag/drop, Gem icons, SPA navigation, and URL generation.
+- Prompt Manager is mostly `src/pages/content/prompt/index.ts`: it injects a floating trigger/panel, stores prompts in `promptStorageService`, migrates from localStorage, supports markdown/KaTeX rendering, import/export/backup, custom websites, i18n, and changelog badge behavior.
+- Timeline is under `src/pages/content/timeline/`: `index.ts` patches history and reinitializes on Gemini `/app` or `/gem` route changes, `manager.ts` owns timeline UI, and `StarredMessagesService.ts` integrates starred data with background messages.
+- Conversation export is split between content injection in `src/pages/content/export/index.ts` and format services in `src/features/export/services/`; `ConversationExportService.ts` exports JSON, Markdown, PDF, and image, packages Markdown images into ZIPs when needed, and uses background image-fetch fallbacks.
+- Cloud sync UI is `src/pages/popup/components/CloudSyncSettings.tsx`; background message handlers in `src/pages/background/index.ts` call `GoogleDriveSyncService.ts` and intentionally return downloaded data for the popup to merge/save instead of overwriting storage directly.
+- Context sync is implemented by content capture in `src/pages/content/contextSync/` and feature services/adapters in `src/features/contextSync/`, with popup controls in `src/pages/popup/components/ContextSyncSettings.tsx`.
+- Fork/branching lives in `src/pages/content/fork/`; `src/pages/content/index.tsx` starts it only when `StorageKeys.FORK_ENABLED` is true and listens for storage changes to start/stop it dynamically.
+- Deep Research export has page extraction/menu code in `src/pages/content/deepResearch/` and document export paths in `src/features/export/services/DeepResearchPDFPrintService.ts` and `ConversationExportService.ts`.
+- Watermark removal is in `src/pages/content/watermarkRemover/`; background registers `public/fetchInterceptor.js` when `geminiWatermarkRemoverEnabled` is true, and `src/pages/content/index.tsx` skips this feature on Safari.
+- In-app changelog rendering lives in `src/pages/content/changelog/index.ts`: it renders sanitized Markdown notes, appends localized sponsor/docs/action links, shows a Chrome-only Web Store rating banner, and binds changelog images to a full-screen click/Esc lightbox preview.
+- Smaller content modules are individually scoped under `src/pages/content/`: `chatWidth`, `editInputWidth`, `sidebarWidth`, `sidebarAutoHide`, `inputCollapse`, `sendBehavior`, `recentsHider`, `gemsHider`, `markdownPatcher`, `defaultModel`, `quoteReply`, `formulaCopy`, `mermaid`, `userLatex`, `preventAutoScroll`, `titleUpdater`, `visualEffects`, and `katexConfig`.
+
+## Data And Sync Flows
+- Feature settings usually read/write `chrome.storage.sync` keys from `src/core/types/common.ts`, with some legacy literal keys still present in `src/pages/popup/Popup.tsx`, `src/pages/content/index.tsx`, and feature modules.
+- Prompt data uses `chrome.storage.local` through `promptStorageService` in `src/core/services/StorageService.ts` and `src/pages/content/prompt/index.ts`; migration from localStorage is in `src/core/utils/storageMigration.ts`.
+- Folder data uses `gvFolderData` and `gvFolderDataAIStudio` from `src/core/types/common.ts`, folder import/export code in `src/features/folder/services/FolderImportExportService.ts`, and storage adapters in `src/pages/content/folder/storage/FolderStorageAdapter.ts`.
+- Starred messages and fork nodes are centralized in `src/pages/background/index.ts` to avoid content-script read-modify-write races; content modules communicate with message types prefixed `gv.starred.` and `gv.fork.`.
+- Google Drive sync stores separate JSON files named in `src/core/services/GoogleDriveSyncService.ts`: Gemini folders, AI Studio folders, prompts, starred messages, and forks inside the `Gemini Voyager Data` Drive folder; account-scoped filenames add a hashed account suffix.
+- Export image fetching first tries page fetches in `src/features/export/services/ConversationExportService.ts`, then `gv.fetchImage` and `gv.fetchImageViaPage` background messages handled in `src/pages/background/index.ts`.
+
+## Localization, Docs, And Assets
+- Runtime translations live in `src/locales/{en,ar,es,fr,ja,ko,pt,ru,zh,zh_TW}/messages.json`; helpers are in `src/utils/i18n.ts`, `src/utils/language.ts`, `src/utils/localeMessages.ts`, and `src/utils/translations.ts`.
+- Popup shortcut copy for `ctrlEnterSend` and `ctrlEnterSendHint` uses a `{modifier}` placeholder in all 10 locale files, and `inputCollapseShortcutHint` is present in all 10 locale files for the collapsed-input expand shortcut shown by `src/pages/popup/Popup.tsx`.
+- Changelog Chrome rating copy uses `changelog_rate_chrome` and `changelog_rate_chrome_cta`, which are present in all 10 locale files under `src/locales/*/messages.json`.
+- Docs are VitePress content under `docs/`, with localized directories such as `docs/en/`, `docs/ja/`, `docs/zh_TW/`, and shared assets in `docs/public/assets/`.
+- Input-collapse docs in `docs/guide/input-collapse.md` plus localized files under `docs/{ar,en,es,fr,ja,ko,pt,ru,zh_TW}/guide/input-collapse.md` mention the static `Ctrl`/Command+`I` shortcut for expanding the input area.
+- Changelog content displayed in-app lives in `src/pages/content/changelog/notes/`; release/bump instructions in `CLAUDE.md` require a new note for bumped versions.
+- Changelog modal, Chrome rating banner, and image lightbox styles are in `public/contentStyle.css` under `gv-changelog-*` selectors, including light/dark theme variants for the rating banner.
+- Popup and UI primitives use React components in `src/components/` and `src/components/ui/`, Tailwind styles in `src/assets/styles/tailwind.css`, and popup styles in `src/pages/popup/index.css`.
+
+## Testing And Verification
+- Unit tests are Vitest files colocated under `__tests__` directories and some `.test.ts` siblings, e.g. `src/core/services/__tests__/GoogleDriveSyncService.test.ts`, `src/pages/content/export/__tests__/`, and `src/features/export/services/__tests__/`.
+- `src/core/utils/__tests__/browser.test.ts` covers Safari reminder behavior plus macOS detection and modifier-label behavior for `isMac()`/`getModifierKey()` in `src/core/utils/browser.ts`.
+- Test setup is `src/tests/setup.ts`; Vitest config is `vitest.config.ts`.
+- Standard verification commands are declared in `package.json`: `bun run typecheck`, `bun run lint`, `bun run test`, and `bun run build:chrome`; project-specific rules in `CLAUDE.md` say to run these before declaring code changes done.
+
+## Durable Constraints
+- Do not edit `dist_*` output folders; this is stated in `CLAUDE.md` and those folders are not source.
+- Avoid direct `chrome.storage` in UI components; `CLAUDE.md` says UI should use `StorageService`, while content scripts under `src/pages/content/` are the exception.
+- All injected CSS classes for Gemini DOM must use the `gv-` prefix per `CLAUDE.md`; content modules and `public/contentStyle.css` follow this convention.
+- Adding or modifying i18n keys requires updating all 10 locale files under `src/locales/` as required by `CLAUDE.md`.
+- Adding Material Symbols icons requires updating the `icon_names=` Google Fonts URL in `src/pages/popup/index.html`, per `CLAUDE.md`.
+- Source uses strict TypeScript expectations from `CLAUDE.md`: no `any`, prefer `unknown` plus narrowing, and use branded IDs where applicable in `src/core/types/common.ts`.

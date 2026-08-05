@@ -1,0 +1,31 @@
+{
+  "apply_order": [
+    "00-bootstrap.notes.md",
+    "01-update-7d3888e9.notes.md",
+    "02-update-4647c45d.notes.md",
+    "03-update-af88448f.notes.md"
+  ],
+  "final": "03-update-af88448f.notes.md",
+  "snapshots": [
+    {
+      "file": "00-bootstrap.notes.md",
+      "notes_chars": 9522,
+      "notes_estimated_tokens": 2381
+    },
+    {
+      "file": "01-update-7d3888e9.notes.md",
+      "notes_chars": 13029,
+      "notes_estimated_tokens": 3258
+    },
+    {
+      "file": "02-update-4647c45d.notes.md",
+      "notes_chars": 14837,
+      "notes_estimated_tokens": 3710
+    },
+    {
+      "file": "03-update-af88448f.notes.md",
+      "notes_chars": 18924,
+      "notes_estimated_tokens": 4731
+    }
+  ]
+}

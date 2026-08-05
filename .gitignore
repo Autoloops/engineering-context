@@ -1,6 +1,7 @@
 node_modules/
 dist/
 eval-runs/
+.context/
 memory-workbench/
 __pycache__/
 *.pyc

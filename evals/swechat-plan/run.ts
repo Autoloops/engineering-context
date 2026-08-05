@@ -25,7 +25,7 @@ import { runCodexAgent } from "../../libs/agent-runner/codex.js";
 import type { AgentRunResult } from "../../libs/agent-runner/types.js";
 import { loadRepoEnv } from "../../libs/env/load-local-env.js";
 
-type RunnerName = "baseline" | "greplica" | "docs";
+type RunnerName = "baseline" | "greplica" | "docs" | "docs-agent";
 type JudgeKey =
   | "is_actionable_engineering_plan"
   | "identifies_relevant_systems"
@@ -57,6 +57,7 @@ interface CaseConfig {
   };
   memory?: {
     manifest_path?: string;
+    notes_manifest_path?: string;
   };
 }
 
@@ -79,6 +80,8 @@ interface RunContext {
   codexHomeDir: string;
   docsMemoryDir: string;
   docsMemoryStatsPath: string;
+  agentNotesDir: string;
+  agentNotesStatsPath: string;
   transcriptPath: string;
   finalPlanPath: string;
   judgeInputPath: string;
@@ -100,6 +103,9 @@ interface TranscriptAudit {
   first_docs_memory_command?: string;
   docs_memory_commands?: string[];
   docs_memory_first_navigation_used?: boolean;
+  first_agent_notes_command?: string;
+  agent_notes_commands?: string[];
+  agent_notes_first_navigation_used?: boolean;
 }
 
 interface DocsMemoryStats {
@@ -110,6 +116,13 @@ interface DocsMemoryStats {
   raw_proposal_chars: number;
   raw_proposal_estimated_tokens: number;
   largest_files: Array<{ path: string; chars: number }>;
+}
+
+interface AgentNotesStats {
+  directory: string;
+  file_count: number;
+  notes_markdown_chars: number;
+  notes_markdown_estimated_tokens: number;
 }
 
 interface JudgeChecks extends Record<JudgeKey, boolean> {
@@ -152,6 +165,7 @@ export async function main(argv = process.argv.slice(2), defaultCaseId?: string)
 
   const seedCommands = args.runner === "greplica" || args.runner === "docs" ? seedGreplicaMemory(context) : [];
   const docsMemorySetup = args.runner === "docs" ? setupDocsMemory(context) : null;
+  const agentNotesSetup = args.runner === "docs-agent" ? setupAgentNotes(context) : null;
   installToolGuards(context.guardDir, args.runner, context.greplicaCommand);
   const generation = await runPlanningAgent(context, args);
   const changedFiles = changedFilesInRepo(context.targetRepoDir);
@@ -212,6 +226,9 @@ export async function main(argv = process.argv.slice(2), defaultCaseId?: string)
     docs_memory_dir: docsMemorySetup?.stats.directory,
     docs_memory_stats_path: docsMemorySetup === null ? undefined : context.docsMemoryStatsPath,
     docs_memory_stats: docsMemorySetup?.stats,
+    agent_notes_dir: agentNotesSetup?.stats.directory,
+    agent_notes_stats_path: agentNotesSetup === null ? undefined : context.agentNotesStatsPath,
+    agent_notes_stats: agentNotesSetup?.stats,
     fixture_prep: fixturePrep,
     generation,
     final_plan_path: context.finalPlanPath,
@@ -256,6 +273,8 @@ function prepareRun(args: Args): RunContext {
     codexHomeDir: resolve(runDir, "greplica-setup-codex-home"),
     docsMemoryDir: resolve(runDir, "target-repo", "greplica-memory-docs"),
     docsMemoryStatsPath: resolve(runDir, "docs-memory-stats.json"),
+    agentNotesDir: resolve(runDir, "target-repo", "agent-notes"),
+    agentNotesStatsPath: resolve(runDir, "agent-notes-stats.json"),
     transcriptPath: resolve(runDir, "agent-events.jsonl"),
     finalPlanPath: resolve(runDir, "final-plan.md"),
     judgeInputPath: resolve(runDir, "judge-input.json"),
@@ -360,6 +379,30 @@ function collectDocsMemoryStats(context: RunContext): DocsMemoryStats {
   };
 }
 
+function setupAgentNotes(context: RunContext): { stats: AgentNotesStats } {
+  rmSync(context.agentNotesDir, { recursive: true, force: true });
+  const manifestPath = resolve(context.caseDir, context.config.memory?.notes_manifest_path ?? "notes-seeds/manifest.json");
+  const manifest = readJson<{ apply_order: string[]; final?: string }>(manifestPath);
+  const finalName = manifest.final ?? manifest.apply_order[manifest.apply_order.length - 1];
+  if (!finalName) throw new Error(`Notes seed manifest has no entries: ${manifestPath}`);
+  const seedPath = resolve(dirname(manifestPath), finalName);
+  if (!existsSync(seedPath)) {
+    throw new Error(`Notes seed missing: ${seedPath}. Regenerate with: npm run eval:swechat-plan-build-memory -- --case ${context.config.case_id} --memory docs-agent`);
+  }
+  const notes = readFileSync(seedPath, "utf8");
+  if (!notes.trim()) throw new Error(`Notes seed is empty: ${seedPath}`);
+  mkdirSync(context.agentNotesDir, { recursive: true });
+  writeFileSync(resolve(context.agentNotesDir, "notes.md"), notes);
+  const stats: AgentNotesStats = {
+    directory: relative(context.runDir, context.agentNotesDir),
+    file_count: 1,
+    notes_markdown_chars: notes.length,
+    notes_markdown_estimated_tokens: Math.ceil(notes.length / 4),
+  };
+  writeJson(context.agentNotesStatsPath, stats);
+  return { stats };
+}
+
 async function runPlanningAgent(context: RunContext, args: Args): Promise<AgentRunResult> {
   return runCodexAgent({
     cwd: context.targetRepoDir,
@@ -389,7 +432,12 @@ function agentPrompt(context: RunContext, runner: RunnerName): string {
 - Treat the docs as navigation context, then verify only the repo files needed for the plan.
 - Do not use Greplica commands.
 - Do not use CodeGraph commands.`
-      : `- Do not use Greplica commands or Greplica memory.
+      : runner === "docs-agent"
+        ? `- Use the local notes file as your repo memory map. Before broad manual exploration, search or read agent-notes/notes.md using task terms.
+- Treat the notes as navigation context, then verify only the repo files needed for the plan.
+- Do not use Greplica commands.
+- Do not use CodeGraph commands.`
+        : `- Do not use Greplica commands or Greplica memory.
 - Do not use CodeGraph commands.`;
   return `You are running a local-only planning benchmark.
 
@@ -450,6 +498,8 @@ function auditTranscript(transcriptPath: string, runner: RunnerName): Transcript
   const greplica_context_commands: string[] = [];
   let first_docs_memory_command: string | undefined;
   const docs_memory_commands: string[] = [];
+  let first_agent_notes_command: string | undefined;
+  const agent_notes_commands: string[] = [];
   for (const [index, line] of readOptional(transcriptPath).split("\n").entries()) {
     if (!line.trim()) continue;
     let event: unknown;
@@ -467,6 +517,10 @@ function auditTranscript(transcriptPath: string, runner: RunnerName): Transcript
         first_docs_memory_command ??= command;
         docs_memory_commands.push(command);
       }
+      if (commandTouchesAgentNotes(command)) {
+        first_agent_notes_command ??= command;
+        agent_notes_commands.push(command);
+      }
       const violation = auditCommand(command, runner);
       if (violation) violations.push(`line ${index + 1}: ${violation}: ${command}`);
     }
@@ -481,6 +535,9 @@ function auditTranscript(transcriptPath: string, runner: RunnerName): Transcript
     first_docs_memory_command,
     docs_memory_commands,
     docs_memory_first_navigation_used: runner === "docs" && first_command !== undefined && commandTouchesDocsMemory(first_command),
+    first_agent_notes_command,
+    agent_notes_commands,
+    agent_notes_first_navigation_used: runner === "docs-agent" && first_command !== undefined && commandTouchesAgentNotes(first_command),
   };
 }
 
@@ -497,6 +554,7 @@ function auditCommand(command: string, runner: RunnerName): string | undefined {
     return "forbidden_codegraph_command";
   }
   if (normalized.includes("greplica-memory-docs") && runner !== "docs") return "forbidden_docs_memory_access";
+  if (normalized.includes("agent-notes") && runner !== "docs-agent") return "forbidden_agent_notes_access";
   if (/\bnpx\s+.*codegraph\b/.test(normalized) || /\bnpm\s+(exec|install)\b.*codegraph\b/.test(normalized)) return "forbidden_codegraph_registry_or_setup";
   if (/\bgit\s+(clone|fetch|pull|log|show|reflog|blame|bisect)\b/.test(normalized)) return "forbidden_git_history_or_network";
   if (normalized.includes(".context/swechat") || normalized.includes("judge-input") || normalized.includes("case.json") || normalized.includes("judge.md")) return "hidden_eval_artifact_access";
@@ -506,6 +564,10 @@ function auditCommand(command: string, runner: RunnerName): string | undefined {
 
 function commandTouchesDocsMemory(command: string): boolean {
   return command.toLowerCase().includes("greplica-memory-docs");
+}
+
+function commandTouchesAgentNotes(command: string): boolean {
+  return command.toLowerCase().includes("agent-notes");
 }
 
 function commandInvokesTool(command: string, tool: "greplica" | "codegraph"): boolean {
@@ -642,9 +704,9 @@ function extractOutputText(body: Record<string, unknown>): string {
 
 function parseArgs(argv: string[], defaultCaseId?: string): Args {
   const caseId = valueAfter(argv, "--case") ?? defaultCaseId;
-  if (!caseId) throw new Error("Usage: swechat-plan run --case <case-id> --runner baseline|greplica|docs");
+  if (!caseId) throw new Error("Usage: swechat-plan run --case <case-id> --runner baseline|greplica|docs|docs-agent");
   const runner = valueAfter(argv, "--runner") ?? "baseline";
-  if (runner !== "baseline" && runner !== "greplica" && runner !== "docs") throw new Error("Only --runner baseline|greplica|docs is supported.");
+  if (runner !== "baseline" && runner !== "greplica" && runner !== "docs" && runner !== "docs-agent") throw new Error("Only --runner baseline|greplica|docs|docs-agent is supported.");
   return {
     caseId,
     runner,
