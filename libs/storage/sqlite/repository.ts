@@ -552,6 +552,151 @@ export class SqliteRepository implements GraphReadRepository {
     return deserializeEdges(rows);
   }
 
+  getObjectById(type: GraphObjectType, id: string): Component | Flow | Claim | Source | Edge | undefined {
+    const table = tableForType(type);
+    const row = this.db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+
+    switch (type) {
+      case "component": {
+        const comp = row as ComponentRow;
+        return { id: comp.id, name: comp.name, code_anchor: comp.code_anchor ?? undefined } as Component;
+      }
+      case "flow":
+        return row as Flow;
+      case "claim": {
+        const claim = row as ClaimRow;
+        return {
+          id: claim.id,
+          kind: claim.kind,
+          text: claim.text,
+          truth: claim.truth,
+          intent: claim.intent,
+          code_anchors: claim.code_anchors === null ? undefined : JSON.parse(claim.code_anchors) as Claim["code_anchors"],
+        } as Claim;
+      }
+      case "source":
+        return row as Source;
+      case "edge": {
+        const edge = row as EdgeRow;
+        return {
+          ...edge,
+          metadata: edge.metadata === null ? undefined : JSON.parse(edge.metadata) as Record<string, unknown>,
+        } as Edge;
+      }
+    }
+  }
+
+  getEdgesForObject(type: GraphObjectType, id: string): Edge[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM edges WHERE (from_type = ? AND from_id = ?) OR (to_type = ? AND to_id = ?)`,
+      )
+      .all(type, id, type, id) as EdgeRow[];
+    return rows.map((row) => ({
+      ...row,
+      metadata: row.metadata === null ? undefined : (JSON.parse(row.metadata) as Record<string, unknown>),
+    }));
+  }
+
+  getRelatedObjects(
+    repoId: string,
+    seedType: GraphObjectType,
+    seedId: string,
+    maxDepth: number,
+  ): {
+    components: Component[];
+    flows: Flow[];
+    claims: Claim[];
+    sources: Source[];
+    edges: Edge[];
+  } {
+    const scopeIds = this.currentScopeIds(repoId);
+    const memberships = this.membershipsForScopes(scopeIds);
+    const allEdges = this.loadEdges(selectIds(memberships, "edge"));
+    const active = activeSubjectKeys(memberships, allEdges);
+
+    // Build index of edges by connected object for efficient traversal
+    const edgesByObject = new Map<string, Edge[]>();
+    for (const edge of allEdges) {
+      if (!active.has(subjectKey("edge", edge.id))) continue;
+      const fromKey = subjectKey(edge.from_type, edge.from_id);
+      const toKey = subjectKey(edge.to_type, edge.to_id);
+      if (!edgesByObject.has(fromKey)) edgesByObject.set(fromKey, []);
+      if (!edgesByObject.has(toKey)) edgesByObject.set(toKey, []);
+      edgesByObject.get(fromKey)!.push(edge);
+      edgesByObject.get(toKey)!.push(edge);
+    }
+
+    // BFS traversal from seed object
+    const visited = new Set<string>();
+    const collectedEdges = new Map<string, Edge>();
+    const collectedTypes = new Map<string, GraphObjectType>();
+
+    const queue: Array<{ type: GraphObjectType; id: string; depth: number }> = [
+      { type: seedType, id: seedId, depth: 0 },
+    ];
+    visited.add(subjectKey(seedType, seedId));
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (current.depth >= maxDepth) continue;
+
+      const edges = this.getEdgesForObject(current.type, current.id);
+      for (const edge of edges) {
+        if (!active.has(subjectKey("edge", edge.id))) continue;
+        if (!collectedEdges.has(edge.id)) {
+          collectedEdges.set(edge.id, edge);
+        }
+
+        // Determine neighbor
+        const neighborType = edge.from_type === current.type && edge.from_id === current.id
+          ? edge.to_type
+          : edge.from_type;
+        const neighborId = edge.from_type === current.type && edge.from_id === current.id
+          ? edge.to_id
+          : edge.from_id;
+        const neighborKey = subjectKey(neighborType, neighborId);
+
+        if (!visited.has(neighborKey) && neighborType !== "source") {
+          visited.add(neighborKey);
+          collectedTypes.set(neighborKey, neighborType);
+          queue.push({ type: neighborType, id: neighborId, depth: current.depth + 1 });
+        }
+      }
+    }
+
+    // Collect all objects by type
+    const componentIds: string[] = [];
+    const flowIds: string[] = [];
+    const claimIds: string[] = [];
+    const sourceIds: string[] = [];
+
+    for (const [key, objType] of collectedTypes) {
+      const id = key.slice(key.indexOf(":") + 1);
+      switch (objType) {
+        case "component": componentIds.push(id); break;
+        case "flow": flowIds.push(id); break;
+        case "claim": claimIds.push(id); break;
+        case "source": sourceIds.push(id); break;
+      }
+    }
+
+    // Also include sources referenced by collected edges
+    for (const edge of collectedEdges.values()) {
+      if (edge.to_type === "source") sourceIds.push(edge.to_id);
+    }
+
+    return {
+      components: this.loadComponents(componentIds),
+      flows: this.loadFlows(flowIds),
+      claims: this.loadClaims(claimIds),
+      sources: this.loadSources([...new Set(sourceIds)]),
+      edges: [...collectedEdges.values()],
+    };
+  }
+
+  private loadByIds<T>(table: string, ids: string[]): T[] {
   private loadByIds<T>(repoId: string, table: string, ids: string[]): T[] {
     if (ids.length === 0) return [];
     return this.db.prepare(`SELECT * FROM ${table} WHERE repo_id = ? AND id IN (${placeholders(ids)})`).all(repoId, ...ids) as T[];

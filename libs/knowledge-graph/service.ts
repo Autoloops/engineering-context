@@ -211,6 +211,19 @@ export class KnowledgeGraphService {
     };
   }
 
+  lookupObject(input: RepoRef, type: GraphObjectType, id: string): Component | Flow | Claim | Source | Edge | undefined {
+    this.requireRepo(input);
+    return this.repository.getObjectById(type, id);
+  }
+
+  traverseGraph(
+    input: RepoRef,
+    type: GraphObjectType,
+    id: string,
+    maxDepth: number = 1,
+  ): GraphReadResult {
+    const initialized = this.requireRepo(input);
+    return this.repository.getRelatedObjects(initialized.repo_id, type, id, maxDepth);
   private async validateNormalizedProposal(
     input: RepoRef,
     repoId: string,

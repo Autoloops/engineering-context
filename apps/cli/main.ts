@@ -5,6 +5,7 @@ import { isatty } from "node:tty";
 import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import type { ClaimAnchorAuditResult, RepoRef } from "../../libs/knowledge-graph/service.js";
+import type { GraphObjectType } from "../../libs/knowledge-graph/schema.js";
 import { envVarSource, loadRepoEnv, type LoadedRepoEnv } from "../../libs/env/load-local-env.js";
 import {
   ensureGreplicaConfig,
@@ -187,6 +188,20 @@ const cliCommands = [
     path: ["graph", "read"],
     usage: "graph read [--with-working <login>...] [--memory-pr <id>] [--main-only] [--include-quarantined] [--json]",
     handler: withCommandContext(runGraphReadCommand),
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "graphGet",
+    path: ["graph", "get"],
+    usage: "graph get <type> <id>",
+    handler: runGraphGetCommand,
+    showInTopLevelHelp: true,
+  },
+  {
+    key: "graphTraverse",
+    path: ["graph", "traverse"],
+    usage: "graph traverse <type> <id> [--depth <n>]",
+    handler: runGraphTraverseCommand,
     showInTopLevelHelp: true,
   },
   {
@@ -472,6 +487,36 @@ async function runGraphReadCommand(args: string[], getContext: CommandContextPro
   printSection("Edges", graph.edges, (item) => `${field(item, "from_type")}:${field(item, "from_id")} -[${field(item, "kind")}]-> ${field(item, "to_type")}:${field(item, "to_id")}`);
 }
 
+function runGraphGetCommand(args: string[]): void {
+  const type = requireGraphObjectType(args[0], usage("graphGet"));
+  const id = requireFile(args[1], usage("graphGet"));
+  const { repo, service } = createCommandContext();
+  const obj = service.lookupObject(repo, type, id);
+  if (obj === undefined) {
+    console.log(`No ${type} found with id '${id}'`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(JSON.stringify(obj, null, 2));
+}
+
+function runGraphTraverseCommand(args: string[]): void {
+  const type = requireGraphObjectType(args[0], usage("graphTraverse"));
+  const id = requireFile(args[1], usage("graphTraverse"));
+  const depth = parseGraphTraverseDepth(args);
+  const { repo, service } = createCommandContext();
+  const graph = service.traverseGraph(repo, type, id, depth);
+  console.log(`Traversal from ${type}:${id} (depth=${depth}):`);
+  printSection("Components", graph.components, (item) => `${named(item)} ${anchor(item)}`.trim());
+  printSection("Flows", graph.flows, named);
+  printSection("Claims", graph.claims, (item) => `${field(item, "kind")}: ${field(item, "text")}`);
+  printSection("Sources", graph.sources, (item) => `${field(item, "kind")}: ${field(item, "title") || field(item, "ref")}`);
+  printSection("Edges", graph.edges, (item) => `${field(item, "from_type")}:${field(item, "from_id")} -[${field(item, "kind")}]-> ${field(item, "to_type")}:${field(item, "to_id")}`);
+}
+
+async function runGraphContextCommand(args: string[]): Promise<void> {
+  const output = parseGraphContextOutput(args);
+  const query = args.filter((arg) => arg !== "--debug").join(" ").trim();
 async function runGraphContextCommand(args: string[], getContext: CommandContextProvider): Promise<void> {
   const options = parseGraphSelectionArgs(args, new Set(["--json", "--debug"]));
   const output = options.json || args.includes("--debug") ? "json" : "markdown";
@@ -1248,6 +1293,34 @@ function readProposal(file: string): unknown {
 function requireFile(file: string | undefined, usage: string): string {
   if (file === undefined || file.trim().length === 0) throw new Error(usage);
   return file;
+}
+
+function requireGraphObjectType(value: string | undefined, usage: string): GraphObjectType {
+  const validTypes = ["component", "flow", "claim", "edge", "source"] as const;
+  if (value === undefined || !validTypes.includes(value as GraphObjectType)) {
+    throw new Error(`Invalid graph object type '${value}'. Expected one of: ${validTypes.join(", ")}.\n${usage}`);
+  }
+  return value as GraphObjectType;
+}
+
+function parseGraphTraverseDepth(args: string[]): number {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--depth") {
+      const value = args[index + 1];
+      if (value === undefined || value.startsWith("--")) throw new Error(`Missing value for --depth.\n${usage("graphTraverse")}`);
+      const depth = Number.parseInt(value, 10);
+      if (Number.isNaN(depth) || depth < 1) throw new Error(`Invalid --depth value '${value}'; expected a positive integer.\n${usage("graphTraverse")}`);
+      return depth;
+    }
+    if (arg.startsWith("--depth=")) {
+      const value = arg.slice("--depth=".length);
+      const depth = Number.parseInt(value, 10);
+      if (Number.isNaN(depth) || depth < 1) throw new Error(`Invalid --depth value '${value}'; expected a positive integer.\n${usage("graphTraverse")}`);
+      return depth;
+    }
+  }
+  return 1; // default depth
 }
 
 function parseRequiredOption(args: string[], name: string, usage: string): string {
