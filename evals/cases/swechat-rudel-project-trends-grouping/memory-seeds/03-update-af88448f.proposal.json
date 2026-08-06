@@ -1,0 +1,243 @@
+{
+  "title": "Update working memory from session",
+  "summary": "Durable context learned during the current coding session.",
+  "creates": {
+    "components": [],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.overview_kpis_parallel_queries",
+        "kind": "fact",
+        "text": "getOverviewKPIs now computes the main KPI row, distinct subagents, distinct skills, distinct slash commands, and all-time total sessions with five concurrent ClickHouse queries via Promise.all instead of one query containing scalar ARRAY JOIN subqueries.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.api_http",
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/api/src/services/overview.service.ts",
+            "symbol": "getOverviewKPIs"
+          }
+        ]
+      },
+      {
+        "id": "claim.overview_insights_parallel_clickhouse_queries",
+        "kind": "fact",
+        "text": "getOverviewInsights now launches the current-period stats, previous-period stats, top-performer, and knowledge-silo ClickHouse queries together in one Promise.all; the Postgres user-name lookup still runs afterward only when a top performer exists.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.api_http",
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/api/src/services/overview.service.ts",
+            "symbol": "getOverviewInsights"
+          }
+        ]
+      },
+      {
+        "id": "claim.overview_latency_fix_scope",
+        "kind": "decision",
+        "text": "The overview latency fix intentionally targeted the two high-impact query-ordering problems first: parallelizing the KPI scans and the insights ClickHouse queries, without adding analytics result caching in this slice.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/api/src/services/overview.service.ts",
+            "symbol": "getOverviewKPIs"
+          },
+          {
+            "file": "apps/api/src/services/overview.service.ts",
+            "symbol": "getOverviewInsights"
+          }
+        ]
+      },
+      {
+        "id": "claim.analytics_ttl_cache_future_work",
+        "kind": "task",
+        "text": "A short in-memory TTL cache remains an optional future optimization for repeat analytics dashboard loads if single-query ClickHouse scan cost is still too high after the overview query parallelization.",
+        "truth": "unknown",
+        "intent": "intended",
+        "about": [
+          "flow.analytics_dashboard"
+        ]
+      },
+      {
+        "id": "claim.error_trends_contract_project_splits_only",
+        "kind": "fact",
+        "text": "Error trends now accept only project_path, user_id, and model split values and default to project_path; repository and error_type are not valid error-trend split values.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.api_contract",
+          "component.api_http",
+          "flow.analytics_dashboard"
+        ],
+        "supersedes": [
+          "claim.error_trends_contract_splits_only"
+        ],
+        "code_anchors": [
+          {
+            "file": "packages/api-routes/src/schemas/analytics.ts",
+            "symbol": "ErrorTrendsInputSchema"
+          },
+          {
+            "file": "apps/api/src/services/error.service.ts",
+            "symbol": "getErrorTrends"
+          }
+        ]
+      },
+      {
+        "id": "claim.errors_page_project_split_display",
+        "kind": "fact",
+        "text": "ErrorsPage initializes the Errors over time chart with project_path splitting, and ErrorTrendChart labels that split as Project while displaying only the last path segment for project_path dimensions.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.web_dashboard",
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/web/src/pages/dashboard/ErrorsPage.tsx",
+            "symbol": "ErrorsPage"
+          },
+          {
+            "file": "apps/web/src/components/charts/ErrorTrendChart.tsx",
+            "symbol": "ErrorTrendChart"
+          }
+        ]
+      },
+      {
+        "id": "claim.chart_legend_interactive_renderer_contract",
+        "kind": "fact",
+        "text": "ChartLegend is the shared recharts legend renderer for scrollable right-side legends: it accepts a readonly payload, optional formatter, optional hiddenSeries set, and optional onToggle callback, and renders each entry as a button whose hidden state is shown with lower opacity and strikethrough text.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.web_dashboard",
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/web/src/components/charts/ChartLegend.tsx",
+            "symbol": "ChartLegend"
+          }
+        ]
+      },
+      {
+        "id": "claim.success_score_tooltip_copy_distinction",
+        "kind": "fact",
+        "text": "Success Rate surfaces use an aggregate tooltip describing the average session quality score formula, while individual session Score surfaces use a separate tooltip describing the per-session 0-100 score inputs and deductions.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.web_dashboard",
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/web/src/components/charts/DeveloperTrendChart.tsx",
+            "symbol": "DeveloperTrendChart"
+          },
+          {
+            "file": "apps/web/src/pages/dashboard/ProjectsListPage.tsx"
+          },
+          {
+            "file": "apps/web/src/pages/dashboard/SessionDetailPage.tsx",
+            "symbol": "SessionDetailPage"
+          }
+        ]
+      },
+      {
+        "id": "claim.slash_command_code_chips_avoid_muted_background",
+        "kind": "fact",
+        "text": "ConversationMessage renders slash-command Command and Args code chips with bg-secondary text-foreground because the theme defines muted and muted-foreground as the same color, making bg-muted chips look redacted under muted foreground text.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.web_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/web/src/components/conversation/ConversationMessage.tsx",
+            "symbol": "ConversationMessage"
+          },
+          {
+            "file": "apps/web/src/index.css"
+          }
+        ]
+      },
+      {
+        "id": "claim.pr_title_single_commit_must_match",
+        "kind": "requirement",
+        "text": "The PR title workflow uses amannn/action-semantic-pull-request with validateSingleCommit and validateSingleCommitMatchesPrTitle enabled, so a one-commit PR must have a conventional PR title that matches the single commit subject.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.repository"
+        ],
+        "code_anchors": [
+          {
+            "file": ".github/workflows/pr-title.yml"
+          }
+        ]
+      },
+      {
+        "id": "claim.ci_verify_runs_turbo_lint_types_tests_build",
+        "kind": "fact",
+        "text": "Pull-request CI runs bunx turbo run lint check-types test build, so chart and dashboard changes must satisfy Biome lint and the apps/web TypeScript build before the verify job passes.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.repository",
+          "component.web_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": ".github/workflows/ci.yml"
+          },
+          {
+            "file": "package.json"
+          },
+          {
+            "file": "apps/web/package.json"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.af88448f_2eec_4dc1_84ab_1531eb6a97af",
+        "kind": "session",
+        "ref": "claude-code-session:af88448f-2eec-4dc1-84ab-1531eb6a97af",
+        "title": "Claude Code session: overview latency and chart dashboard UX"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.overview_latency_fix_scope",
+        "to": "source.claude_code_session.af88448f_2eec_4dc1_84ab_1531eb6a97af",
+        "metadata": {
+          "reason": "The session analyzed three performance options, and the user explicitly asked to implement fixes 1 and 2: parallelize insights and KPI queries."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.analytics_ttl_cache_future_work",
+        "to": "source.claude_code_session.af88448f_2eec_4dc1_84ab_1531eb6a97af",
+        "metadata": {
+          "reason": "The session identified a two-to-five-minute in-memory cache as an optional next optimization for repeat dashboard loads, but the accepted implementation scope did not include caching."
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "case_id": "swechat-gemini-voyager-changelog-badge-plan",
+  "dataset": {
+    "name": "SALT-NLP/SWE-chat",
+    "held_out_session_id": "56286605-a571-4f52-92dd-069c28fe5fc5",
+    "held_out_created_at": "2026-03-06T21:49:41.427037Z",
+    "prior_sessions": [
+      {
+        "session_id": "45d1d240-4a4c-4891-9e2e-34b4ec2d8396",
+        "created_at": "2026-03-05T15:43:53.315386Z",
+        "checkpoint_id": "Nagi-ovo/gemini-voyager#9ba5a14a5220",
+        "title": "Popup visual-effect selector"
+      },
+      {
+        "session_id": "16a5c736-9609-48fb-8a10-a4595c039b21",
+        "created_at": "2026-03-06T15:35:58.630892Z",
+        "checkpoint_id": "Nagi-ovo/gemini-voyager#38f323846226",
+        "title": "Extension rename and UI copy"
+      },
+      {
+        "session_id": "27c4f0a3-a92c-42db-9d92-c81d0ed03ce4",
+        "created_at": "2026-03-06T17:26:03.309330Z",
+        "checkpoint_id": "Nagi-ovo/gemini-voyager#7bf952569a2f",
+        "title": "Folder manual ordering"
+      },
+      {
+        "session_id": "f1e0b56b-726f-4988-902d-d5a848ed8a19",
+        "created_at": "2026-03-06T18:19:20.047052Z",
+        "checkpoint_id": "Nagi-ovo/gemini-voyager#b61d10362795",
+        "title": "Drag/drop browser edge case"
+      }
+    ],
+    "checkpoint_id": "Nagi-ovo/gemini-voyager#308c8cbfca43",
+    "base_commit_source": "Held-out public commit 43a479e70f94ff91020f3f8dbdd9b9af20dd51ab adds changelog badge notification mode; eval base is its parent."
+  },
+  "repo": {
+    "full_name": "Nagi-ovo/gemini-voyager",
+    "url": "https://github.com/Nagi-ovo/gemini-voyager.git",
+    "base_commit": "c72b13fd3301878a75fc79f76ac6e31bde7d37c4"
+  },
+  "task": {
+    "prompt_path": "prompt.md",
+    "judge_path": "judge.md",
+    "expected_relevant_areas": [
+      "changelog modal",
+      "prompt manager floating button",
+      "extension settings/storage",
+      "version notification state",
+      "popup/content script UI"
+    ]
+  },
+  "memory": {
+    "manifest_path": "memory-seeds/manifest.json"
+  }
+}

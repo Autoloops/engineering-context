@@ -1,0 +1,208 @@
+{
+  "title": "Update working memory from macOS shortcut display session",
+  "summary": "Durable context learned while adapting popup shortcut labels and input-collapse docs for macOS modifier display.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.keyboard_shortcut_service",
+        "name": "Keyboard Shortcut Service",
+        "code_anchor": "src/core/services/KeyboardShortcutService.ts"
+      },
+      {
+        "id": "component.popup_settings_ui",
+        "name": "Popup Settings UI",
+        "code_anchor": "src/pages/popup/Popup.tsx"
+      },
+      {
+        "id": "component.input_collapse_content",
+        "name": "Input Collapse Content Script",
+        "code_anchor": "src/pages/content/inputCollapse/index.ts"
+      },
+      {
+        "id": "component.send_behavior_content",
+        "name": "Send Behavior Content Script",
+        "code_anchor": "src/pages/content/sendBehavior/index.ts"
+      },
+      {
+        "id": "component.input_collapse_docs",
+        "name": "Input Collapse Documentation",
+        "code_anchor": "docs/en/guide/input-collapse.md"
+      }
+    ],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.mac_modifier_platform_helpers",
+        "kind": "fact",
+        "text": "Browser detection utilities expose `isMac()` for macOS detection via `navigator.platform` with a user-agent fallback, and `getModifierKey()` returns `⌘` on macOS and `Ctrl` elsewhere for shortcut labels.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.browser_detection_utils"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/utils/browser.ts",
+            "symbol": "isMac"
+          },
+          {
+            "file": "src/core/utils/browser.ts",
+            "symbol": "getModifierKey"
+          }
+        ]
+      },
+      {
+        "id": "claim.keyboard_shortcut_format_platform_modifiers",
+        "kind": "fact",
+        "text": "`KeyboardShortcutService.formatShortcut()` now renders modifier keys with platform-specific labels: macOS uses `⌘`, `⌥`, `⌃`, and `⇧` with no separator, while other platforms keep text labels and map `Meta` to `Win` with ` + ` separators.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.keyboard_shortcut_service"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/core/services/KeyboardShortcutService.ts",
+            "symbol": "KeyboardShortcutService.formatShortcut"
+          }
+        ]
+      },
+      {
+        "id": "claim.runtime_shortcuts_accept_ctrl_or_meta",
+        "kind": "fact",
+        "text": "The runtime shortcut handlers accept either Ctrl or Meta for the affected shortcuts: send behavior sends on Ctrl/Cmd+Enter, and input collapse expands a collapsed input on Ctrl/Cmd+I. The macOS display session changed labels and discoverability rather than the shortcut mechanics.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.send_behavior_content",
+          "component.input_collapse_content"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/content/sendBehavior/index.ts",
+            "symbol": "handleKeyDown"
+          },
+          {
+            "file": "src/pages/content/inputCollapse/index.ts",
+            "symbol": "initInputCollapse"
+          }
+        ]
+      },
+      {
+        "id": "claim.popup_modifier_hint_rendering",
+        "kind": "fact",
+        "text": "The popup settings UI replaces `{modifier}` with `getModifierKey()` for `ctrlEnterSend` and `ctrlEnterSendHint`, and it appends the localized `inputCollapseShortcutHint` beside the input-collapse enable description.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.popup_settings_ui"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/popup/Popup.tsx",
+            "symbol": "Popup"
+          }
+        ]
+      },
+      {
+        "id": "claim.localized_shortcut_modifier_placeholder_contract",
+        "kind": "fact",
+        "text": "Shortcut-related extension messages use a `{modifier}` placeholder instead of hardcoded `Ctrl` for `ctrlEnterSend` and `ctrlEnterSendHint`, and include `inputCollapseShortcutHint` for the collapsed-input expansion shortcut across the locale message files.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.popup_settings_ui"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/locales/en/messages.json"
+          },
+          {
+            "file": "src/locales/ar/messages.json"
+          },
+          {
+            "file": "src/locales/zh_TW/messages.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.input_collapse_docs_ctrl_cmd_i",
+        "kind": "fact",
+        "text": "The localized VitePress input-collapse guide pages document the expansion shortcut as `Ctrl`/`⌘`+`I` in a static markdown form.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.input_collapse_docs"
+        ],
+        "code_anchors": [
+          {
+            "file": "docs/en/guide/input-collapse.md"
+          },
+          {
+            "file": "docs/guide/input-collapse.md"
+          },
+          {
+            "file": "docs/zh_TW/guide/input-collapse.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.keep_ctrl_i_hint_in_popup_for_discoverability",
+        "kind": "decision",
+        "text": "Ctrl/Cmd+I should remain visible in the popup input-collapse settings because the popup is the feature entry point and this keeps shortcut discoverability consistent with the Ctrl/Cmd+Enter setting.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.popup_settings_ui"
+        ],
+        "code_anchors": [
+          {
+            "file": "src/pages/popup/Popup.tsx",
+            "symbol": "Popup"
+          }
+        ]
+      },
+      {
+        "id": "claim.input_collapse_docs_use_static_ctrl_cmd_i",
+        "kind": "decision",
+        "text": "VitePress input-collapse docs should use the platform-agnostic static notation `Ctrl`/`⌘`+`I` for the expansion shortcut instead of runtime platform detection.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.input_collapse_docs"
+        ],
+        "code_anchors": [
+          {
+            "file": "docs/en/guide/input-collapse.md"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.72a86ca0_ec56_45a9_9f97_c841875b5e96",
+        "kind": "session",
+        "ref": "claude-code-session:72a86ca0-ec56-45a9-9f97-c841875b5e96",
+        "title": "Popup and localized release UI changes"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.keep_ctrl_i_hint_in_popup_for_discoverability",
+        "to": "source.claude_code_session.72a86ca0_ec56_45a9_9f97_c841875b5e96",
+        "metadata": {
+          "reason": "The user questioned whether Ctrl+I should be indicated in the popup; the session kept it there for discoverability and consistency, and the user accepted that direction before requesting docs coverage."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.input_collapse_docs_use_static_ctrl_cmd_i",
+        "to": "source.claude_code_session.72a86ca0_ec56_45a9_9f97_c841875b5e96",
+        "metadata": {
+          "reason": "After accepting the popup hint, the user asked to add the shortcut to VitePress docs if missing, and the session chose static `Ctrl`/`⌘` notation because markdown docs do not run platform detection."
+        }
+      }
+    ]
+  }
+}

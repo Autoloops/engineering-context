@@ -11,6 +11,8 @@ export function defaultDatabasePath(): string {
 export function openDatabase(path = defaultDatabasePath()): Database.Database {
   mkdirSync(dirname(path), { recursive: true });
   const db = new Database(path);
+  db.pragma("journal_mode = WAL");
+  db.pragma("busy_timeout = 5000");
   db.pragma("foreign_keys = ON");
   migrate(db);
   return db;

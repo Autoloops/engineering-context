@@ -1,6 +1,6 @@
 <div align="center">
 
-<img alt="Greplica" src="docs/assets/greplica-arcade-font2.png" width="420">
+<img alt="Greplica logo" src="docs/assets/greplica-logo.png" width="420">
 
 ### Persistent, searchable engineering memory for AI coding agents
 
@@ -20,7 +20,7 @@ Does your coding agent spend 5 minutes just grepping around when you give it a c
 
 That's because it is re-learning context. Every new session, your agent wastes tokens and time building context on work it already did. And still misses important facts.
 
-**Greplica** explores your repo structure, code and session transcripts (fully local, no telemetry) to give your agent a persistent, maintained memory it can query before exploring.
+**Greplica** explores your repo structure, code and session transcripts to give your agent a persistent, maintained memory it can query before exploring. Local mode stays fully local with no telemetry; managed mode connects an authorized repository to shared team memory.
 
 ---
 
@@ -36,12 +36,101 @@ Install Greplica for this repo using https://raw.githubusercontent.com/Autoloops
 
 Full prompt: [docs/agent-install-prompt.md](https://raw.githubusercontent.com/Autoloops/greplica/refs/heads/main/docs/agent-install-prompt.md)
 
-That prompt asks a short setup questionnaire, installs Greplica with your chosen hook mode, creates the first saved context from the repo, and can optionally pull durable learnings from recent sessions.
+That prompt runs a short setup questionnaire, installs Greplica in local or managed mode, and either creates the first local context or connects to existing shared memory.
 
-To visualise your current memory in browser, run:
+To visualize your current memory in a browser, run:
 
 ```bash
 greplica graph view
+```
+
+---
+
+## Shared Managed Memory
+
+Managed mode lets contributors on different clones and forks query the same repository memory. It requires Greplica `0.2.0` or later and access to a managed Greplica server.
+
+After an administrator invites your GitHub user to an organization or repository, run:
+
+```bash
+npm install -g greplica@latest
+cd /path/to/your/repository-or-fork
+greplica login --api-url https://memory.autoloops.ai
+greplica install --mode managed --platform codex
+greplica repo status
+greplica graph context "What should I know before changing this subsystem?"
+```
+
+An organization admin can instead create one reusable, repository-scoped reader link from a folder already connected to the memory:
+
+```bash
+greplica repo invite-link create
+```
+
+Give the printed link or command to an agent. It logs in when needed, claims access, installs Greplica, and upgrades local memory to the invited managed memory:
+
+```bash
+greplica install --invite-link <invite-url> --platform codex
+```
+
+The link works for multiple GitHub users until an admin revokes it. Greplica never creates a new managed-memory namespace through this link. When ordinary managed discovery finds no access or invite, creation requires the user to type `create managed memory`; an agent must ask rather than supply that confirmation itself.
+
+Replace `codex` with your agent platform. Login uses GitHub's browser device flow; do not share GitHub credentials or Greplica tokens. Interactive install can accept a matching invitation and automatically map a public fork to its upstream namespace. The GitHub App therefore does not need access to each contributor fork.
+
+Organization admins and members inherit read access to every organization repository. Guests can read only explicitly granted repositories. A `contributor` writes proposals to their own persistent personal working scope; `memory_admin` additionally manages repository memory access. Managed graph data stays on the server, while local SQLite stores only the repository binding, role cache, hook policy, and runtime session metadata.
+
+Managed retrieval defaults to canonical `main` plus your own persistent working memory. Add other contributors explicitly when reviewing related work:
+
+```bash
+greplica graph context "How does authentication work?" \
+  --with-working alice \
+  --with-working bob
+```
+
+Context and generated graph views retain stable user IDs, current and historical GitHub logins, the full Git head/ref/dirty envelope, and every source origin when identical contributor drafts coalesce into one canonical object. Components, flows, and claims expose the same provenance badges and filters.
+
+Managed GitHub repositories reconcile Memory PRs against exact default-branch code through the official reusable workflow. Pin the reusable workflow to a full commit SHA; do not use a branch or movable tag:
+
+```yaml
+name: Greplica memory
+
+on:
+  push:
+    branches: [main] # Replace with the repository's default branch.
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  reconcile-memory:
+    permissions:
+      contents: read
+      id-token: write
+    uses: Autoloops/greplica/.github/workflows/reconcile.yml@<full-40-character-commit-sha>
+    with:
+      managed-repo: <managed-repository-uuid>
+      merge-sha: ${{ github.sha }}
+```
+
+The push trigger reconciles immediately after default-branch updates; the hourly schedule retries unmatched and stalled work without a human memory-admin step. The workflow checks out `merge-sha` with full history, installs an immutable Greplica Action revision, proves that each code PR's recorded merge commit is contained in that exact checkout, audits every eligible Memory PR's version-keyed claim and component anchors (including code drift from stored baselines), and attests through GitHub OIDC. It does not use a repository or model secret.
+
+When a compatible managed server requests repair evidence, the Action also submits a deterministic packet bound to that exact SHA. It reads only the anchors named by the selected claim and component versions—never a repository-wide content scan—and limits the packet to 128 anchors, 4 KiB and 80 lines per snippet, and 64 KiB of snippets total. Snippets can come only from regular blobs tracked at the attested commit, with the checkout bytes verified against that blob. Traversal is rejected; ignored/untracked files, symlinks, submodules, sensitive paths, binary or oversized files, and high-confidence credential content are represented only as non-content omissions. For evidence-enabled candidates, the version-keyed audit and fingerprints are derived from that same packet; omissions become explicit `unverifiable` failures rather than independently appearing clean. Managed repair may use only `resolved` or `file_only` entries whose transmitted snippet hash and current anchor fingerprint are present and valid. Older servers retain the prior attestation shape.
+
+Managed Greplica must allowlist both signed reusable-workflow claims for the pinned revision:
+
+- `job_workflow_ref=Autoloops/greplica/.github/workflows/reconcile.yml@<full-40-character-commit-sha>`
+- `job_workflow_sha=<the-same-full-40-character-commit-sha>`
+
+Those claims prove the trusted reusable workflow ran. A token issued directly to a consumer-authored workflow or a composite Action alone is not sufficient.
+
+Local mode remains independent and does not require login or a server:
+
+```bash
+greplica install --mode local --platform codex --embedding local
 ```
 
 ---
@@ -118,27 +207,48 @@ Current showcase rows:
 ## Commands
 
 ```bash
-greplica install --platform codex|claude|copilot|opencode|openhands|factory-droid --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]
+greplica install --mode local --platform codex|claude|copilot|cursor|opencode|openhands|factory-droid|antigravity --embedding local|openai [--hooks enabled|disabled] [--auto-memory enabled|disabled]
+greplica login [--api-url https://memory.autoloops.ai]
+greplica install --mode managed [--platform codex|claude|copilot|cursor|opencode|openhands|factory-droid|antigravity] [--managed-repo <uuid>] [--hooks enabled|disabled] [--auto-memory enabled|disabled]
+greplica install --invite-link <url> --platform codex|claude|copilot|cursor|opencode|openhands|factory-droid|antigravity
+greplica repo invite-link create|list
+greplica repo invite-link revoke --link <uuid>
+greplica repo invite-contributor --github-user <login>
+greplica repo grant-contributor --user <managed-user-id>
+greplica repo revoke-contributor --user <managed-user-id>
+greplica logout
+greplica whoami
+greplica repo status
 greplica config
 greplica doctor [--check-embeddings]
-greplica graph read
-greplica graph context "<query>" [--debug]
+greplica embeddings prewarm
+greplica graph read [--with-working <login>...] [--memory-pr <id>] [--main-only] [--include-quarantined] [--json]
+greplica graph context "<query>" [--with-working <login>...] [--memory-pr <id>] [--main-only] [--include-quarantined] [--json|--debug]
 greplica graph audit anchors
-greplica graph view [--out <file>] [--no-open]
+greplica graph view [--with-working <login>...] [--memory-pr <id>] [--main-only] [--include-quarantined] [--json] [--out <file>] [--no-open]
 greplica graph export <dir>
-greplica transcript bundle --platform codex|claude|copilot --file <path> [--file <path>...] --out <bundle.md>
 greplica proposal validate <proposal.json>
 greplica proposal apply <proposal.json>
+greplica proposal list|show
+greplica memory pr list|show|context|retry
+greplica memory status [--json]
+greplica session mark-memory-current --session-ref <ref>
+greplica transcript bundle --platform codex|claude|copilot|opencode --file <path> [--file <path>...] --out <bundle.md>
 ```
 
 - `greplica graph context "<query>"` - returns Markdown for agent use. Add `--debug` for the full retrieval payload with ranking signals.
 - `greplica graph read` - prints the current graph view: all components, flows, claims, sources, and edges in scope.
-- `greplica graph view` to visualise the current memory in a local HTML, opens in your default browser. Use `--out` to choose where the file is written; by default it goes to a temp path.
-- `greplica transcript bundle` - converts one or more Codex, Claude Code, or GitHub Copilot CLI JSONL transcripts into a sanitized Markdown bundle for `greplica-fast-session-bootstrap`.
+- `greplica graph view` to visualize the current memory in a local HTML file, which opens in your default browser. Use `--out` to choose where the file is written; by default it goes to a temp path.
+- `greplica transcript bundle` - converts one or more Codex, Claude Code, GitHub Copilot CLI, or OpenCode transcripts into a sanitized Markdown bundle for `greplica-fast-session-bootstrap`.
+- `greplica embeddings prewarm` - downloads and initializes the local embedding model ahead of the first query when local embeddings are configured.
+- `greplica session mark-memory-current` - marks a tracked agent session as already reflected in working memory.
 - `greplica doctor` - verifies installation and diagnoses configuration failures. Not a required preflight before every command.
-- `greplica install` prepares repo state, local storage, and agent integration; normal repo commands require install first.
+- `greplica install` prepares repo state, local storage, and agent integration; normal repo commands require install first. Local and managed mode are selected independently per repository.
+- `greplica login` authenticates managed mode through GitHub and stores the Greplica JWT separately in `~/.greplica/credentials.json`.
 
 For **OpenHands**, install is repo-local: skills are written to `.agents/skills/` and the `UserPromptSubmit`/`Stop` hooks to `.openhands/hooks.json` (Claude/Codex/Copilot install to the agent's home config instead). GitHub Copilot CLI installs personal skills under `~/.copilot/skills` (or `$COPILOT_HOME/skills`) and user hooks under `~/.copilot/hooks/greplica.json`. The hooks inject `graph context` guidance and trigger background working-memory updates; OpenHands must trust the repo hooks for the background save to run.
+
+For **Cursor**, skills are written to `~/.cursor/skills` and the `beforeSubmitPrompt`/`stop` hooks to `~/.cursor/hooks.json` (both overridable via `$CURSOR_HOME`). `greplica-bootstrap` and `greplica graph context` guidance is delivered through an always-applied project rule at `.cursor/rules/greplica.mdc` rather than the hook, because Cursor's `beforeSubmitPrompt` hook cannot inject prompt context; the hooks track sessions and trigger `greplica-update-working-memory`. A user-authored `greplica.mdc` is never overwritten (install falls back to `greplica-N.mdc`). Reload Cursor if the new rule does not appear immediately. Background working-memory updates run the Cursor CLI (`cursor-agent`), so that must be installed and authenticated for automatic saves; session tracking and guidance work without it.
 
 ## License
 

@@ -1,10 +1,21 @@
 export const schemaSql = `
 CREATE TABLE IF NOT EXISTS repos (
   id TEXT PRIMARY KEY,
+  repo_key TEXT UNIQUE,
   remote_url TEXT UNIQUE,
   root_path TEXT UNIQUE,
   repo_name TEXT NOT NULL,
-  default_branch TEXT NOT NULL
+  default_branch TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'inactive' CHECK(status IN ('active', 'inactive')),
+  active_mode TEXT NOT NULL DEFAULT 'local' CHECK(active_mode IN ('local', 'managed')),
+  managed_repo_id TEXT,
+  managed_role TEXT CHECK(managed_role IN ('reader', 'contributor', 'memory_admin')),
+  managed_access_status TEXT CHECK(managed_access_status IN ('active', 'pending', 'suspended', 'revoked')),
+  managed_access_refreshed_at TEXT,
+  hooks_enabled INTEGER NOT NULL DEFAULT 1 CHECK(hooks_enabled IN (0, 1)),
+  auto_memory_updates INTEGER NOT NULL DEFAULT 1 CHECK(auto_memory_updates IN (0, 1)),
+  created_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z',
+  updated_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z'
 );
 
 CREATE TABLE IF NOT EXISTS graph_scopes (
@@ -51,6 +62,7 @@ CREATE TABLE IF NOT EXISTS claims (
   truth TEXT NOT NULL,
   intent TEXT NOT NULL,
   code_anchors TEXT,
+  anchor_fingerprints TEXT,
   PRIMARY KEY(repo_id, id)
 );
 
@@ -112,6 +124,12 @@ CREATE TABLE IF NOT EXISTS agent_worker_locks (
   name TEXT PRIMARY KEY,
   owner TEXT NOT NULL,
   locked_until_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS platform_integrations (
+  platform TEXT PRIMARY KEY,
+  installed_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 

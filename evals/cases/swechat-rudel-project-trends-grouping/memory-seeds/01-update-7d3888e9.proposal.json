@@ -1,0 +1,187 @@
+{
+  "title": "Update working memory from session",
+  "summary": "Durable context learned during the current coding session.",
+  "creates": {
+    "components": [],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.typescript_standards_zod_schema_types",
+        "kind": "requirement",
+        "text": "Rudel TypeScript work should derive TypeScript types from existing Zod schemas with z.infer or imported schema-derived types instead of duplicating interface shapes; when services need internal fields beyond the API contract, extend the schema-derived base type.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.repository",
+          "component.api_contract"
+        ],
+        "code_anchors": [
+          {
+            "file": ".claude/skills/typescript-standards/SKILL.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.analytics_contract_strict_inputs",
+        "kind": "fact",
+        "text": "The shared analytics contract validates DateRangeInputSchema dates as YYYY-MM-DD strings, constrains InsightSchema.type to trend, performer, alert, or info, and constrains DimensionAnalysisInputSchema dimension, splitBy, and metric to enumerated session dimensions and metrics.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.api_contract",
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "packages/api-routes/src/schemas/analytics.ts",
+            "symbol": "DateRangeInputSchema"
+          },
+          {
+            "file": "packages/api-routes/src/schemas/analytics.ts",
+            "symbol": "InsightSchema"
+          },
+          {
+            "file": "packages/api-routes/src/schemas/analytics.ts",
+            "symbol": "DimensionAnalysisInputSchema"
+          }
+        ]
+      },
+      {
+        "id": "claim.analytics_services_schema_type_scope",
+        "kind": "requirement",
+        "text": "The analytics service type cleanup kept raw ClickHouse query-result and service-only shapes local, but service exports that mirror public API responses should import or extend @rudel/api-routes schema-derived types.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.api_contract",
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/api/src/services/developer.service.ts"
+          },
+          {
+            "file": "apps/api/src/services/session-analytics.service.ts"
+          },
+          {
+            "file": "apps/api/src/services/roi.service.ts"
+          }
+        ]
+      },
+      {
+        "id": "claim.session_dimension_analysis_contract_typed_metrics",
+        "kind": "fact",
+        "text": "getSessionDimensionAnalysis accepts dimension, metric, and split_by using DimensionAnalysisInput types and selects metric SQL through a Record keyed by DimensionAnalysisInput[\"metric\"]; the service no longer has separate string whitelist checks for those fields.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/api/src/services/session-analytics.service.ts",
+            "symbol": "getSessionDimensionAnalysis"
+          }
+        ]
+      },
+      {
+        "id": "claim.error_trends_contract_splits_only",
+        "kind": "fact",
+        "text": "Error trends are limited to repository, user_id, and model split values; error_type is not supported by the API contract or the getErrorTrends service signature.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.api_contract",
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "packages/api-routes/src/schemas/analytics.ts",
+            "symbol": "ErrorTrendsInputSchema"
+          },
+          {
+            "file": "apps/api/src/services/error.service.ts",
+            "symbol": "getErrorTrends"
+          }
+        ]
+      },
+      {
+        "id": "claim.sessions_list_uses_dimension_contract",
+        "kind": "fact",
+        "text": "SessionsListPage stores dimension, metric, and split-by state using DimensionAnalysisInput types, and its dimension controls no longer offer task_type because task_type is not a valid analytics dimension.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.web_dashboard",
+          "flow.analytics_dashboard"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/web/src/pages/dashboard/SessionsListPage.tsx",
+            "symbol": "SessionsListPage"
+          }
+        ]
+      },
+      {
+        "id": "claim.cli_upload_subprocess_retry",
+        "kind": "fact",
+        "text": "The full CLI upload integration test retries the subprocess upload up to three times and preserves the last stdout, stderr, and exit code, matching the direct upload test retry pattern for transient ClickHouse insert readiness after local API restart.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.session_ingest"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/cli/src/__tests__/api-upload.integration.test.ts"
+          }
+        ]
+      },
+      {
+        "id": "claim.session_scope_review_recommendations_1_3",
+        "kind": "decision",
+        "text": "This session implemented only code-review recommendations 1 and 3: deriving API service types from Zod schemas and tightening analytics Zod schemas; broader review recommendations such as additional strictness, dead-code cleanup, cost unification, and new analytics tests were left outside this PR.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.repository",
+          "flow.analytics_dashboard"
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.7d3888e9_0d88_4ac6_ab51_881a2b0c5747",
+        "kind": "session",
+        "ref": "claude-code-session:7d3888e9-0d88-4ac6-ab51-881a2b0c5747",
+        "title": "Claude Code session 7d3888e9 full code review and analytics service context"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.typescript_standards_zod_schema_types",
+        "to": "source.claude_code_session.7d3888e9_0d88_4ac6_ab51_881a2b0c5747",
+        "metadata": {
+          "reason": "The user asked to make the Zod-derived type pattern explicit in the TypeScript standards skill while implementing the type cleanup."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.analytics_services_schema_type_scope",
+        "to": "source.claude_code_session.7d3888e9_0d88_4ac6_ab51_881a2b0c5747",
+        "metadata": {
+          "reason": "The implementation plan in the session distinguished exact schema matches, service types with extra internal fields, and raw ClickHouse query-result types that should remain local."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.session_scope_review_recommendations_1_3",
+        "to": "source.claude_code_session.7d3888e9_0d88_4ac6_ab51_881a2b0c5747",
+        "metadata": {
+          "reason": "The user selected recommendations 1 and 3 from the code review for this PR, and the session summary explicitly listed the broader recommendations as not implemented in this slice."
+        }
+      }
+    ]
+  }
+}

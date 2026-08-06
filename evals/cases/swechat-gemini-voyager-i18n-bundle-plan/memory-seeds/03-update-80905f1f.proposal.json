@@ -1,0 +1,11 @@
+{
+  "title": "Update working memory from session",
+  "summary": "No durable context was recoverable from the filtered transcript: it contains only session metadata, and the target repository has no reconstructed code diff for this historical session.",
+  "creates": {
+    "components": [],
+    "flows": [],
+    "claims": [],
+    "sources": [],
+    "edges": []
+  }
+}

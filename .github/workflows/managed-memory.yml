@@ -1,0 +1,23 @@
+name: Managed Greplica memory
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  reconcile-memory:
+    permissions:
+      contents: read
+      id-token: write
+    uses: Autoloops/greplica/.github/workflows/reconcile.yml@0725bf1e5094935ed8ae843e60d638ff40983767
+    with:
+      managed-repo: 9731ebad-16c5-403c-a28f-a68b0be0f774
+      merge-sha: ${{ github.sha }}

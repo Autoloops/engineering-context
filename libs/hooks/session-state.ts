@@ -163,6 +163,9 @@ function fallbackSessionId(input: RecordHookInput): string {
 
 function isGuidanceEvent(platform: InstallPlatform, eventName: string | undefined): boolean {
   if (platform === "copilot") return eventName === "SessionStart";
+  // Cursor guidance rides the always-applied .cursor/rules rule; its
+  // beforeSubmitPrompt hook cannot inject context into the prompt.
+  if (platform === "cursor") return false;
   return eventName === "UserPromptSubmit";
 }
 

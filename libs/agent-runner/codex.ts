@@ -56,10 +56,19 @@ function runCodexProcess(
       },
     );
 
-    child.once("error", reject);
+    let spawnError: Error | undefined;
+    child.once("error", (error) => {
+      spawnError = error;
+      transcript.once("close", () => reject(error));
+      transcript.end();
+    });
     child.stdout.pipe(transcript);
+    // If the child exits before draining the prompt, stdin emits EPIPE;
+    // the failure is reported via the exit code on "close".
+    child.stdin.once("error", () => {});
     child.stdin.end(input.prompt);
     child.once("close", (exitCode, signal) => {
+      if (spawnError !== undefined) return;
       resolve({ exitCode, signal });
     });
   });

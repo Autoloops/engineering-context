@@ -1,0 +1,839 @@
+{
+  "title": "Bootstrap IPTVnator repository memory",
+  "summary": "Shallow orientation memory for the IPTVnator Nx workspace: Electron and Angular app surfaces, playlist and portal flows, persistence boundaries, mock servers, and documented development workflows.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.repository",
+        "name": "Repository",
+        "code_anchor": "README.md"
+      },
+      {
+        "id": "component.nx_workspace",
+        "name": "Nx workspace configuration and scripts",
+        "code_anchor": "package.json"
+      },
+      {
+        "id": "component.web_app",
+        "name": "Angular web renderer application",
+        "code_anchor": "apps/web/src/app/app.routes.ts"
+      },
+      {
+        "id": "component.electron_backend",
+        "name": "Electron backend and preload bridge",
+        "code_anchor": "apps/electron-backend/src/main.ts"
+      },
+      {
+        "id": "component.shared_interfaces",
+        "name": "Shared renderer and backend contracts",
+        "code_anchor": "libs/shared/interfaces/src/index.ts"
+      },
+      {
+        "id": "component.sqlite_database",
+        "name": "Shared SQLite schema and connection layer",
+        "code_anchor": "libs/shared/database/src/lib/schema.ts"
+      },
+      {
+        "id": "component.database_worker",
+        "name": "Electron SQLite worker runtime",
+        "code_anchor": "apps/electron-backend/src/app/services/database-worker-client.ts"
+      },
+      {
+        "id": "component.data_service",
+        "name": "Renderer data-service abstraction",
+        "code_anchor": "libs/services/src/lib/data.service.ts"
+      },
+      {
+        "id": "component.m3u_playlist",
+        "name": "M3U playlist state and playback feature",
+        "code_anchor": "libs/playlist/m3u/feature-player/src/index.ts"
+      },
+      {
+        "id": "component.xtream_portal",
+        "name": "Xtream portal feature and data access",
+        "code_anchor": "libs/portal/xtream/feature/src/lib/xtream-feature.routes.ts"
+      },
+      {
+        "id": "component.stalker_portal",
+        "name": "Stalker portal feature and data access",
+        "code_anchor": "libs/portal/stalker/feature/src/lib/stalker-feature.routes.ts"
+      },
+      {
+        "id": "component.remote_control",
+        "name": "Desktop remote control backend and web UI",
+        "code_anchor": "docs/architecture/remote-control.md"
+      },
+      {
+        "id": "component.mock_servers",
+        "name": "Xtream and Stalker development mock servers",
+        "code_anchor": "apps/xtream-mock-server/src/main.ts"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.develop_and_package",
+        "name": "Develop, build, and package IPTVnator",
+        "touches": [
+          "component.repository",
+          "component.nx_workspace",
+          "component.web_app",
+          "component.electron_backend"
+        ]
+      },
+      {
+        "id": "flow.app_bootstrap",
+        "name": "Renderer bootstrap, routing, and environment-specific data providers",
+        "touches": [
+          "component.web_app",
+          "component.data_service",
+          "component.m3u_playlist",
+          "component.xtream_portal",
+          "component.stalker_portal"
+        ]
+      },
+      {
+        "id": "flow.electron_startup_ipc",
+        "name": "Electron startup initializes persistence and IPC surfaces",
+        "touches": [
+          "component.electron_backend",
+          "component.sqlite_database",
+          "component.database_worker",
+          "component.remote_control"
+        ]
+      },
+      {
+        "id": "flow.playlist_persistence",
+        "name": "Playlist and portal data persistence across IndexedDB and SQLite",
+        "touches": [
+          "component.shared_interfaces",
+          "component.sqlite_database",
+          "component.data_service",
+          "component.m3u_playlist",
+          "component.xtream_portal",
+          "component.stalker_portal"
+        ]
+      },
+      {
+        "id": "flow.m3u_playback",
+        "name": "M3U channel playback, favorites, EPG, catchup, and external players",
+        "touches": [
+          "component.m3u_playlist",
+          "component.data_service",
+          "component.shared_interfaces"
+        ]
+      },
+      {
+        "id": "flow.portal_playback",
+        "name": "Xtream and Stalker portal catalog, live, VOD, series, search, favorites, and recent flows",
+        "touches": [
+          "component.xtream_portal",
+          "component.stalker_portal",
+          "component.data_service",
+          "component.sqlite_database"
+        ]
+      },
+      {
+        "id": "flow.remote_control",
+        "name": "Electron-hosted remote-control web app sends commands into renderer live views",
+        "touches": [
+          "component.remote_control",
+          "component.electron_backend",
+          "component.m3u_playlist",
+          "component.xtream_portal",
+          "component.stalker_portal"
+        ]
+      },
+      {
+        "id": "flow.mock_portal_development",
+        "name": "Local mock portal servers provide deterministic Xtream and Stalker protocols",
+        "touches": [
+          "component.mock_servers",
+          "component.xtream_portal",
+          "component.stalker_portal"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.repo_identity",
+        "kind": "fact",
+        "text": "IPTVnator is an open-source cross-platform IPTV player built with Electron and Angular; it supports M3U/M3U8 playlists, XMLTV EPG, radio playlists, Xtream Codes, Stalker portals, external players, favorites, recent items, and a Docker/self-hosted option, but does not provide playlists or digital content.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.repository",
+        "code_anchors": [
+          {
+            "file": "README.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.development_commands",
+        "kind": "fact",
+        "text": "Development uses Corepack plus pnpm; `pnpm run serve:backend` or `nx serve electron-backend` starts Electron and the Angular dev server, while `pnpm run serve:frontend` runs only the Angular app.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.repository",
+          "flow.develop_and_package"
+        ],
+        "code_anchors": [
+          {
+            "file": "README.md"
+          },
+          {
+            "file": "package.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.standard_workspace_commands",
+        "kind": "fact",
+        "text": "The root package scripts expose separate frontend/backend build targets, Electron and frontend serve targets, unit-test aggregation, CI typechecks, package layout verification, packaged Electron smoke testing, and Electron make/package commands.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.nx_workspace",
+          "flow.develop_and_package"
+        ],
+        "code_anchors": [
+          {
+            "file": "package.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.electron_build_depends_on_renderer_apps",
+        "kind": "fact",
+        "text": "The Electron backend build depends on its worker build plus production builds of both the main web renderer and the remote-control web app.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.electron_backend",
+          "component.web_app",
+          "component.remote_control",
+          "flow.develop_and_package"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/electron-backend/project.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.electron_dev_cdp",
+        "kind": "fact",
+        "text": "The Electron serve target runs through `nx-electron:execute`, waits for `web:serve`, and enables remote debugging on port 9222.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.electron_backend",
+          "flow.develop_and_package"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/electron-backend/project.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.electron_packaging_contract",
+        "kind": "fact",
+        "text": "Packaged Electron output includes the built remote-control-web app, electron-backend, web renderer, and worker resources; better-sqlite3-related native modules are unpacked for runtime loading.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.electron_backend",
+          "component.remote_control",
+          "flow.develop_and_package"
+        ],
+        "code_anchors": [
+          {
+            "file": "electron-builder.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.web_routes_workspace_shell",
+        "kind": "fact",
+        "text": "The Angular renderer routes into a `/workspace` shell that lazy-loads dashboard, sources, M3U playlist views, global favorites/recent, downloads, Xtream routes, Stalker routes, and settings.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.web_app",
+          "flow.app_bootstrap"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/web/src/app/app.routes.ts",
+            "symbol": "routes"
+          }
+        ]
+      },
+      {
+        "id": "claim.app_config_provider_boundary",
+        "kind": "fact",
+        "text": "The Angular application config wires NgRx playlist state/effects, router store, translations, IndexedDB, service worker registration, portal action providers, and Xtream data-source providers; `DataFactory` selects ElectronService when `window.electron` exists and PwaService otherwise.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.web_app",
+          "component.data_service",
+          "flow.app_bootstrap"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/web/src/app/app.config.ts",
+            "symbol": "appConfig"
+          },
+          {
+            "file": "apps/web/src/app/app.config.ts",
+            "symbol": "DataFactory"
+          }
+        ]
+      },
+      {
+        "id": "claim.data_service_contract",
+        "kind": "fact",
+        "text": "Renderer features depend on the abstract DataService contract for app version, environment, IPC-style command dispatch, listener registration, and listener removal rather than directly coupling every feature to Electron or PWA transport.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.data_service",
+          "flow.app_bootstrap"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/services/src/lib/data.service.ts"
+          }
+        ]
+      },
+      {
+        "id": "claim.electron_service_dispatch",
+        "kind": "fact",
+        "text": "ElectronService implements DataService by translating playlist parsing, playlist update, Xtream, Stalker, external player, and auto-update commands into preload bridge calls and renderer store updates.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.data_service",
+          "component.electron_backend",
+          "flow.app_bootstrap"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/web/src/app/services/electron.service.ts",
+            "symbol": "ElectronService"
+          },
+          {
+            "file": "apps/web/src/app/services/electron.service.ts",
+            "symbol": "sendIpcEvent"
+          }
+        ]
+      },
+      {
+        "id": "claim.pwa_service_dispatch",
+        "kind": "fact",
+        "text": "PwaService implements DataService by handling playlist URL parsing/refresh locally with HTTP and store dispatch, and by forwarding Xtream and Stalker requests through configured backend proxy endpoints.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.data_service",
+          "flow.app_bootstrap"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/web/src/app/services/pwa.service.ts",
+            "symbol": "PwaService"
+          },
+          {
+            "file": "apps/web/src/app/services/pwa.service.ts",
+            "symbol": "sendIpcEvent"
+          }
+        ]
+      },
+      {
+        "id": "claim.electron_main_startup",
+        "kind": "fact",
+        "text": "Electron startup sets the app name and userData path, initializes the main BrowserWindow, waits for app readiness, initializes the database, bootstraps Electron, playlist, shared, player, settings, Stalker, Xtream, database, EPG, and remote-control events, resets stale downloads, and shuts down the database worker before quit.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.electron_backend",
+          "flow.electron_startup_ipc"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/electron-backend/src/main.ts",
+            "symbol": "Main"
+          },
+          {
+            "file": "apps/electron-backend/src/main.ts",
+            "symbol": "bootstrapAppEvents"
+          }
+        ]
+      },
+      {
+        "id": "claim.browser_window_contract",
+        "kind": "fact",
+        "text": "The Electron app creates a single BrowserWindow with context isolation, a preload script, persisted normal bounds, minimum size constraints, hidden macOS title-bar styling, and development loading from localhost versus packaged loading from the built renderer index.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.electron_backend",
+          "flow.electron_startup_ipc"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/electron-backend/src/app/app.ts",
+            "symbol": "App"
+          },
+          {
+            "file": "apps/electron-backend/src/app/app.ts",
+            "symbol": "initMainWindow"
+          },
+          {
+            "file": "apps/electron-backend/src/app/app.ts",
+            "symbol": "loadMainWindow"
+          }
+        ]
+      },
+      {
+        "id": "claim.preload_public_api",
+        "kind": "fact",
+        "text": "The preload bridge exposes a `window.electron` API for remote-control listeners, player and portal debug events, playlist import/refresh, EPG, Xtream, Stalker, database operations, playback positions, downloads, settings, external players, and local IP lookup.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.electron_backend",
+          "flow.electron_startup_ipc"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/electron-backend/src/app/api/main.preload.ts",
+            "symbol": "electronApi"
+          }
+        ]
+      },
+      {
+        "id": "claim.indexeddb_playlist_store",
+        "kind": "fact",
+        "text": "The browser IndexedDB schema is named `iptvnator`, version 1, and defines a `playlists` object store keyed by `_id` with playlist metadata, playlist payload, favorites, recently viewed, refresh, URL, and file path indexes.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.shared_interfaces",
+          "component.sqlite_database",
+          "flow.playlist_persistence"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/shared/interfaces/src/lib/indexed-db.config.ts",
+            "symbol": "dbConfig"
+          },
+          {
+            "file": "libs/shared/interfaces/src/lib/indexed-db.config.ts",
+            "symbol": "DbStores"
+          }
+        ]
+      },
+      {
+        "id": "claim.playlist_interface_unifies_sources",
+        "kind": "fact",
+        "text": "The shared Playlist interface carries M3U metadata and payloads, Xtream credentials, Stalker portal identity and session fields, favorites, recently viewed items, auto-refresh state, headers, origin/referrer, file paths, and source-specific URLs.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.shared_interfaces",
+          "flow.playlist_persistence"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/shared/interfaces/src/lib/playlist.interface.ts",
+            "symbol": "Playlist"
+          }
+        ]
+      },
+      {
+        "id": "claim.channel_radio_contract",
+        "kind": "fact",
+        "text": "The shared Channel interface includes playback URL, grouping, TVG metadata, catchup/timeshift metadata, HTTP headers, EPG params, and a string `radio` flag.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.shared_interfaces",
+          "component.m3u_playlist",
+          "flow.m3u_playback"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/shared/interfaces/src/lib/channel.interface.ts",
+            "symbol": "Channel"
+          }
+        ]
+      },
+      {
+        "id": "claim.sqlite_schema_contract",
+        "kind": "fact",
+        "text": "The shared SQLite schema defines playlist metadata, app state, categories, content, recently viewed, favorites, EPG channels/programs, playback positions, and downloads with indexes and cascade relationships around playlists/content.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.sqlite_database",
+          "flow.playlist_persistence"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/shared/database/src/lib/schema.ts",
+            "symbol": "playlists"
+          },
+          {
+            "file": "libs/shared/database/src/lib/schema.ts",
+            "symbol": "content"
+          },
+          {
+            "file": "libs/shared/database/src/lib/schema.ts",
+            "symbol": "downloads"
+          }
+        ]
+      },
+      {
+        "id": "claim.sqlite_connection_contract",
+        "kind": "fact",
+        "text": "The shared database connection uses better-sqlite3 with Drizzle and stores the database under IPTVnator's database path; initialization owns create-table statements and column migration statements for the Electron-backed SQLite store.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.sqlite_database",
+          "flow.playlist_persistence"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/shared/database/src/lib/connection.ts",
+            "symbol": "getDatabasePath"
+          },
+          {
+            "file": "libs/shared/database/src/lib/connection.ts",
+            "symbol": "CREATE_TABLE_STATEMENTS"
+          },
+          {
+            "file": "libs/shared/database/src/lib/connection.ts",
+            "symbol": "COLUMN_MIGRATION_STATEMENTS"
+          }
+        ]
+      },
+      {
+        "id": "claim.database_worker_contract",
+        "kind": "fact",
+        "text": "Heavy non-EPG SQLite work is handled by one long-lived Electron worker; requests are correlated by requestId, request-scoped progress events are forwarded to the renderer as `DB_OPERATION_EVENT`, and cancellation uses operationId-based cooperative aborts.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.database_worker",
+          "flow.electron_startup_ipc",
+          "flow.playlist_persistence"
+        ],
+        "code_anchors": [
+          {
+            "file": "docs/architecture/sqlite-db-worker.md"
+          },
+          {
+            "file": "apps/electron-backend/src/app/services/database-worker-client.ts",
+            "symbol": "DatabaseWorkerClient"
+          },
+          {
+            "file": "libs/services/src/lib/database-electron.service.ts",
+            "symbol": "DatabaseService"
+          }
+        ]
+      },
+      {
+        "id": "claim.database_service_operation_events",
+        "kind": "fact",
+        "text": "Renderer database operations can generate operation IDs, subscribe to scoped database operation events, fall back to the legacy save-content progress listener only for that operation, and request cancellation through the preload bridge.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.data_service",
+          "component.database_worker",
+          "flow.playlist_persistence"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/services/src/lib/database-electron.service.ts",
+            "symbol": "DatabaseService"
+          },
+          {
+            "file": "libs/services/src/lib/database-electron.service.ts",
+            "symbol": "isDbAbortError"
+          }
+        ]
+      },
+      {
+        "id": "claim.m3u_module_architecture",
+        "kind": "fact",
+        "text": "The documented M3U playlist module centers on the feature-player route, NgRx `m3u-state`, a channel-list container, EPG integration, favorites management, search/grouping, and multiple video-player backends.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.m3u_playlist",
+          "flow.m3u_playback"
+        ],
+        "code_anchors": [
+          {
+            "file": "docs/architecture/m3u-playlist-module.md"
+          },
+          {
+            "file": "libs/m3u-state/src/index.ts"
+          },
+          {
+            "file": "libs/playlist/m3u/feature-player/src/index.ts"
+          }
+        ]
+      },
+      {
+        "id": "claim.m3u_effects_external_players",
+        "kind": "fact",
+        "text": "M3U playlist effects persist favorites through PlaylistsService, resolve active EPG catchup playback URLs, request channel programs on active channel changes, set channel user-agent headers when present, and open MPV/VLC for non-radio channels when configured.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.m3u_playlist",
+          "flow.m3u_playback"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/m3u-state/src/lib/effects.ts",
+            "symbol": "PlaylistEffects"
+          }
+        ]
+      },
+      {
+        "id": "claim.m3u_utils_contract",
+        "kind": "fact",
+        "text": "Shared M3U utilities export playlist helpers and catchup helpers, including favorite aggregation, favorites playlist creation, playlist-object creation, and catchup URL resolution.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.m3u_playlist",
+          "flow.m3u_playback"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/shared/m3u-utils/src/lib/playlist.utils.ts",
+            "symbol": "createPlaylistObject"
+          },
+          {
+            "file": "libs/shared/m3u-utils/src/lib/playlist.utils.ts",
+            "symbol": "aggregateFavoriteChannels"
+          },
+          {
+            "file": "libs/shared/m3u-utils/src/lib/catchup.utils.ts",
+            "symbol": "resolveM3uCatchupUrl"
+          }
+        ]
+      },
+      {
+        "id": "claim.xtream_route_tree",
+        "kind": "fact",
+        "text": "Xtream routes live under `xtreams/:id` and expose live, VOD category/detail, series category/detail, search, recently-added, favorites, recent, and downloads screens with route-session and catalog-facade providers.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.xtream_portal",
+          "flow.portal_playback"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/portal/xtream/feature/src/lib/xtream-feature.routes.ts",
+            "symbol": "createXtreamRoutes"
+          }
+        ]
+      },
+      {
+        "id": "claim.xtream_data_source_boundary",
+        "kind": "fact",
+        "text": "Xtream data access is abstracted behind `IXtreamDataSource` and `XTREAM_DATA_SOURCE`; `provideXtreamDataSource` registers both Electron and PWA implementations and the factory selects Electron when `window.electron` exists.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.xtream_portal",
+          "component.data_service",
+          "flow.portal_playback"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/portal/xtream/data-access/src/lib/data-sources/xtream-data-source.interface.ts",
+            "symbol": "IXtreamDataSource"
+          },
+          {
+            "file": "libs/portal/xtream/data-access/src/lib/data-sources/xtream-data-source.interface.ts",
+            "symbol": "XTREAM_DATA_SOURCE"
+          },
+          {
+            "file": "libs/portal/xtream/data-access/src/lib/data-sources/index.ts",
+            "symbol": "provideXtreamDataSource"
+          }
+        ]
+      },
+      {
+        "id": "claim.xtream_store_facade",
+        "kind": "fact",
+        "text": "XtreamStore is an NgRx signal-store facade composed from portal, content, selection, search, EPG, player, favorites, recent-items, and playback-position feature slices, with cross-feature reset and initialization orchestration.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.xtream_portal",
+          "flow.portal_playback"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/portal/xtream/data-access/src/lib/stores/xtream.store.ts",
+            "symbol": "XtreamStore"
+          }
+        ]
+      },
+      {
+        "id": "claim.stalker_route_tree",
+        "kind": "fact",
+        "text": "Stalker routes live under `stalker/:id` and expose VOD, ITV live, series, favorites, recent, search, and downloads screens; VOD and series catalog routes provide a Stalker catalog facade and shared portal catalog detail component token.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.stalker_portal",
+          "flow.portal_playback"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/portal/stalker/feature/src/lib/stalker-feature.routes.ts",
+            "symbol": "createStalkerRoutes"
+          }
+        ]
+      },
+      {
+        "id": "claim.stalker_store_facade",
+        "kind": "fact",
+        "text": "StalkerStore is an NgRx signal-store facade composed from portal, selection, content, series, player, favorites, recent, and EPG feature slices while preserving the public facade API.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.stalker_portal",
+          "flow.portal_playback"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/portal/stalker/data-access/src/lib/stalker.store.ts",
+            "symbol": "StalkerStore"
+          }
+        ]
+      },
+      {
+        "id": "claim.stalker_architecture_scope",
+        "kind": "fact",
+        "text": "Documented Stalker support covers ITV, VOD, regular series, VOD-as-series shapes, favorites, recent items, search, external playback through shared portal player infrastructure, and live remote control; Stalker requests flow through DataService or StalkerSessionService to Electron `STALKER_REQUEST` handling.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.stalker_portal",
+          "flow.portal_playback"
+        ],
+        "code_anchors": [
+          {
+            "file": "docs/architecture/stalker-portal.md"
+          },
+          {
+            "file": "libs/portal/stalker/data-access/src/lib/stalker-session.service.ts",
+            "symbol": "StalkerSessionService"
+          }
+        ]
+      },
+      {
+        "id": "claim.remote_control_contract",
+        "kind": "fact",
+        "text": "Remote control is a desktop-only Electron feature: the backend serves a mobile web app and `/api/remote-control/*` endpoints, sends channel and volume IPC commands into the renderer, ingests renderer status snapshots, and supports M3U, Xtream live, and Stalker ITV integrations.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.remote_control",
+          "flow.remote_control"
+        ],
+        "code_anchors": [
+          {
+            "file": "docs/architecture/remote-control.md"
+          },
+          {
+            "file": "apps/electron-backend/src/app/api/main.preload.ts",
+            "symbol": "electronApi"
+          }
+        ]
+      },
+      {
+        "id": "claim.remote_control_preload_api",
+        "kind": "fact",
+        "text": "The preload bridge exposes remote-control APIs for channel-change subscription, remote command subscription, status publication, and local IP address lookup.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.remote_control",
+          "component.electron_backend",
+          "flow.remote_control"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/electron-backend/src/app/api/main.preload.ts",
+            "symbol": "electronApi"
+          }
+        ]
+      },
+      {
+        "id": "claim.xtream_mock_server_protocol",
+        "kind": "fact",
+        "text": "The Xtream mock server listens on port 3211 by default, exposes `/health`, `/reset`, direct `/player_api.php`, stream stub routes that redirect to an HLS test stream, and a PWA-compatible `/xtream` proxy envelope.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.mock_servers",
+          "flow.mock_portal_development"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/xtream-mock-server/src/main.ts"
+          }
+        ]
+      },
+      {
+        "id": "claim.stalker_mock_server_protocol",
+        "kind": "fact",
+        "text": "The Stalker mock server listens on port 3210 by default, exposes direct `/portal.php`, PWA-compatible `/stalker`, `/health`, and `/reset` endpoints, logs request action/MAC information, and advertises predefined MAC scenarios at startup.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.mock_servers",
+          "flow.mock_portal_development"
+        ],
+        "code_anchors": [
+          {
+            "file": "apps/stalker-mock-server/src/main.ts"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "from": "component.electron_backend",
+        "to": "component.web_app",
+        "kind": "contains",
+        "metadata": {
+          "description": "Electron packages and launches the built Angular web renderer."
+        }
+      },
+      {
+        "from": "component.electron_backend",
+        "to": "component.remote_control",
+        "kind": "contains",
+        "metadata": {
+          "description": "Electron packages and serves the remote-control web app."
+        }
+      }
+    ]
+  }
+}

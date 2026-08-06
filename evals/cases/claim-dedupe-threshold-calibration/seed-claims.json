@@ -1,0 +1,782 @@
+[
+  {
+    "id": "claim.repo_identity",
+    "text": "Greplica is a Node.js CLI that gives AI coding agents persistent, searchable engineering memory by storing repository context in a local SQLite knowledge graph.",
+    "kind": "fact",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.cli_owns_public_commands",
+    "text": "The CLI entrypoint dispatches install, hook ingest/worker, session mark-memory-current, transcript bundle, config, doctor, graph read/context/export/view/audit anchors, and proposal validate/apply commands.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.install_initializes_repo_memory",
+    "text": "installGreplica configures the requested embedding provider, initializes repo/main/working graph scopes through the knowledge graph service, runs the platform installer, and reports skills, hooks, config, database path, session settings, and notes.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.codex_install_copies_skills_and_hooks",
+    "text": "The Codex platform installer copies bundled Greplica skills into CODEX_HOME or ~/.codex/skills, merges a Codex hook config, and returns installed skills plus hook command metadata.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.config_defaults_and_embedding_update",
+    "text": "Greplica config normalizes embedding and session settings, defaults to local all-mpnet-base-v2 embeddings, and can update provider-specific embedding config in the configured Greplica config file.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.openai_embedding_requires_api_key",
+    "text": "When install is run with OpenAI embeddings, configureEmbedding requires OPENAI_API_KEY from the environment or repo env files before updating config.",
+    "kind": "requirement",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.proposal_normalizer_expands_compact_relationships",
+    "text": "normalizeProposal accepts compact components, flows, claims, and edges, expands contains/touches/about/evidenced_by/supersedes relationship fields into canonical edges, and deduplicates generated edges.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.proposal_validation_contract",
+    "text": "validateProposal requires proposal title and creates object, validates component/flow/claim/source/edge shape, checks duplicate and missing subject references, enforces allowed edge directions, and limits code anchors per claim.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.service_validates_code_anchors",
+    "text": "KnowledgeGraphService.validateProposal normalizes proposals, runs structural validation, and rejects code_verified claims whose audited code anchors are missing, invalid, ambiguous, or unsupported.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.apply_validates_then_writes_working_memory",
+    "text": "KnowledgeGraphService.applyProposal normalizes and validates before writing, creates a working-scope memory commit, inserts proposal records, ensures embeddings for the graph, and returns created object counts.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.sqlite_repository_scopes_and_views",
+    "text": "SqliteRepository owns repo identity lookup, main/working scope creation, scope requirements, current graph view reads, claim provenance, and proposal record persistence.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.graph_context_pipeline",
+    "text": "GraphContextBuilder builds claim/component/flow documents, ensures embeddings, scores semantic and BM25 relevance, applies graph ranking, resolves code anchors for selected claims, and returns ranked graph context results.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.transcript_bundle_filters_sessions",
+    "text": "buildTranscriptBundle requires at least one file, converts platform transcripts to filtered Markdown, records file/session/cwd metadata, wraps entries in a safety-prefaced transcript backfill bundle, and returns bundle entries with session refs.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.agent_install_prompt_sequence",
+    "text": "The documented agent install prompt asks the agent to install the CLI and matching integration, ask whether to use recent prior sessions before reading transcripts, bootstrap baseline memory, optionally bundle prior sessions, then explain normal graph context and update-working-memory usage.",
+    "kind": "requirement",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.fast_session_bootstrap_one_reconstructable_topic",
+    "text": "greplica-fast-session-bootstrap is optimized to read a transcript bundle once, pick exactly one reconstructable flow or component, store a small set of claims for that topic plus at most one strong correction or gotcha, and output only the applied status, the no-grep reconstruction section, and the optional correction section.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.prior_session_backfill_smallest_useful_set",
+    "text": "Prior-session onboarding backfill should choose the smallest useful recent same-repo set: one large high-signal session is enough, two is the default when multiple sessions are useful, and three is reserved for smaller or distinct sessions.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.bootstrap_skill_fast_inspection_contract",
+    "text": "greplica-bootstrap now follows a compact fast-inspection contract: read root docs/config/public entrypoints and targeted public-boundary source files, skip tests/evals/fixtures/samples/rubrics and sample proposals for format hints, write shallow memory, validate/apply, and keep final output to a repo summary plus baseline-applied status.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.bootstrap_eval_records_timing_splits",
+    "text": "The bootstrap-current eval records and prints separate install, nested-agent generation, validate/apply command, and total runner timings, so bootstrap optimization can distinguish installer/setup time from agent proposal-generation time.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.release_0_1_5_published",
+    "text": "Greplica 0.1.5 was published to npm and tagged as v0.1.5 after the onboarding bootstrap and fast-session changes.",
+    "kind": "fact",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.package_version_0_1_5",
+    "text": "The package metadata declares greplica version 0.1.5.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.greplica_reset_backup_20260626",
+    "text": "The 2026-06-26 Greplica reset session saved a verified backup under `.context/greplica-backups/20260626-162220`, including a standalone `graph.db`, a full `greplica-home` copy, `config.json`, `hooks.json.before-delete`, `manifest.txt`, and `SHA256SUMS.txt`.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.greplica_reset_delete_only_no_install",
+    "text": "For the 2026-06-26 Greplica reset, the user corrected the scope to delete-only after the backup and explicitly rejected running `greplica install`; future agents should not treat reinstalling Greplica as unfinished work from that session.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.greplica_home_delete_hook_recreation_gotcha",
+    "text": "When Codex Greplica hooks remain configured, manually deleting `~/.greplica` may not persist because `greplica hook ingest --platform codex` can recreate the Greplica home during prompt or stop hooks.",
+    "kind": "risk",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.contextbench_dataset_materializer_uses_synthetic_memory_remote",
+    "text": "The ContextBench dataset materializer reads ContextBench `full.parquet` rows and writes memory-build task packages with `memory_remote_url` set to `greplica-eval://swe-context/<repo>` so Greplica identity is stable without relying on the real GitHub remote.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.contextbench_retrieval_eval_compares_greplica_and_baseline",
+    "text": "The ContextBench retrieval eval runs saved Greplica task artifacts through immutable task environments and supports both `greplica` and `baseline` runners; the Greplica runner copies `memory/pre-task` into a scratch `GREPLICA_HOME`, while baseline runs without allowing Greplica.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swe_chat_benchmark_repo_selection_rule",
+    "text": "For SWE-chat-based Greplica benchmarks, repo selection should start from the actual SWE-chat tables, then rank by high session count, repeated same-user chronological chains, large mature non-fork codebases, and public popularity; public examples should be used only as sanity checks, not as the primary selection signal.",
+    "kind": "requirement",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swe_chat_benchmark_stays_with_dataset",
+    "text": "For the current benchmark effort, stay within the Hugging Face SWE-chat dataset rather than mining GitHub Copilot Agent-Logs-Url commits; the Copilot-log route produced some famous-repo leads but did not provide reliably downloadable session transcripts.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swe_chat_benchmark_primary_repo_marin",
+    "text": "Use marin-community/marin as the first SWE-chat benchmark target because, within the available dataset, it is the best compromise of codebase size, technical complexity, real multi-session agent history, and usable temporal chains; keep Lightprotocol, iptvnator, and gemini-voyager as secondary candidates.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swe_chat_benchmark_marin_tokenizer_case",
+    "text": "The first marin holdout case should use the real 2026-02-25 tokenizer session about mostly reverting the PR #2984 disk_cache workaround after PR #2986 restored shared data; prior chronological memory should come from earlier marin sessions, especially execution-refactor and tokenizer-logging work.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_marin_tokenize_case_config",
+    "text": "The SWE-chat Marin tokenizer eval case targets held-out session 3aa08a54-1716-41fc-91a1-75e2066265d3, uses base commit cc8a540f1c804930f20d28ece0a750debcf02636, gives the agent the vague prompt about removing the tokenizer disk_cache workaround after shared data was fixed, and verifies the pre-task fixture still contains the disk_cache tokenizer markers.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_marin_tokenize_fixture_materialization",
+    "text": "The SWE-chat Marin tokenizer runner materializes the target repo from the GitHub codeload tarball for the configured base commit, initializes a synthetic one-commit git repo, and verifies the expected pre-task file markers before running the agent.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_marin_tokenize_baseline_isolation",
+    "text": "For the baseline arm, the SWE-chat Marin tokenizer runner uses an empty Greplica home, blocks the greplica command, blocks gh/curl/wget and git history/network commands with PATH guards, and tells the agent to use only the local checked-out snapshot.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_marin_tokenize_greplica_arm",
+    "text": "For the Greplica arm, the SWE-chat Marin tokenizer runner creates an isolated agent-greplica-home, installs Greplica in that home, validates and applies the case seed proposal, runs a retrieval smoke query for tokenizer disk_cache shared data cleanup, and exposes only greplica graph context to the agent through the PATH guard.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_marin_tokenize_judge_contract",
+    "text": "The SWE-chat Marin tokenizer judge returns only predefined booleans, per-boolean evidence, and an explanation; validateJudgeChecks rejects score, passed, or final_score fields so the LLM judge cannot own numeric scoring.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_marin_tokenize_deterministic_scorer",
+    "text": "scoreJudgeChecks deterministically computes the SWE-chat Marin tokenizer score from the judge booleans, transcript leakage status, token count, tool count, elapsed time, and patch files; pass requires score at least 80 and no leakage.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_marin_tokenize_synthetic_seed_is_plumbing_only",
+    "text": "The first Greplica arm for the SWE-chat Marin tokenizer case intentionally uses synthetic task-specific memory to prove wiring and compare against baseline; it is not claimed to be extracted from prior SWE-chat sessions.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_marin_tokenize_first_run_result",
+    "text": "The first gpt-5.5 SWE-chat Marin tokenizer runs both passed with score 100 and no leakage; the baseline used 1,278,074 total agent tokens and 38 tool calls, while the synthetic-memory Greplica arm used 733,438 total agent tokens and 31 tool calls with the first command as greplica graph context \"tokenizer disk_cache shared data cleanup\".",
+    "kind": "fact",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_marin_zephyr_restart_best_contextual_candidate",
+    "text": "The strongest contextual SWE-chat candidate is marin-community/marin held-out session e2f1b498-80a7-45e2-90fc-86a3aca12b0f, a Zephyr/Fray worker-restart bug involving Zephyr execution, Fray Ray backend actor options, worker registration, heartbeats, and coordinator lifecycle; prior Marin sessions 5ce0bbff, 77a645c3, 6c274512, and 412dee3f contain the memory likely to matter.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_marin_zephyr_restart_materialization_caveat",
+    "text": "The Marin Zephyr/Fray restart candidate is semantically stronger than the tokenizer case, but its checkpoints did not expose real Git commit SHAs in the inspected SWE-chat metadata, so making it runnable may require transcript/file-snapshot reconstruction instead of the simple GitHub codeload checkout used by the tokenizer eval.",
+    "kind": "risk",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_eval_runner_data_driven",
+    "text": "The generic SWE-chat plan eval runner loads a case directory by id, reads the task prompt and judge guidance from the paths in case.json, materializes the configured repository base_commit from GitHub codeload into a synthetic one-commit local repo, and verifies fixture markers before running the agent.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_eval_greplica_arm_manifest_seeded",
+    "text": "For the Greplica runner, the generic SWE-chat plan eval installs Greplica into an isolated home, validates and applies proposal seeds in memory-seeds/manifest.json apply_order, runs a retrieval smoke using case.memory.retrieval_query, requires the first navigation command to be greplica graph context with that query, and guards the agent so only greplica graph context is allowed.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_eval_judge_generic_boolean_scorer",
+    "text": "The SWE-chat plan judge is generic across cases: case-specific judge.md is supplied as guidance, the OpenAI judge may return only the predefined boolean checks plus evidence and explanation, validateJudgeChecks rejects score/pass fields, and scoreJudgeChecks deterministically computes the numeric score while hard-failing leakage or repo edits.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_memory_builder_case_driven",
+    "text": "The SWE-chat plan memory builder is case-driven: it reads dataset.prior_sessions from case.json, materializes the configured full repo base snapshot, runs a bootstrap proposal on the clean checkout, then processes the listed prior sessions in chronological case order while validating/applying each generated proposal into an isolated Greplica home.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_memory_builder_filtered_transcript_and_diff_roles",
+    "text": "For SWE-chat prior-session memory updates, the builder gives the update-working-memory agent a filtered Markdown transcript containing metadata plus human and assistant text only; raw Claude toolUseResult edit records are used by the harness to reconstruct the before/after working-tree diff, not as transcript evidence passed to the agent.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_cases_should_remain_data_only",
+    "text": "Future SWE-chat plan eval cases should be added as data-only case directories with case.json, prompt.md, judge.md, and optional memory-seeds, while eval behavior stays in the two generic scripts evals/swechat-plan/run.ts and evals/swechat-plan/build-memory.ts instead of new case-local TypeScript runners.",
+    "kind": "requirement",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_eval_runner_materializes_plan_and_scores_generically",
+    "text": "The generic SWE-chat plan runner loads the case prompt and judge guidance from case.json paths, materializes the configured GitHub base_commit through codeload into a synthetic one-commit repo, runs a plan-only Codex agent, and uses a generic boolean judge plus deterministic scoreJudgeChecks scoring for all cases.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_eval_no_answer_shaped_retrieval_hint",
+    "text": "SWE-chat plan cases should not prescribe the exact Greplica retrieval query or keep smoke-must-contain terms in case.json, because those fields can leak a mini-answer-shaped navigation hint. The case should define the task and memory seeds, and the Greplica agent should choose its own query from the user request.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_memory_builder_case_driven_replay",
+    "text": "The generic SWE-chat plan memory builder is case-driven: it reads dataset.prior_sessions from case.json, materializes the configured base repo, runs a bootstrap proposal on the clean checkout, then processes each prior SWE-chat session in order and validates/applies each generated proposal into an isolated Greplica home before storing proposal JSON files under the case memory-seeds directory.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_memory_builder_filtered_transcript_and_diff_context",
+    "text": "For SWE-chat memory updates, the builder passes only filtered Claude human/assistant messages to the update-working-memory agent; raw tool-call JSONL is used by the harness only to reconstruct before/after file state and an uncommitted git diff for the agent to inspect.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_eval_report_multiple_runs",
+    "text": "SWE-chat plan benchmark comparisons should avoid relying on one baseline trajectory: this session found materially noisy baseline outcomes, so future reports should prefer multiple runs and median or pass-rate summaries when comparing Greplica to baseline.",
+    "kind": "requirement",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_eval_no_case_hardcoded_greplica_query",
+    "text": "SWE-chat plan cases should not store memory.retrieval_query or smoke_must_contain terms, because those fields prescribe an answer-shaped Greplica query. The Greplica arm should apply the case memory seeds, then require the agent to choose its own short greplica graph context query from the user request and verify memory against current files.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_memory_builder_replay_contract",
+    "text": "The generic SWE-chat plan memory builder materializes the configured full repo base snapshot, runs Greplica bootstrap on that clean checkout, then processes case.json dataset.prior_sessions in order. For each prior Claude Code session, it uses raw SWE-chat tool/edit records only to reconstruct the before/after working-tree diff, while the update-working-memory agent receives a filtered Markdown transcript containing session metadata plus human and assistant text messages only.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_memory_seeds_are_replay_artifacts_not_sqlite",
+    "text": "SWE-chat plan cases should store durable memory as proposal JSON files plus memory-seeds/manifest.json apply_order, not committed Greplica SQLite/runtime state. Eval runs validate/apply those proposals into isolated GREPLICA_HOME directories before the Greplica arm runs.",
+    "kind": "requirement",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_memory_build_filtered_transcripts",
+    "text": "The generic SWE-chat memory builder passes update-working-memory agents a filtered Markdown transcript containing session metadata plus human and assistant text messages only; raw SWE-chat Claude JSONL tool/edit records are harness input for reconstructing before/after file state and are not passed as transcript evidence to the memory agent.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_memory_build_bootstrap_then_temporal_updates",
+    "text": "SWE-chat plan memory generation bootstraps Greplica on the clean full base repo checkout before replaying historical sessions, then processes case prior_sessions in order by applying each reconstructed completed-session working tree, validating/applying each generated proposal in the isolated GREPLICA_HOME, and storing only proposal JSONs plus a minimal memory-seeds/manifest.json apply_order.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_memory_builder_replay_contract_refined",
+    "text": "The generic SWE-chat plan memory builder materializes the configured full repo base snapshot and bootstraps Greplica on that clean checkout before processing case.json dataset.prior_sessions in order. For each historical Claude Code session, raw SWE-chat tool/edit records reconstruct the before/after working-tree diff, while the update-working-memory agent receives only a filtered Markdown transcript with session metadata plus human and assistant text messages; validated proposals are applied to the isolated GREPLICA_HOME and stored as proposal JSONs with a minimal apply_order manifest.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_memory_builder_replay_contract_canonical",
+    "text": "The generic SWE-chat plan memory builder materializes the configured full repo base snapshot and bootstraps Greplica on that clean checkout before processing case.json dataset.prior_sessions in order. For each historical Claude Code session, raw SWE-chat tool/edit records are used only by the harness to reconstruct the before/after working-tree diff, while the update-working-memory agent receives a filtered Markdown transcript with session metadata plus human and assistant text messages. The builder validates/applies generated proposals in an isolated GREPLICA_HOME and stores only proposal JSONs plus a minimal apply_order manifest.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_case_layout_is_data_only",
+    "text": "A generic SWE-chat plan case is now data-only: case.json, prompt.md, judge.md, and memory-seeds containing proposal JSON files plus a minimal manifest.json apply_order. Case-local run.ts/generate-memory.ts wrappers and the older tokenizer coding-task eval were removed from this surface.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_greplica_query_is_agent_chosen",
+    "text": "SWE-chat plan Greplica runs must not hard-code a retrieval_query or run a pre-agent smoke query. The agent is only instructed to make its first code-navigation step a greplica graph context query of its own wording based on the user request; auditing verifies command shape and forbids other Greplica commands, hidden eval artifacts, web/GitHub/network, and git-history access.",
+    "kind": "requirement",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_judge_schema_and_scoring_contract",
+    "text": "The generic SWE-chat plan judge reads prompt.md output plus case-specific judge.md guidance, returns only fixed boolean plan-quality checks with evidence/explanation, and never returns score/pass fields. The runner deterministically maps those booleans to a 0-100 score and requires score >= 80 with no leakage and no repo edits to pass.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_memory_build_contract_from_session_artifacts",
+    "text": "The generic SWE-chat plan memory builder uses the case prior_sessions to run a full-repo bootstrap at the configured base commit, then processes historical sessions in order. Raw SWE-chat edit/tool records are used only by the harness to reconstruct the before/after working-tree diff; update-working-memory agents receive filtered Markdown transcripts containing session metadata plus human and assistant text messages only, and generated proposals are validated/applied in an isolated Greplica home before storing only proposal JSON plus apply_order.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_eval_result_variance_requires_repeated_runs",
+    "text": "Single-run SWE-chat plan comparisons are too noisy for credible claims. After removing the hard-coded Greplica query, three gpt-5.4 baseline runs produced two passes and one off-target failure with a median around 1.015M tokens, while a Greplica run passed at about 646k tokens; future reporting should use repeated runs and compare median or distributional tokens/tool calls/time, not one lucky or wandering trajectory.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_case_format_data_only",
+    "text": "Generic SWE-chat plan cases are intended to be data-only directories: case.json, prompt.md, judge.md, and memory-seeds/ with a minimal manifest.json plus proposal JSONs. Case-local run.ts and generate-memory.ts wrappers and the earlier tokenizer coding-task case were removed in favor of the two generic scripts.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_six_case_batch_created",
+    "text": "The first SWE-chat plan-eval batch now consists of six case directories: Marin Zephyr restart recovery, Marin Harbor SWE eval support, Rudel project trends grouping, Lightfast tRPC/platform architecture, IPTVnator workspace/player UX, and Gemini Voyager sync/auth bug. The Code Insights candidates were skipped for this batch because their checkpoints or transcript SHAs were not public-materializable with the current runner.",
+    "kind": "fact",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_case_quality_after_first_batch",
+    "text": "After the first batch, Harbor SWE eval support, Lightfast tRPC/platform architecture, and Marin Zephyr restart recovery are the strongest planning benchmark cases. IPTVnator is mixed because both arms can already produce perfect plans, Gemini Voyager is a poor shape because Greplica cost more than baseline, and Rudel should not be treated as Greplica-ready until its memory build is completed.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_rudel_memory_seed_partial",
+    "text": "The Rudel project trends case is currently partial for Greplica evaluation: it has only bootstrap plus two update proposal files and its memory-seeds/manifest.json is not a valid apply_order manifest, because the third prior-session memory build was stopped. Finish or regenerate that memory build before using Rudel as a Greplica arm.",
+    "kind": "risk",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_clean_case_config_constraint",
+    "text": "SWE-chat plan case.json files should define the task, repo snapshot, prior sessions, judge prompt path, and memory manifest path; they should not prescribe Greplica retrieval queries, smoke marker strings, held-out transcript marker checks, or fixture expectations that leak answer-shaped navigation hints into the case format.",
+    "kind": "requirement",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_first_batch_result_pattern",
+    "text": "The first completed batch showed the intended benchmark pattern on the strongest cases: Harbor baseline failed with broad high-cost exploration while Greplica passed with lower cost, Lightfast Greplica improved score and greatly reduced tool calls, and Zephyr remained a useful control where Greplica can recover the right context. Future reporting should still use repeated runs because baseline trajectories showed high variance.",
+    "kind": "fact",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_greplica_query_not_case_hardcoded",
+    "text": "The generic SWE-chat plan runner no longer takes a case-specific Greplica retrieval query or smoke-match terms from case.json. For Greplica runs it applies proposal seeds from memory-seeds/manifest.json, then prompts the agent to choose its own short greplica graph context query from the user request and audits only that the first navigation command was greplica graph context and that no forbidden Greplica mutation/setup commands were used.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_memory_builder_normalizes_checkout_alias_paths",
+    "text": "The SWE-chat plan memory builder normalizes file paths from Claude Code transcript edit records by stripping local checkout aliases and returning repo-root-relative paths from known root markers or root files. This prevents replay patches from creating nested local checkout directories such as a Rudel transcript's miami/ folder inside the target repo.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_first_six_case_readout_after_rudel_completion",
+    "text": "After completing the Rudel memory build and Greplica run, the first SWE-chat plan case batch should be read as: Harbor SWE eval support, Lightfast tRPC/platform architecture, and Marin Zephyr restart recovery are strong Greplica-win cases; IPTVnator is mixed because both arms already plan well; Gemini Voyager and Rudel project trends are bad or low-signal eval shapes because their Greplica arms cost more than the baselines while preserving score.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_case_selection_requires_public_base_materialization",
+    "text": "SWE-chat plan cases should only be promoted into runnable benchmark cases when the repo base state can be public-materialized from the configured commit or equivalent source. The Code Insights candidates were skipped because their checkpoints or transcript SHAs were not public-materializable from the available dataset, and substitute cases were chosen rather than approximating repo state.",
+    "kind": "requirement",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_rudel_reclassified_mixed_after_rerun",
+    "text": "After the first six SWE-chat plan cases and a fresh Rudel rerun, read the batch as: Harbor SWE eval support, Lightfast tRPC/platform architecture, and Marin Zephyr restart recovery are strong Greplica-win cases; IPTVnator remains mixed because both arms already plan well; Gemini Voyager remains a bad eval shape because Greplica cost more than baseline; Rudel project trends is mixed/low-signal rather than bad because the fresh rerun kept score 100 while reducing tokens from 642250 to 390905 and tools from 31 to 29, but was slightly slower at 210.824s versus 202.09s.",
+    "kind": "fact",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_skip_unmaterializable_cases",
+    "text": "For the SWE-chat plan benchmark batch, cases whose held-out base cannot be materialized from the dataset plus public Git refs should be skipped or replaced rather than approximated; the first six-case batch skipped the two Code Insights candidates for this reason and used IPTVnator and Gemini Voyager as substitutes.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_generic_judge_scoring_contract",
+    "text": "The generic SWE-chat plan runner judges natural Markdown plans with one reusable boolean-plus-evidence schema; judge.md supplies case-specific gold guidance, but score/pass are deterministic in code from the boolean checks, repo-edit/leakage audit, and the 80-point threshold.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_generic_npm_entrypoints",
+    "text": "The reusable SWE-chat benchmark entrypoints are npm run eval:swechat-plan for baseline or Greplica plan runs and npm run eval:swechat-plan-build-memory for generating proposal seeds from a case's prior sessions.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_case_layout_canonical_data_only_20260629",
+    "text": "The canonical format for future SWE-chat plan eval cases is data-only: case.json declares dataset/repo/task/memory paths, prompt.md contains the natural user planning request, judge.md contains hidden gold guidance, and memory-seeds/ contains proposal JSON files plus a minimal manifest.json apply_order. Do not add case-local TypeScript runners or generated runtime metadata to case folders; eval behavior belongs in evals/swechat-plan/run.ts and evals/swechat-plan/build-memory.ts.",
+    "kind": "requirement",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_runner_case_driven_execution",
+    "text": "The generic SWE-chat plan runner is case-driven: it loads case.json plus prompt.md and judge.md, materializes the configured GitHub base commit through codeload into a synthetic one-commit repo, runs a plan-only Codex agent, sends the natural final plan to a generic boolean-only OpenAI judge, and computes pass/fail with deterministic weights in scoreJudgeChecks.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_greplica_agent_chooses_query",
+    "text": "The SWE-chat plan Greplica arm no longer hard-codes a retrieval query in case.json: it seeds proposals from memory-seeds/manifest.json into an isolated GREPLICA_HOME, prompts the agent to choose its own short greplica graph context query from the user request before broad exploration, and guards/audits Greplica so only graph context is allowed during the agent run.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_memory_builder_filters_transcripts_and_replays_edits",
+    "text": "The generic SWE-chat memory builder replays prior sessions in chronological case order by requiring local raw JSONL transcripts, converting only human and assistant text into filtered Markdown for the update agent, extracting successful Claude edit toolUseResult records only to reconstruct before/after working-tree diffs, then running bootstrap/update agents that validate/apply/store proposal JSON files and write a minimal apply_order manifest.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_replay_path_normalization_strips_checkout_aliases",
+    "text": "SWE-chat replay path normalization must handle historical local checkout aliases by stripping back to repo-root markers such as apps, packages, lib, src, .github, or root files; this prevents replay patches from creating alias directories like a nested miami/ tree instead of root-relative paths.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_only_two_generic_npm_scripts",
+    "text": "package.json exposes the SWE-chat planning benchmark through two generic commands only: eval:swechat-plan for baseline or Greplica plan runs, and eval:swechat-plan-build-memory for regenerating proposal seeds from prior SWE-chat sessions.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.install_flags_hooks_auto_memory_20260629",
+    "text": "`greplica install` accepts `--hooks enabled|disabled` and `--auto-memory enabled|disabled`, defaults both to enabled, maps `--hooks disabled` to disabled automatic memory updates, and rejects the invalid combination `--hooks disabled --auto-memory enabled`.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.hook_guidance_separate_from_auto_memory_20260629",
+    "text": "Hook guidance and background memory updates are now separate: `runHookIngest` can still emit the shared Greplica guidance text, but it starts the hook worker only when `session.autoMemoryUpdates` is true.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.no_hooks_manual_guidance_snippet_requirement_20260629",
+    "text": "In No hooks onboarding, Greplica must not edit `AGENTS.md`, `CLAUDE.md`, or another agent instruction file; the fallback is to print the same hook guidance snippet and ask the user to add it manually if they want future sessions to use Greplica without hooks.",
+    "kind": "requirement",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_case_inventory_17_cases_20260629",
+    "text": "The SWE-chat plan benchmark currently has 17 data-only plan case directories under evals/cases, spanning Marin, Rudel, Lightfast, IPTVnator, Gemini Voyager, Entire CLI, Packmind Context Evaluator, and Moltis. The ten-case expansion added additional case directories rather than replacing existing ones.",
+    "kind": "fact",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_memory_build_prior_cap_user_rule_20260629",
+    "text": "For future SWE-chat plan eval case expansion, keep adding cases rather than replacing existing ones, prefer more credible repos for new additions, and cap memory generation at the best 3-4 prior sessions per case unless the case is explicitly a large-memory stress test.",
+    "kind": "requirement",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_runner_agent_chosen_greplica_query_20260629",
+    "text": "SWE-chat plan Greplica runs do not hard-code a case retrieval query. The generic runner prompts the agent to make its first code-navigation step `greplica graph context \"<your own short query based on the user request>\"`, treats Greplica as navigation only, and audits only that the first command is a graph-context command and no mutating Greplica commands are used.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_memory_builder_uses_filtered_transcripts_and_replay_diffs_20260629",
+    "text": "SWE-chat memory generation is case-driven: it reads `dataset.prior_sessions` from case.json, projects each Claude/SWE-chat JSONL into filtered Markdown containing metadata plus human and assistant text, reconstructs session edits from `toolUseResult` only for the patched working-tree diff, and writes proposal seeds plus a minimal `memory-seeds/manifest.json` apply order.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_replay_path_normalizes_checkout_aliases_20260629",
+    "text": "The SWE-chat memory builder normalizes historical edit paths back to repo-relative paths by stripping local checkout aliases and snapping to known root markers or root files, which prevents replay patches from creating nested checkout-name directories such as the Rudel `miami/` alias issue.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_case_inventory_17_cases_8_repos_20260629",
+    "text": "The current SWE-chat plan benchmark inventory has 17 case directories across eight repositories: Entire CLI, Gemini Voyager, IPTVnator, Lightfast, Marin, Moltis, Packmind Context Evaluator, and Rudel. The session direction is additive: keep existing cases and append more credible/high-context cases rather than replacing weaker ones.",
+    "kind": "fact",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_moltis_seed_manifest_stale_after_prior_cap_20260629",
+    "text": "Regenerate the Moltis onboarding/provider-feedback memory seeds before treating that case as the canonical capped-prior result: the case now lists four prior sessions, but the stored memory-seeds manifest still applies bootstrap plus seven historical update proposals from the earlier large-memory run.",
+    "kind": "task",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_moltis_loop_mixed_result_20260629",
+    "text": "The first Moltis onboarding/provider-feedback full loop was useful but mixed: baseline produced a 100-point plan but failed the hard audit after forbidden web-search tool-surface events, while the Greplica run passed cleanly with score 80 and lower exploration cost (about 2.26M tokens and 63 tool calls versus baseline about 3.33M tokens and 74 tool calls).",
+    "kind": "fact",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_batch_runs_require_transcript_hydration_20260629",
+    "text": "Before running full baseline-memory-Greplica batches over many SWE-chat cases, hydrate every referenced prior-session JSONL transcript under `.context/swechat-data/transcripts`; otherwise the memory-build phase fails immediately on the first missing transcript even when the baseline phase can run.",
+    "kind": "requirement",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_case_set_and_scope",
+    "text": "This session completed the requested SWE-chat plan expansion to a total of 17 case directories under `evals/cases` with `swechat-*` prefixes.",
+    "kind": "fact",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_batch_orchestrator_added",
+    "text": "A dedicated batch runner (`.context/run-all-swechat-plan-cases.cjs`) was added for sequential baseline, memory-build, and Greplica execution, with a JSONL run log in `.context/swechat-plan-full-run-report.jsonl` and a summary markdown note.",
+    "kind": "fact",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_transcripts_hydrated",
+    "text": "The run prerequisites were updated so required SWE-chat session transcripts were fully available by materializing missing IDs from `conversations.parquet` into `.context/swechat-data/transcripts` (57 required, 57 present).",
+    "kind": "fact",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_prior_cap_3_to_4",
+    "text": "For the full batch loop, case prior-session lists were capped to 3-4 sessions to keep memory-build cost and runtime manageable.",
+    "kind": "requirement",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_transcript_only_sessions_supported",
+    "text": "Memory replay behavior was adjusted to support transcript-only prior sessions and no-op bootstrap/update proposals, so missing edit extractions no longer terminate memory build.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_path_anchor_normalization_during_seed_apply",
+    "text": "Seed validation failures due shortened file anchors were handled by normalizing generated memory proposals to repo-relative paths, allowing replay-derived proposals to apply against held-out bases.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_moltis_seed_manifest_needs_refresh",
+    "text": "Moltis case memory now uses capped priors, so the persisted seed manifest should be regenerated before treating the 7-update manifest as canonical for future comparisons.",
+    "kind": "task",
+    "truth": "unknown"
+  },
+  {
+    "id": "claim.cli_install_flags_enabled_disabled_20260629",
+    "text": "`greplica install` now accepts `--hooks enabled|disabled` and `--auto-memory enabled|disabled` (default enabled), with parser validation for duplicate flags and an explicit ban on `--hooks disabled` combined with `--auto-memory enabled`.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.install_auto_memory_toggle_respects_hooks_20260629",
+    "text": "Install writes `session.autoMemoryUpdates` into repo config, and if auto-memory is requested while hooks were not installed, it automatically disables auto-memory in config before returning installation output.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.no_hooks_manual_guidance_snippet_requirement_20260629_v2",
+    "text": "When no hooks are selected, install output no longer edits agent instruction files automatically; instead it prints a reusable hook-guidance snippet and instructs users to add it manually in their agent config if they want future recall behavior.",
+    "kind": "requirement",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.onboarding_questionnaire_contract",
+    "text": "The onboarding path now asks exactly two questions before install/bootstrap/backfill: guidance+auto-save vs guidance-only vs no-hooks, and whether to inspect recent same-repo sessions, then maps answers to install behavior.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.install_cli_flags_support",
+    "text": "`greplica install` now parses `--hooks` and `--auto-memory` as enabled/disabled values, defaults both to enabled, and rejects `--auto-memory enabled` when hooks are disabled.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.session_auto_memory_default_and_mapping",
+    "text": "Session config includes `autoMemoryUpdates` with default `true`, install writes this flag into config, and installation forces it false whenever hooks are disabled or hook installation is unavailable.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.onboarding_questionnaire_019f143e",
+    "text": "Greplica onboarding now uses a mandatory pre-install setup questionnaire in two questions: first choosing guidance/auto-save mode and second deciding whether to inspect recent same-repo sessions, with installs deferred until both are answered.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.install_flag_mapping_and_validation_019f143e",
+    "text": "Install now accepts `--hooks enabled|disabled` and `--auto-memory enabled|disabled` flags (default true), rejects `--auto-memory enabled` when hooks are disabled, and maps questionnaire answers to those install modes.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.session_auto_memory_default_mapping_019f143e",
+    "text": "Session config includes `autoMemoryUpdates` default true; install writes the requested value into repo config and forces it false when hooks are not requested or when the selected platform cannot install hooks.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.no_hooks_manual_guidance_snippet_019f143e",
+    "text": "With hooks disabled, onboarding no longer edits `AGENTS.md`, `CLAUDE.md`, or other agent instruction files; install output prints the shared `Greplica hook guidance` snippet for manual opt-in in the next session.",
+    "kind": "decision",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.hook_guidance_vs_auto_updates_019f143e",
+    "text": "Guidance injection and auto-memory updates are separate: hook ingest can emit guidance while background worker scheduling is gated by `session.autoMemoryUpdates`, and installed repos with missing hooks no longer get automatic memory updates enabled.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.factory_droid_respects_no_hooks_option_019f143e",
+    "text": "The `factory-droid` installer now honors `--hooks disabled` by installing skills but skipping hook configuration writes.",
+    "kind": "fact",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.onboarding_questionnaire_and_default_modes",
+    "text": "Onboarding now prompts for hook/auto-memory choices before installation, with default behavior remaining hook-enabled and auto-memory enabled, and supports explicit `--hooks enabled|disabled` and `--auto-memory enabled|disabled` install flags.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.no_hooks_session_guidance_behavior",
+    "text": "The no-hooks install path now skips editing agent instruction files and prints the reusable Greplica guidance snippet for manual copy into repo guidance files when needed.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.factory_droid_hook_flag_respected",
+    "text": "Factory Droid platform installation now respects `--hooks disabled` by only installing non-hook skills, preventing hook config writes in that mode.",
+    "kind": "fact",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.onboarding_two_questionnaire_mapping",
+    "text": "Greplica install now uses a two-question onboarding questionnaire for repo bootstrap: guidance+auto-save, guidance-only, or no-hooks, each mapped to hooks and auto-memory behavior before install.",
+    "kind": "fact",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.sqlrepository_loadcomponents_null_anchor_normalized",
+    "text": "SqliteRepository.loadComponents now loads rows through a ComponentRow type with nullable `code_anchor` (`string | null`) and maps `row.code_anchor` to `undefined` when null, preventing downstream trim-based crashes.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.graph_view_regression_check_created",
+    "text": "Added `scripts/check-graph-view.js` to create an isolated temp SQLite DB with a component lacking a `code_anchor`, run `KnowledgeGraphService.buildGraphView`, and assert generated HTML renders with expected markers.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.onboarding_questionnaire_first",
+    "text": "Onboarding for Greplica is now explicitly agent-led before install: it asks for hook/guidance + auto-memory choice and prior-session backfill choice up front, and behavior is determined from that mapping.",
+    "kind": "requirement",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.no_hooks_manual_guidance_snippet",
+    "text": "No-hooks onboarding does not modify AGENTS.md or CLAUDE.md; it installs core Greplica support and prints a reusable manual guidance snippet for future hook behavior.",
+    "kind": "requirement",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.factory_droid_hook_disable_respected",
+    "text": "Factory-droid platform install now respects `--hooks disabled` by skipping hook config writes while keeping install behavior aligned with the onboarding defaults for disabled hook mode.",
+    "kind": "requirement",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.factory_droid_hooks_respected",
+    "text": "Factory-Droid installer behavior now respects install hooks/auto-memory settings so disabling hooks prevents hook config writes for that platform.",
+    "kind": "decision",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.greplica_video_specs_locked",
+    "text": "The Remotion composition for the launch cut is 1920x1080 @30fps, 900 frames total, which is exactly 30 seconds.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.copilot_platform_registered",
+    "text": "`copilot` is now a first-class install platform, resolved through `--platform` parsing and platform installer dispatch.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.019f18fe_demo20_timeline",
+    "text": "The 20-second scene order is fixed as: 0-3s title, 3-8s cold-start command sequence, 8-10s orientation stop, 10-15s Greplica context query, 15-18s plan rows with mapped outputs, 18-20s end card.",
+    "kind": "requirement",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.readme_how_it_works_loop_table",
+    "text": "The README `How It Works` section now presents the context flow as a short table: past sessions, Greplica storing durable learnings, a new agent querying `greplica graph context \"<question>\"`, the agent using returned anchors and constraints first, and memory updates through hooks or `greplica-update-working-memory`.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.019f2eae_mit_license_decision",
+    "text": "The user finalized the repository license choice as MIT after initially discussing Apache-2.0 and rejecting it for a simpler setup.",
+    "kind": "decision",
+    "truth": "source_verified"
+  },
+  {
+    "id": "claim.swechat_plan_runner_four_navigation_arms_20260703",
+    "text": "The SWE-chat plan runner now supports four runner modes: `baseline`, `greplica`, `codegraph`, and `docs`. Transcript audit records first navigation commands for Greplica, CodeGraph, and docs-memory reads separately so the same judge/scorer can compare navigation surfaces.",
+    "kind": "fact",
+    "truth": "code_verified"
+  },
+  {
+    "id": "claim.swechat_plan_memory_build_stores_proposal_manifest_20260703",
+    "text": "SWE-chat plan memory generation builds memory as bootstrap plus temporal update proposal JSON files, validates/applies each proposal into an isolated Greplica home, copies accepted proposals into `memory-seeds/`, and writes `memory-seeds/manifest.json` as the replay source; it does not commit runtime graph database state.",
+    "kind": "fact",
+    "truth": "code_verified"
+  }
+]

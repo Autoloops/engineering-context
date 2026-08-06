@@ -132,6 +132,9 @@ function runClaudePrint(input: WorkingMemoryUpdateInput): Promise<void> {
       reject(error);
     });
     child.stdout.pipe(transcript);
+    // If the child exits before draining the prompt, stdin emits EPIPE;
+    // the failure is reported via the exit code on "close".
+    child.stdin.once("error", () => {});
     child.stdin.end(input.prompt);
     child.once("close", (exitCode, signal) => {
       transcript.end();

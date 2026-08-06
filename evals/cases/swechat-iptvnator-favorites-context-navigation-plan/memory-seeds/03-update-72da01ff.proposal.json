@@ -1,0 +1,265 @@
+{
+  "title": "Update working memory from workspace navigation UX session",
+  "summary": "Durable context learned while reviewing and improving IPTVnator's workspace header and playlist-local rail navigation.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.workspace-shell-navigation",
+        "name": "Workspace shell navigation frame",
+        "code_anchor": "libs/workspace/shell/feature/src/lib/workspace-shell/workspace-shell.component.ts"
+      },
+      {
+        "id": "component.portal-rail-links",
+        "name": "Portal rail links",
+        "code_anchor": "libs/portal/shared/util/src/lib/navigation/portal-rail-links.ts"
+      },
+      {
+        "id": "component.playlist-switcher",
+        "name": "Playlist switcher",
+        "code_anchor": "libs/playlist/shared/ui/src/lib/playlist-switcher/playlist-switcher.component.ts"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.workspace-navigation-scope",
+        "name": "Workspace global and playlist-local navigation scope",
+        "touches": [
+          "component.workspace-shell-navigation",
+          "component.portal-rail-links",
+          "component.playlist-switcher"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.workspace_navigation_scope_old_confusion",
+        "kind": "fact",
+        "text": "Before this session, the workspace shell navigation model was confusing because the header mixed global actions with playlist-specific overflow actions, while the left rail mixed static global links with provider-specific playlist-local links that changed silently when the active playlist changed.",
+        "truth": "source_verified",
+        "intent": "unknown",
+        "about": [
+          "flow.workspace-navigation-scope"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/workspace-shell.component.ts",
+            "symbol": "WorkspaceShellComponent"
+          },
+          {
+            "file": "libs/portal/shared/util/src/lib/navigation/portal-rail-links.ts",
+            "symbol": "buildPortalRailLinks"
+          }
+        ]
+      },
+      {
+        "id": "claim.workspace_rail_context_region_groups_playlist_links",
+        "kind": "fact",
+        "text": "The workspace rail now wraps playlist-local primary and secondary rail links in a single `rail-context-region` panel when primary context links exist; the panel uses provider-specific classes for Xtream, Stalker, and M3U accent colors and intentionally has no playlist-title tooltip.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.workspace-navigation-scope",
+          "component.workspace-shell-navigation"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/workspace-shell.component.html"
+          },
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/workspace-shell.component.scss"
+          },
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/workspace-shell.component.ts",
+            "symbol": "WorkspaceShellComponent"
+          }
+        ]
+      },
+      {
+        "id": "claim.workspace_rail_context_region_not_text_label",
+        "kind": "decision",
+        "text": "Do not use a truncated playlist-name text label inside the 60px workspace rail as the primary scope cue; this session rejected that representation because playlist titles and URLs are usually shortened too aggressively to be useful.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.workspace-navigation-scope",
+          "component.workspace-shell-navigation"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/workspace-shell.component.html"
+          },
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/workspace-shell.component.scss"
+          }
+        ]
+      },
+      {
+        "id": "claim.workspace_rail_context_region_not_title_tooltip",
+        "kind": "requirement",
+        "text": "The workspace rail context region must not expose the playlist title through a `matTooltip`; the user explicitly asked to remove the playlist title tooltip after the background-region approach was implemented.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.workspace-navigation-scope",
+          "component.workspace-shell-navigation"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/workspace-shell.component.html"
+          }
+        ]
+      },
+      {
+        "id": "claim.workspace_favorites_scope_distinction",
+        "kind": "fact",
+        "text": "Workspace favorites now distinguish scope visually and textually: the header global-favorites shortcut keeps the star icon with a globe-style badge and the tooltip copy says `All favorites (all playlists)`, while playlist-local rail favorites use the `favorite` icon and `Favorites (this playlist)` tooltip.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.workspace-navigation-scope",
+          "component.workspace-shell-navigation",
+          "component.portal-rail-links"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/workspace-shell.component.html"
+          },
+          {
+            "file": "libs/portal/shared/util/src/lib/navigation/portal-rail-links.ts",
+            "symbol": "buildPortalRailLinks"
+          },
+          {
+            "file": "apps/web/src/assets/i18n/en.json"
+          }
+        ]
+      },
+      {
+        "id": "claim.playlist_switcher_owns_playlist_context_actions",
+        "kind": "fact",
+        "text": "Playlist-scoped `Playlist Info` and `Account Info` actions are now exposed by `PlaylistSwitcherComponent` through `showPlaylistInfo` and `showAccountInfo` inputs plus `playlistInfoRequested` and `accountInfoRequested` outputs, and the workspace shell wires those actions into the playlist switcher instead of a header three-dot menu.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.workspace-navigation-scope",
+          "component.playlist-switcher",
+          "component.workspace-shell-navigation"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/playlist/shared/ui/src/lib/playlist-switcher/playlist-switcher.component.ts",
+            "symbol": "PlaylistSwitcherComponent"
+          },
+          {
+            "file": "libs/playlist/shared/ui/src/lib/playlist-switcher/playlist-switcher.component.html"
+          },
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/workspace-shell.component.html"
+          }
+        ]
+      },
+      {
+        "id": "claim.workspace_header_bulk_action_stays_direct",
+        "kind": "decision",
+        "text": "The session intentionally kept the section bulk action, such as `Clear Recently Viewed`, as a direct conditional header button instead of moving it into the playlist switcher with playlist information actions.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.workspace-navigation-scope",
+          "component.workspace-shell-navigation"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/workspace-shell.component.html"
+          },
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/workspace-shell.component.ts",
+            "symbol": "WorkspaceShellComponent"
+          }
+        ]
+      },
+      {
+        "id": "claim.portal_rail_links_animate_on_entry",
+        "kind": "fact",
+        "text": "Portal rail link entries now use a CSS-only fade-and-slide animation with 30ms staggered delays for up to eight rail links, so playlist/provider rail changes are visually signaled when links render.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.workspace-navigation-scope",
+          "component.portal-rail-links"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/portal/shared/ui/src/lib/navigation/portal-rail-links.component.scss"
+          }
+        ]
+      },
+      {
+        "id": "claim.workspace_search_scope_indicator_deferred",
+        "kind": "task",
+        "text": "Analyze workspace search behavior in more detail before implementing a search scope indicator; the original quick-win search-scope change was explicitly deferred and was not part of this implementation slice.",
+        "truth": "unknown",
+        "intent": "intended",
+        "about": [
+          "flow.workspace-navigation-scope",
+          "component.workspace-shell-navigation"
+        ],
+        "code_anchors": [
+          {
+            "file": "libs/workspace/shell/feature/src/lib/workspace-shell/workspace-shell.component.ts",
+            "symbol": "WorkspaceShellComponent"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.72da01ff_064d_40bf_8443_254ceb0d5ab4",
+        "kind": "session",
+        "ref": "claude-code-session:72da01ff-064d-40bf-8443-254ceb0d5ab4",
+        "title": "Workspace rail and playlist navigation review"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.workspace_navigation_scope_old_confusion",
+        "to": "source.claude_code_session.72da01ff_064d_40bf_8443_254ceb0d5ab4",
+        "metadata": {
+          "reason": "The live UX review described the pre-change header and rail scopes, including global header actions, playlist-local rail links, and the confusing mixed-scope header overflow menu."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.workspace_rail_context_region_not_text_label",
+        "to": "source.claude_code_session.72da01ff_064d_40bf_8443_254ceb0d5ab4",
+        "metadata": {
+          "reason": "After the first implementation, the user objected that the playlist title was always shortened in the narrow rail and asked for non-text alternatives."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.workspace_rail_context_region_not_title_tooltip",
+        "to": "source.claude_code_session.72da01ff_064d_40bf_8443_254ceb0d5ab4",
+        "metadata": {
+          "reason": "The user explicitly asked to remove the playlist title used in the rail context region `matTooltip`."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.workspace_header_bulk_action_stays_direct",
+        "to": "source.claude_code_session.72da01ff_064d_40bf_8443_254ceb0d5ab4",
+        "metadata": {
+          "reason": "During the header context menu removal, the session decided to keep Clear Recently Viewed accessible as a direct header bulk action rather than placing it in the playlist switcher."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.workspace_search_scope_indicator_deferred",
+        "to": "source.claude_code_session.72da01ff_064d_40bf_8443_254ceb0d5ab4",
+        "metadata": {
+          "reason": "The user told the agent to skip search for this implementation because search functionality needed more detailed analysis first."
+        }
+      }
+    ]
+  }
+}

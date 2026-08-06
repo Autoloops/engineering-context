@@ -1,0 +1,1 @@
+Favorites and recently viewed feel split between global navigation, playlist-local context, and provider-specific content types. Can you investigate the workspace shell, route/state model, provider modules, and prior navigation decisions enough to plan where TV, VOD, and series favorites/recent items should live without making one flat bucket?

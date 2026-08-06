@@ -1,0 +1,169 @@
+{
+  "title": "Update working memory from Chrome changelog UX session",
+  "summary": "Durable context from a session that added Chrome Web Store rating UX and image lightbox previews to the changelog modal.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.changelog_modal",
+        "name": "Changelog Modal",
+        "code_anchor": "src/pages/content/changelog/index.ts"
+      },
+      {
+        "id": "component.browser_detection_utils",
+        "name": "Browser Detection Utilities",
+        "code_anchor": "src/core/utils/browser.ts"
+      }
+    ],
+    "flows": [],
+    "claims": [
+      {
+        "id": "claim.changelog_modal_render_flow",
+        "kind": "fact",
+        "text": "The version changelog popup is owned by the content changelog module: `showChangelogModal` loads the matching markdown note, extracts the current language section, sanitizes the rendered HTML with DOMPurify, then passes the sanitized HTML and language into `createChangelogModal`.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "src/pages/content/changelog/index.ts",
+            "symbol": "showChangelogModal"
+          },
+          {
+            "file": "src/pages/content/changelog/index.ts",
+            "symbol": "createChangelogModal"
+          }
+        ],
+        "about": "component.changelog_modal"
+      },
+      {
+        "id": "claim.changelog_chrome_rating_requirement",
+        "kind": "requirement",
+        "text": "The changelog popup's Chrome Web Store rating prompt is intended to appear only for Chrome users, and its prompt and CTA copy should be selected from the user's current language.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "src/pages/content/changelog/index.ts",
+            "symbol": "createChangelogModal"
+          },
+          {
+            "file": "src/core/utils/browser.ts",
+            "symbol": "isChrome"
+          }
+        ],
+        "about": [
+          "component.changelog_modal",
+          "component.browser_detection_utils"
+        ]
+      },
+      {
+        "id": "claim.changelog_chrome_rating_implementation",
+        "kind": "fact",
+        "text": "`createChangelogModal` appends a Chrome Web Store rating banner between the recommendation text and footer action row only when `isChrome()` is true; the banner links to the Gemini Voyager Chrome Web Store listing and uses `changelog_rate_chrome` plus `changelog_rate_chrome_cta` translations for the active language.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "src/pages/content/changelog/index.ts",
+            "symbol": "createChangelogModal"
+          },
+          {
+            "file": "src/core/utils/browser.ts",
+            "symbol": "isChrome"
+          }
+        ],
+        "about": [
+          "component.changelog_modal",
+          "component.browser_detection_utils"
+        ]
+      },
+      {
+        "id": "claim.browser_is_chrome_contract",
+        "kind": "fact",
+        "text": "`isChrome()` is a browser utility for Chrome Web Store prompts: it first excludes Safari via `isSafari()`, then treats `chrome` or `chromium` user agents as Chrome while excluding Edge and Firefox user agents.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "src/core/utils/browser.ts",
+            "symbol": "isChrome"
+          }
+        ],
+        "about": "component.browser_detection_utils"
+      },
+      {
+        "id": "claim.changelog_image_preview_requirement",
+        "kind": "requirement",
+        "text": "Images inside the changelog popup are intended to show a pointer affordance on hover and open an enlarged preview when clicked.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "src/pages/content/changelog/index.ts",
+            "symbol": "showImageLightbox"
+          },
+          {
+            "file": "public/contentStyle.css"
+          }
+        ],
+        "about": "component.changelog_modal"
+      },
+      {
+        "id": "claim.changelog_image_lightbox_behavior",
+        "kind": "fact",
+        "text": "After inserting sanitized changelog HTML, `createChangelogModal` binds every body image to `showImageLightbox`; the lightbox appends a full-screen overlay to `document.body`, renders the clicked image, closes on overlay click or Escape, and removes its keydown listener during close.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "src/pages/content/changelog/index.ts",
+            "symbol": "createChangelogModal"
+          },
+          {
+            "file": "src/pages/content/changelog/index.ts",
+            "symbol": "showImageLightbox"
+          }
+        ],
+        "about": "component.changelog_modal"
+      },
+      {
+        "id": "claim.changelog_image_lightbox_styles",
+        "kind": "fact",
+        "text": "Injected changelog CSS gives body images a `zoom-in` cursor and hover opacity feedback, and styles `.gv-changelog-lightbox` as a fixed full-screen dark overlay with centered constrained image preview and `zoom-out` cursor.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "code_anchors": [
+          {
+            "file": "public/contentStyle.css"
+          }
+        ],
+        "about": "component.changelog_modal"
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.96b73801_7be5_496d_80df_f989afd548bd",
+        "kind": "session",
+        "ref": "claude-code-session:96b73801-7be5-496d-80df-f989afd548bd",
+        "title": "Claude Code session 96b73801 Chrome store popup and extension UX updates"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.changelog_chrome_rating_requirement",
+        "to": "source.claude_code_session.96b73801_7be5_496d_80df_f989afd548bd",
+        "metadata": {
+          "reason": "The user asked for a graceful Chrome-only prompt in the updated version popup that invites Chrome users to rate the extension in the Google store, with language-specific text based on the selected language."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.changelog_image_preview_requirement",
+        "to": "source.claude_code_session.96b73801_7be5_496d_80df_f989afd548bd",
+        "metadata": {
+          "reason": "The user explicitly requested click-to-enlarge preview behavior for images in the popup and a changed cursor when hovering over images."
+        }
+      }
+    ]
+  }
+}

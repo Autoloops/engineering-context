@@ -1,0 +1,56 @@
+{
+  "case_id": "swechat-moltis-onboarding-provider-feedback-plan",
+  "dataset": {
+    "name": "SALT-NLP/SWE-chat",
+    "held_out_session_id": "15946ec6-bbba-4062-a765-78ab96bf4eca",
+    "held_out_created_at": "2026-03-11T19:46:09.617000Z",
+    "prior_sessions": [
+      {
+        "session_id": "41cda726-51e1-4a6b-8ce7-2682c2bec6fc",
+        "created_at": "2026-03-10T16:32:52.719000Z",
+        "checkpoint_id": "moltis-org/moltis#fab2c52066f1",
+        "title": "Issue 351 fix plan"
+      },
+      {
+        "session_id": "ffe9ecd3-e9a2-4c9c-bcfb-25cb69f3d29f",
+        "created_at": "2026-03-10T20:04:36.488000Z",
+        "checkpoint_id": "moltis-org/moltis#38493b795e8f",
+        "title": "STT onboarding auth fix"
+      },
+      {
+        "session_id": "c30a760b-775f-4ceb-bb2d-970393abc9df",
+        "created_at": "2026-03-11T06:21:09.328000Z",
+        "checkpoint_id": "moltis-org/moltis#bc9a968d5300",
+        "title": "Telegram bot config feedback"
+      },
+      {
+        "session_id": "8769bd03-3e97-426a-a0b2-21ac11110443",
+        "created_at": "2026-03-11T06:35:40.104000Z",
+        "checkpoint_id": "moltis-org/moltis#f20b03984347",
+        "title": "GitHub Copilot provider Responses API"
+      }
+    ],
+    "checkpoint_id": "moltis-org/moltis#7f64b9b73958",
+    "base_commit_source": "Held-out public commit c2b61092666d400b7ced8f45b03b143c30411bd1 implements Discord feedback improvements; eval base is its parent."
+  },
+  "repo": {
+    "full_name": "moltis-org/moltis",
+    "url": "https://github.com/moltis-org/moltis.git",
+    "base_commit": "742bce9fcd8230e38fa97060a1f77a33b8612352"
+  },
+  "task": {
+    "prompt_path": "prompt.md",
+    "judge_path": "judge.md",
+    "expected_relevant_areas": [
+      "onboarding flow",
+      "provider/model selection",
+      "voice/STT configuration",
+      "channel configuration",
+      "web UI settings",
+      "provider tests and e2e coverage"
+    ]
+  },
+  "memory": {
+    "manifest_path": "memory-seeds/manifest.json"
+  }
+}

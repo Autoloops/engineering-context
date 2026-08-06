@@ -1,0 +1,272 @@
+{
+  "title": "Update working memory from issue 376 identity storage session",
+  "summary": "Durable context from session 336722ff about main-agent identity and soul storage, fallback sentinel semantics, node service command boundaries, and test isolation.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.onboarding",
+        "name": "Onboarding wizard and identity settings service",
+        "code_anchor": "crates/onboarding/src/service.rs"
+      },
+      {
+        "id": "component.node_host",
+        "name": "Node host service installation and runner",
+        "code_anchor": "crates/node-host/src/service.rs"
+      },
+      {
+        "id": "component.projects_worktrees",
+        "name": "Project worktree management",
+        "code_anchor": "crates/projects/src/worktree.rs"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.main_agent_identity_soul_storage",
+        "name": "Main-agent identity and soul persist through agents/main files with root fallback",
+        "touches": [
+          "component.config",
+          "component.onboarding",
+          "component.gateway",
+          "component.web_ui",
+          "component.cli"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.main_agent_identity_root_fallback_rationale",
+        "kind": "decision",
+        "text": "For the main agent, agents/main/IDENTITY.md and agents/main/SOUL.md are the primary identity and soul files; root IDENTITY.md and SOUL.md remain legacy fallbacks only when the agent-scoped file is absent, because writing root files after agent-scoped files exist causes settings and Gon refreshes to re-read stale data.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "flow.main_agent_identity_soul_storage"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/config/src/loader.rs",
+            "symbol": "load_identity_for_agent"
+          },
+          {
+            "file": "crates/onboarding/src/service.rs",
+            "symbol": "identity_update"
+          }
+        ]
+      },
+      {
+        "id": "claim.main_agent_identity_empty_sentinel",
+        "kind": "fact",
+        "text": "load_identity_for_agent(\"main\") checks agents/main/IDENTITY.md by file existence; if the file exists, parsed content or None from an empty sentinel is returned without falling back to root, and save_identity_for_agent writes an empty sentinel when all identity fields are cleared.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.main_agent_identity_soul_storage",
+          "component.config"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/config/src/loader.rs",
+            "symbol": "load_identity_for_agent"
+          },
+          {
+            "file": "crates/config/src/loader.rs",
+            "symbol": "save_identity_for_agent"
+          }
+        ]
+      },
+      {
+        "id": "claim.main_agent_soul_empty_sentinel",
+        "kind": "fact",
+        "text": "load_soul_for_agent(\"main\") checks agents/main/SOUL.md by file existence; if the file exists, content or None from an empty clear file is returned without falling back to root, and save_soul_for_agent writes an empty file for None or empty soul content.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.main_agent_identity_soul_storage",
+          "component.config"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/config/src/loader.rs",
+            "symbol": "load_soul_for_agent"
+          },
+          {
+            "file": "crates/config/src/loader.rs",
+            "symbol": "save_soul_for_agent"
+          }
+        ]
+      },
+      {
+        "id": "claim.resolved_identity_uses_agent_scoped_files",
+        "kind": "fact",
+        "text": "identity_get resolves the main identity through resolve_identity_from_config, which merges config with load_identity_for_agent(\"main\") and sets soul from load_soul_for_agent(\"main\"), so server-injected Gon identity refreshes use the same agent-scoped files that settings updates write.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.main_agent_identity_soul_storage",
+          "component.onboarding",
+          "component.web_ui"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/onboarding/src/service.rs",
+            "symbol": "identity_get"
+          },
+          {
+            "file": "crates/config/src/loader.rs",
+            "symbol": "resolve_identity_from_config"
+          }
+        ]
+      },
+      {
+        "id": "claim.onboarding_settings_write_agent_scoped_identity_soul",
+        "kind": "fact",
+        "text": "LiveOnboardingService uses the agent-aware helpers for main-agent onboarding and settings writes: wizard completion and identity_update save IDENTITY.md through save_identity_for_agent(\"main\"), while identity_update and identity_update_soul save SOUL.md through save_soul_for_agent(\"main\").",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.main_agent_identity_soul_storage",
+          "component.onboarding"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/onboarding/src/service.rs",
+            "symbol": "wizard_next"
+          },
+          {
+            "file": "crates/onboarding/src/service.rs",
+            "symbol": "identity_update"
+          },
+          {
+            "file": "crates/onboarding/src/service.rs",
+            "symbol": "identity_update_soul"
+          }
+        ]
+      },
+      {
+        "id": "claim.main_agent_identity_consumers_use_agent_reader",
+        "kind": "fact",
+        "text": "The terminal onboarding wizard, sandbox container prefix, gateway instance slug, and synthesized main agent persona all read main-agent file identity through load_identity_for_agent(\"main\") rather than the root-only load_identity helper.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.main_agent_identity_soul_storage",
+          "component.cli",
+          "component.gateway"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/onboarding/src/wizard.rs",
+            "symbol": "run_onboarding"
+          },
+          {
+            "file": "crates/cli/src/sandbox_commands.rs",
+            "symbol": "instance_sandbox_prefix"
+          },
+          {
+            "file": "crates/gateway/src/agent_persona.rs",
+            "symbol": "synthesize_main_agent"
+          }
+        ]
+      },
+      {
+        "id": "claim.agent_soul_rpc_delegates_to_agent_helper",
+        "kind": "fact",
+        "text": "Gateway services write agent soul through save_soul_for_agent for every agent id, so the main agent no longer special-cases root save_soul in write_soul_for_agent.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "flow.main_agent_identity_soul_storage",
+          "component.gateway"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/gateway/src/methods/services.rs",
+            "symbol": "write_soul_for_agent"
+          }
+        ]
+      },
+      {
+        "id": "claim.node_service_installers_timeout_only",
+        "kind": "fact",
+        "text": "The node host launchd plist and systemd unit run `moltis node run --timeout <seconds>`; gateway URL, device token, node id, display name, and working directory are expected to come from node.json at runtime rather than service-manager CLI flags.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.node_host"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/node-host/src/service.rs",
+            "symbol": "generate_launchd_plist"
+          },
+          {
+            "file": "crates/node-host/src/service.rs",
+            "symbol": "generate_systemd_unit"
+          }
+        ]
+      },
+      {
+        "id": "claim.node_service_config_flags_rejected",
+        "kind": "decision",
+        "text": "The session rejected adding launchd or systemd command arguments such as --gateway-url, --device-token, --node-id, --name, or --working-dir for `moltis node run`; only --timeout is a valid service-manager CLI override because the rest of ServiceConfig is read from node.json.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": [
+          "component.node_host"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/node-host/src/service.rs",
+            "symbol": "generate_launchd_plist"
+          },
+          {
+            "file": "crates/node-host/src/service.rs",
+            "symbol": "generate_systemd_unit"
+          }
+        ]
+      },
+      {
+        "id": "claim.worktree_tests_disable_inherited_gpg_signing",
+        "kind": "fact",
+        "text": "Project worktree tests set commit.gpgsign=false in their temporary git repositories before creating the initial empty commit, isolating test branch resolution from a developer's global GPG signing and pinentry configuration.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": [
+          "component.projects_worktrees"
+        ],
+        "code_anchors": [
+          {
+            "file": "crates/projects/src/worktree.rs",
+            "symbol": "init_test_repo"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "source.claude_code_session.336722ff_bab8_42b8_b5cc_1496eaab8ae4",
+        "kind": "session",
+        "ref": "claude-code-session:336722ff-bab8-42b8-b5cc-1496eaab8ae4",
+        "title": "SWE-chat Claude Code session 336722ff: issue 376 identity storage fix"
+      }
+    ],
+    "edges": [
+      {
+        "kind": "evidenced_by",
+        "from": "claim.main_agent_identity_root_fallback_rationale",
+        "to": "source.claude_code_session.336722ff_bab8_42b8_b5cc_1496eaab8ae4",
+        "metadata": {
+          "reason": "The session diagnosed issue 376 as root writes being ignored when agents/main files already existed, then kept root files only as legacy fallback while moving main-agent reads and writes to agents/main."
+        }
+      },
+      {
+        "kind": "evidenced_by",
+        "from": "claim.node_service_config_flags_rejected",
+        "to": "source.claude_code_session.336722ff_bab8_42b8_b5cc_1496eaab8ae4",
+        "metadata": {
+          "reason": "PR review in the session corrected an attempted launchd fix that added unsupported node run flags and explicitly settled on node.json for connection details with only --timeout passed by service installers."
+        }
+      }
+    ]
+  }
+}

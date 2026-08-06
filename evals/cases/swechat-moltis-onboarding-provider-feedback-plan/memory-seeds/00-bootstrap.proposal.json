@@ -1,0 +1,732 @@
+{
+  "title": "Bootstrap Moltis repository memory",
+  "summary": "Shallow orientation memory for the Moltis Rust workspace: public surfaces, core flows, storage/config boundaries, security constraints, and validation commands.",
+  "creates": {
+    "components": [
+      {
+        "id": "component.repository",
+        "name": "Repository",
+        "code_anchor": "README.md"
+      },
+      {
+        "id": "component.cli",
+        "name": "Moltis CLI binary and command dispatch",
+        "code_anchor": "crates/cli/src/main.rs"
+      },
+      {
+        "id": "component.gateway",
+        "name": "Gateway HTTP/WebSocket server",
+        "code_anchor": "crates/gateway/src/server.rs"
+      },
+      {
+        "id": "component.auth",
+        "name": "Authentication and credential storage",
+        "code_anchor": "crates/auth/src/credential_store.rs"
+      },
+      {
+        "id": "component.config",
+        "name": "Configuration schema, template, loading, and validation",
+        "code_anchor": "crates/config/src/schema.rs"
+      },
+      {
+        "id": "component.chat",
+        "name": "Chat orchestration service",
+        "code_anchor": "crates/chat/src/lib.rs"
+      },
+      {
+        "id": "component.agent_runner",
+        "name": "Agent loop and model/tool protocol",
+        "code_anchor": "crates/agents/src/runner.rs"
+      },
+      {
+        "id": "component.providers",
+        "name": "LLM provider registry and model metadata",
+        "code_anchor": "crates/providers/src/lib.rs"
+      },
+      {
+        "id": "component.tools",
+        "name": "Tool execution and sandboxing",
+        "code_anchor": "crates/tools/src/sandbox.rs"
+      },
+      {
+        "id": "component.memory",
+        "name": "Long-term memory storage and retrieval",
+        "code_anchor": "crates/memory/src/store.rs"
+      },
+      {
+        "id": "component.sessions",
+        "name": "Session persistence and compaction",
+        "code_anchor": "crates/sessions/src/store.rs"
+      },
+      {
+        "id": "component.web_ui",
+        "name": "Web UI assets, server-injected data, and UI API routes",
+        "code_anchor": "crates/web/src/lib.rs"
+      },
+      {
+        "id": "component.channels",
+        "name": "External channel integrations",
+        "code_anchor": "crates/channels/src/lib.rs"
+      },
+      {
+        "id": "component.docs",
+        "name": "User and contributor documentation",
+        "code_anchor": "docs/src/SUMMARY.md"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow.start_gateway",
+        "name": "CLI loads config, applies overrides, and starts the gateway",
+        "touches": [
+          "component.cli",
+          "component.config",
+          "component.gateway",
+          "component.web_ui"
+        ]
+      },
+      {
+        "id": "flow.chat_agent_turn",
+        "name": "Chat service runs an agent turn through providers and tools",
+        "touches": [
+          "component.chat",
+          "component.agent_runner",
+          "component.providers",
+          "component.tools",
+          "component.sessions"
+        ]
+      },
+      {
+        "id": "flow.auth_gate",
+        "name": "Gateway authentication gate protects HTTP and WebSocket access",
+        "touches": [
+          "component.gateway",
+          "component.auth",
+          "component.web_ui"
+        ]
+      },
+      {
+        "id": "flow.memory_retrieval",
+        "name": "Memory files are indexed and searched with hybrid retrieval",
+        "touches": [
+          "component.memory",
+          "component.sessions",
+          "component.chat"
+        ]
+      },
+      {
+        "id": "flow.sandbox_exec",
+        "name": "Generated commands execute through the sandbox abstraction",
+        "touches": [
+          "component.tools",
+          "component.config",
+          "component.gateway"
+        ]
+      },
+      {
+        "id": "flow.web_ui_assets",
+        "name": "Web UI serves assets and server-injected page data",
+        "touches": [
+          "component.web_ui",
+          "component.gateway"
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim.repo_identity",
+        "kind": "fact",
+        "text": "Moltis is a local-first Rust AI gateway distributed as a single binary, positioned as a Rust-native OpenClaw-inspired system with gateway, chat, tools, providers, memory, channels, auth, and web UI crates.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.repository",
+        "code_anchors": [
+          {
+            "file": "README.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.workspace_shape",
+        "kind": "fact",
+        "text": "The root Cargo workspace uses Rust edition 2024, Rust version 1.91, resolver 2, workspace-level dependencies, and denies unsafe code plus production unwrap/expect through workspace lints.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.repository",
+        "code_anchors": [
+          {
+            "file": "Cargo.toml"
+          }
+        ]
+      },
+      {
+        "id": "claim.default_features_enabled_from_cli",
+        "kind": "requirement",
+        "text": "New feature flags should be enabled by default in crates/cli/Cargo.toml and forwarded to the gateway feature, making features opt-out rather than opt-in.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.cli",
+        "code_anchors": [
+          {
+            "file": "CLAUDE.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.workspace_dependencies_rule",
+        "kind": "requirement",
+        "text": "New crate dependencies belong in the root Cargo.toml workspace dependencies table, and member crate manifests should reference them with workspace = true instead of direct versions.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.repository",
+        "code_anchors": [
+          {
+            "file": "CLAUDE.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.cli_public_commands",
+        "kind": "fact",
+        "text": "The moltis binary defaults to starting the gateway and exposes public subcommands for agent invocation, channels, send, sessions, config, models, onboarding, doctor, auth, skills, hooks, sandbox, browser, db, memory, node, service, import, tailscale, and TLS trust installation.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.cli",
+        "code_anchors": [
+          {
+            "file": "crates/cli/src/main.rs",
+            "symbol": "main"
+          }
+        ]
+      },
+      {
+        "id": "claim.cli_directory_overrides",
+        "kind": "fact",
+        "text": "The CLI accepts global config, data, and share directory overrides through flags and environment variables, applies them before command dispatch, and ensures config/data directories exist for every command path.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "flow.start_gateway",
+        "code_anchors": [
+          {
+            "file": "crates/cli/src/main.rs",
+            "symbol": "main"
+          }
+        ]
+      },
+      {
+        "id": "claim.config_schema_validation_coupling",
+        "kind": "requirement",
+        "text": "When adding or renaming MoltisConfig fields, update build_schema_map in config validation; string enum additions also need semantic warning updates.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.config",
+        "code_anchors": [
+          {
+            "file": "CLAUDE.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.config_public_boundary",
+        "kind": "fact",
+        "text": "Configuration is shaped by MoltisConfig and validated through validate/validate_toml_str; the default template is generated separately by default_config_template.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.config",
+        "code_anchors": [
+          {
+            "file": "crates/config/src/schema.rs",
+            "symbol": "MoltisConfig"
+          },
+          {
+            "file": "crates/config/src/validate.rs",
+            "symbol": "validate"
+          },
+          {
+            "file": "crates/config/src/template.rs",
+            "symbol": "default_config_template"
+          }
+        ]
+      },
+      {
+        "id": "claim.config_user_contract",
+        "kind": "fact",
+        "text": "User configuration lives in moltis.toml under the config directory, supports CLI/env directory overrides, and includes server, providers, chat, memory, auth, hooks, MCP, channels, and sandbox settings.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.config",
+        "code_anchors": [
+          {
+            "file": "docs/src/configuration.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.gateway_preparation_boundary",
+        "kind": "fact",
+        "text": "Gateway startup is centered on prepare_gateway/start_gateway and builds an AppState-backed Axum router with optional web routes supplied from the web-ui feature.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.gateway",
+        "code_anchors": [
+          {
+            "file": "crates/gateway/src/server.rs",
+            "symbol": "prepare_gateway"
+          },
+          {
+            "file": "crates/gateway/src/server.rs",
+            "symbol": "start_gateway"
+          },
+          {
+            "file": "crates/gateway/src/server.rs",
+            "symbol": "AppState"
+          }
+        ]
+      },
+      {
+        "id": "claim.gateway_websocket_origin_validation",
+        "kind": "risk",
+        "text": "WebSocket origin validation in server.rs is a security boundary; cross-origin upgrades must remain rejected while loopback variants are treated equivalently.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.gateway",
+        "code_anchors": [
+          {
+            "file": "CLAUDE.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.auth_single_gate",
+        "kind": "fact",
+        "text": "HTTP auth is centralized through auth_gate/check_auth, with public path bypasses and AuthIdentity insertion for authenticated requests.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "flow.auth_gate",
+        "code_anchors": [
+          {
+            "file": "crates/gateway/src/auth_middleware.rs",
+            "symbol": "auth_gate"
+          },
+          {
+            "file": "crates/gateway/src/auth_middleware.rs",
+            "symbol": "check_auth"
+          },
+          {
+            "file": "crates/auth/src/credential_store.rs",
+            "symbol": "AuthIdentity"
+          }
+        ]
+      },
+      {
+        "id": "claim.auth_documented_model",
+        "kind": "fact",
+        "text": "Authentication has a three-tier model: configured credentials require full auth, no credentials plus direct local access is allowed, and no credentials plus remote/proxied access enters setup-only onboarding.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "flow.auth_gate",
+        "code_anchors": [
+          {
+            "file": "docs/src/authentication.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.credential_store_boundary",
+        "kind": "fact",
+        "text": "CredentialStore is the persistent auth boundary for passwords, passkeys, API keys, sessions, and environment variable access used by tool execution.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.auth",
+        "code_anchors": [
+          {
+            "file": "crates/auth/src/credential_store.rs",
+            "symbol": "CredentialStore"
+          }
+        ]
+      },
+      {
+        "id": "claim.provider_registry_boundary",
+        "kind": "fact",
+        "text": "ProviderRegistry is the central model/provider boundary, while LlmProvider defines the provider interface consumed by the agent runner.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.providers",
+        "code_anchors": [
+          {
+            "file": "crates/providers/src/lib.rs",
+            "symbol": "ProviderRegistry"
+          },
+          {
+            "file": "crates/agents/src/model.rs",
+            "symbol": "LlmProvider"
+          }
+        ]
+      },
+      {
+        "id": "claim.agent_runner_streaming_boundary",
+        "kind": "fact",
+        "text": "The agent runner exposes both run_agent_loop and run_agent_loop_streaming over the shared model protocol for non-streaming and streaming responses.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.agent_runner",
+        "code_anchors": [
+          {
+            "file": "crates/agents/src/runner.rs",
+            "symbol": "run_agent_loop"
+          },
+          {
+            "file": "crates/agents/src/runner.rs",
+            "symbol": "run_agent_loop_streaming"
+          },
+          {
+            "file": "crates/agents/src/model.rs",
+            "symbol": "LlmProvider"
+          }
+        ]
+      },
+      {
+        "id": "claim.chat_service_boundary",
+        "kind": "fact",
+        "text": "LiveChatService is the gateway-facing chat orchestration service and ChatRuntime is the runtime dependency boundary it uses for sessions, broadcasts, providers, tools, and related services.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.chat",
+        "code_anchors": [
+          {
+            "file": "crates/chat/src/lib.rs",
+            "symbol": "LiveChatService"
+          },
+          {
+            "file": "crates/chat/src/runtime.rs",
+            "symbol": "ChatRuntime"
+          }
+        ]
+      },
+      {
+        "id": "claim.channel_reply_requirement",
+        "kind": "requirement",
+        "text": "External channel handling must respond to approved senders with error or fallback messages for LLM failures, transcription failures, and unhandled message types instead of silently failing.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.channels",
+        "code_anchors": [
+          {
+            "file": "CLAUDE.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.sandbox_public_boundary",
+        "kind": "fact",
+        "text": "Command isolation is abstracted by the Sandbox trait and selected through create_sandbox from SandboxConfig, with image tags derived by sandbox_image_tag from base image and package inputs.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.tools",
+        "code_anchors": [
+          {
+            "file": "crates/tools/src/sandbox.rs",
+            "symbol": "Sandbox"
+          },
+          {
+            "file": "crates/tools/src/sandbox.rs",
+            "symbol": "create_sandbox"
+          },
+          {
+            "file": "crates/tools/src/sandbox.rs",
+            "symbol": "sandbox_image_tag"
+          }
+        ]
+      },
+      {
+        "id": "claim.sandbox_docs_contract",
+        "kind": "fact",
+        "text": "The documented sandbox backend order for auto mode prefers Apple Container on macOS, then Podman, Docker, restricted-host, and finally no sandbox; WASM is explicit rather than part of auto detection.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "flow.sandbox_exec",
+        "code_anchors": [
+          {
+            "file": "docs/src/sandbox.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.exec_tool_boundary",
+        "kind": "fact",
+        "text": "ExecTool is the public tool wrapper for command execution, delegating command runs through exec_command with ExecOpts and returning ExecResult.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.tools",
+        "code_anchors": [
+          {
+            "file": "crates/tools/src/exec.rs",
+            "symbol": "ExecTool"
+          },
+          {
+            "file": "crates/tools/src/exec.rs",
+            "symbol": "exec_command"
+          },
+          {
+            "file": "crates/tools/src/exec.rs",
+            "symbol": "ExecOpts"
+          }
+        ]
+      },
+      {
+        "id": "claim.web_fetch_ssrf_boundary",
+        "kind": "risk",
+        "text": "The web_fetch implementation is a security boundary for SSRF protection and must preserve blocking of loopback, private, link-local, and CGNAT IP targets.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.tools",
+        "code_anchors": [
+          {
+            "file": "CLAUDE.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.memory_store_retrieval_boundary",
+        "kind": "fact",
+        "text": "The built-in memory backend is organized around the MemoryStore trait, SqliteMemoryStore implementation, schema migrations, and hybrid_search/keyword_only_search retrieval functions.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.memory",
+        "code_anchors": [
+          {
+            "file": "crates/memory/src/store.rs",
+            "symbol": "MemoryStore"
+          },
+          {
+            "file": "crates/memory/src/store_sqlite.rs",
+            "symbol": "SqliteMemoryStore"
+          },
+          {
+            "file": "crates/memory/src/search.rs",
+            "symbol": "hybrid_search"
+          }
+        ]
+      },
+      {
+        "id": "claim.memory_agent_tools",
+        "kind": "fact",
+        "text": "The memory system exposes memory_search, memory_get, and memory_save through MemorySearchTool, MemoryGetTool, and MemorySaveTool.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "flow.memory_retrieval",
+        "code_anchors": [
+          {
+            "file": "crates/memory/src/tools.rs",
+            "symbol": "MemorySearchTool"
+          },
+          {
+            "file": "crates/memory/src/tools.rs",
+            "symbol": "MemoryGetTool"
+          },
+          {
+            "file": "crates/memory/src/tools.rs",
+            "symbol": "MemorySaveTool"
+          }
+        ]
+      },
+      {
+        "id": "claim.memory_save_path_allowlist",
+        "kind": "fact",
+        "text": "Memory writes are constrained by validate_memory_path so memory_save can target root memory files or one-level memory/*.md files without accepting traversal, absolute paths, non-markdown extensions, spaces, or nested subdirectories.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.memory",
+        "code_anchors": [
+          {
+            "file": "crates/memory/src/writer.rs",
+            "symbol": "validate_memory_path"
+          }
+        ]
+      },
+      {
+        "id": "claim.memory_docs_contract",
+        "kind": "fact",
+        "text": "Documented memory supports built-in SQLite FTS5 plus vector retrieval, optional QMD, local/OpenAI/Ollama/custom embeddings, citations, session export, LLM reranking, and a fallback to keyword-only search when embeddings are unavailable.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.memory",
+        "code_anchors": [
+          {
+            "file": "docs/src/memory.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.session_persistence_boundary",
+        "kind": "fact",
+        "text": "SessionStore, SessionEntry metadata, and compact_session are the stable boundaries for session history, sidebar metadata, and compaction.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.sessions",
+        "code_anchors": [
+          {
+            "file": "crates/sessions/src/store.rs",
+            "symbol": "SessionStore"
+          },
+          {
+            "file": "crates/sessions/src/metadata.rs",
+            "symbol": "SessionEntry"
+          },
+          {
+            "file": "crates/sessions/src/compaction.rs",
+            "symbol": "compact_session"
+          }
+        ]
+      },
+      {
+        "id": "claim.web_ui_routes_and_assets",
+        "kind": "fact",
+        "text": "The web UI crate contributes Axum routes through web_routes, serves versioned and unversioned assets through assets.rs, and builds server-injected page data with build_gon_data.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "flow.web_ui_assets",
+        "code_anchors": [
+          {
+            "file": "crates/web/src/lib.rs",
+            "symbol": "web_routes"
+          },
+          {
+            "file": "crates/web/src/assets.rs",
+            "symbol": "versioned_asset_handler"
+          },
+          {
+            "file": "crates/web/src/templates.rs",
+            "symbol": "build_gon_data"
+          }
+        ]
+      },
+      {
+        "id": "claim.web_ui_change_requirements",
+        "kind": "requirement",
+        "text": "Web UI changes must keep server data in the GonData/build_gon_data path, use the JS gon module, avoid inline scripts and Rust-built HTML, rebuild Tailwind after adding classes, run biome for JS changes, and add Playwright E2E coverage.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.web_ui",
+        "code_anchors": [
+          {
+            "file": "CLAUDE.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.web_ui_e2e_commands",
+        "kind": "fact",
+        "text": "The web UI package exposes Playwright E2E scripts through npm run e2e and installs Chromium with npm run e2e:install.",
+        "truth": "code_verified",
+        "intent": "intended",
+        "about": "component.web_ui",
+        "code_anchors": [
+          {
+            "file": "crates/web/ui/package.json"
+          }
+        ]
+      },
+      {
+        "id": "claim_quality_commands",
+        "kind": "fact",
+        "text": "Primary local workflows include just build-css, just build-release, just build-release-with-wasm, just format-check, just release-preflight, cargo test, crates/web/ui Playwright tests, and scripts/local-validate.sh for CI-parity validation.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.repository",
+        "code_anchors": [
+          {
+            "file": "README.md"
+          },
+          {
+            "file": "CONTRIBUTING.md"
+          },
+          {
+            "file": "docs/src/local-validation.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.pinned_formatting_toolchain",
+        "kind": "requirement",
+        "text": "Rust formatting in this repo must use the pinned nightly rustfmt path via just format/format-check or cargo +nightly-2025-11-30 fmt, not stable cargo fmt.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.repository",
+        "code_anchors": [
+          {
+            "file": "CLAUDE.md"
+          },
+          {
+            "file": "justfile"
+          }
+        ]
+      },
+      {
+        "id": "claim.db_migration_ownership",
+        "kind": "requirement",
+        "text": "Sqlx migrations are crate-owned under crates/<crate>/migrations, new migrations should use timestamped SQL filenames with IF NOT EXISTS, and new crate migrations must be wired through lib.rs and gateway startup in dependency order.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.repository",
+        "code_anchors": [
+          {
+            "file": "CLAUDE.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.docs_sync_requirement",
+        "kind": "requirement",
+        "text": "User-facing feature changes must update relevant docs under docs/src and the config template in the same PR to prevent documentation drift.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.docs",
+        "code_anchors": [
+          {
+            "file": "CLAUDE.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.security_secret_handling",
+        "kind": "requirement",
+        "text": "Passwords, keys, and tokens should use secrecy::Secret<String>, expose_secret only at the consumption point, redacted Debug implementations, and scoped RwLock guards to avoid deadlocks.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.auth",
+        "code_anchors": [
+          {
+            "file": "CLAUDE.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.changelog_release_rules",
+        "kind": "requirement",
+        "text": "Normal PRs should not edit CHANGELOG.md manually; release versioning is date-based via MOLTIS_VERSION while Cargo.toml stays at static 0.1.0.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.repository",
+        "code_anchors": [
+          {
+            "file": "CLAUDE.md"
+          }
+        ]
+      },
+      {
+        "id": "claim.issue_tracking_workflow",
+        "kind": "requirement",
+        "text": "This checkout uses bd/beads for issue tracking; agents should use bd ready/create/update/close with JSON output instead of markdown TODO lists or external trackers.",
+        "truth": "source_verified",
+        "intent": "intended",
+        "about": "component.repository",
+        "code_anchors": [
+          {
+            "file": "CLAUDE.md"
+          }
+        ]
+      }
+    ]
+  }
+}
